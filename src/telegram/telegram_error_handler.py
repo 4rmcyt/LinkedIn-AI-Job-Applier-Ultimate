@@ -18,6 +18,7 @@ from telegram.error import TelegramError
 # Configure standard logging for internal errors
 logging.basicConfig(level=logging.WARNING)
 internal_logger = logging.getLogger("AsyncTelegramSink")
+os.makedirs(LOG_DIR, exist_ok=True)
 log_file_path = os.path.join(Path(LOG_DIR), "internal_logger.log")  # Path to the log file
 file_handler = logging.FileHandler(log_file_path, mode="a")  # Append mode
 file_handler.setLevel(logging.WARNING)  # Set the logging level for the file handler

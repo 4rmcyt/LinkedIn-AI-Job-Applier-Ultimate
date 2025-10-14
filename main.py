@@ -1,12 +1,19 @@
 """This module is used to run the LinkedIn bot"""
 
 import asyncio
+import os
+import time
 import traceback
 from pathlib import Path
 
 import dotenv
 
-from config.constants import BROWSER_STORAGE_STATE, RESUME_DIR, SEARCH_CONFIG_FILE
+from config.constants import (
+    BROWSER_STORAGE_STATE,
+    RESUME_DIR,
+    SEARCH_CONFIG_FILE,
+    CHECK_LAST_SEARCH_TIME,
+)
 from config.logger_config import logger
 from src.job_manager.authenticator import LinkedInAuthenticator
 
@@ -24,6 +31,10 @@ from src.resume_builder.resume_manager import ResumeManager
 from src.resume_builder.style_manager import StyleManager
 from src.utils.browser_utils import create_playwright_browser, save_browser_session
 from src.utils.utils import load_yaml_file, save_yaml_file, validate_and_prompt_resume_completion
+
+
+# Create necessary directories if they don't exist
+os.makedirs(RESUME_DIR, exist_ok=True)
 
 # Resume file paths
 RESUME_STRUCTURED_FILE = Path(RESUME_DIR) / "structured_resume.yaml"
@@ -166,7 +177,7 @@ async def create_and_run_bot(
         bot.set_parameters(search_config)
 
         # Check if the last search was less than a day ago
-        if not apply_component.check_the_last_search_time():
+        if CHECK_LAST_SEARCH_TIME and not apply_component.check_the_last_search_time():
             logger.warning(
                 "Last search was less than a day ago, finishing work. If you want to restart the search, delete the file data/output/last_run.yaml file"
             )
@@ -220,9 +231,9 @@ def main() -> None:
         asyncio.run(create_and_run_bot(search_config, secrets, resume_text, resume_structured))
         logger.info("LinkedIn bot completed successfully")
 
-        # # Commented out - wait time for scheduling
-        # # Wait 1 hour total before next run
-        # time.sleep(3000)
+        # Wait 1 hour total before next run
+        if CHECK_LAST_SEARCH_TIME:
+            time.sleep(3600)
 
     except ConfigError as ce:
         logger.error(f"Configuration error: {str(ce)}")

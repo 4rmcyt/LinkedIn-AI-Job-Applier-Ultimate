@@ -7,9 +7,6 @@ from config.app_config import MINIMUM_LOG_LEVEL
 from config.constants import LOG_DIR
 from src.telegram.telegram_error_handler import AsyncTelegramSink
 
-# Create logs directory if it doesn't exist
-logs_dir = LOG_DIR
-os.makedirs(logs_dir, exist_ok=True)
 
 logger.remove()
 
@@ -34,7 +31,7 @@ logger.add(
 
 # Configuration of logging to a file
 logger.add(
-    os.path.join(logs_dir, "app.log"),
+    os.path.join(LOG_DIR, "app.log"),
     rotation="500 MB",  # Rotate when file reaches 500 MB
     retention="10 days",  # Keep logs for 10 days
     compression="zip",  # Compress rotated logs
@@ -45,7 +42,7 @@ logger.add(
 
 # Configuration of logging errors to a file
 logger.add(
-    os.path.join(logs_dir, "error.log"),
+    os.path.join(LOG_DIR, "error.log"),
     rotation="100 MB",  # Rotate when file reaches 100 MB
     retention="30 days",  # Keep error logs longer
     compression="zip",
