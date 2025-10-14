@@ -1,7 +1,9 @@
 # LinkedIn AI Job Applier Ultimate - AI-Powered Automated LinkedIn Job Applier
 
 
-<img src="assets/logo.png" alt="A sample image" width="40%" style="display: block; margin: 20 auto;">
+<p align="center">
+  <img src="assets/logo.png" alt="A sample image" width="40%">
+</p>
 
 
 This project is an AI-powered bot that automates the process of applying for jobs on LinkedIn. It intelligently parses your resume, customizes applications, answers questions using an LLM, gathers statistics of the most important for employers skills and sends you detailed reports, significantly streamlining your job search.
