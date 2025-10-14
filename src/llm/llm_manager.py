@@ -582,7 +582,7 @@ class GPTAnswerer:
         chain = self.chains["extract_skills_from_vacancy"]
         output = chain.invoke({"job_description": job_description})
         output = output.replace("[", "").replace("]", "")
-        output = output.replace("'", "").replace("\"", "")
+        output = output.replace("'", "").replace('"', "")
         output = output.split(",")
         output = [skill.strip() for skill in output if skill.strip()]
         logger.debug(f"Skills extracted from vacancy: {output}")

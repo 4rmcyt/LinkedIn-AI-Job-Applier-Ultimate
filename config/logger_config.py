@@ -7,7 +7,6 @@ from config.app_config import MINIMUM_LOG_LEVEL
 from config.constants import LOG_DIR
 from src.telegram.telegram_error_handler import AsyncTelegramSink
 
-
 logger.remove()
 
 if MINIMUM_LOG_LEVEL in ["DEBUG", "TRACE", "INFO", "WARNING", "ERROR", "CRITICAL"]:

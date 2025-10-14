@@ -60,7 +60,9 @@ class JobApplier:
         self.llm_answerer_component = None
         self.llm_agent_component = None
         self.resume_generator_manager = None
-        self.jobs_no_info = []  # vacancies to which applications were not sent due to missing information
+        self.jobs_no_info = (
+            []
+        )  # vacancies to which applications were not sent due to missing information
         self.job_key_skills = []  # key skills according to employer's opinion
         self.interesting_jobs = []
         self.page_num = 0

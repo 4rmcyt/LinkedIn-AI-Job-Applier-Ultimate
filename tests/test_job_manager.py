@@ -3,10 +3,11 @@ from pathlib import Path
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
-# yaml is intentionally not imported to avoid real file I/O in tests
 
 from src.job_manager.job_manager import JobApplier
 from src.pydantic_models.job_models import Job, JobManagerCache
+
+# yaml is intentionally not imported to avoid real file I/O in tests
 
 
 @pytest.fixture
@@ -626,9 +627,7 @@ class TestGetApplyResult:
 
     def test_get_apply_result_skip(self, job_applier):
         """Test get_apply_result with skipped application"""
-        with (
-            patch.object(job_applier, "_save_company"),
-        ):
+        with (patch.object(job_applier, "_save_company"),):
             job_applier.cache = JobManagerCache()
             job_applier.applies_num = 0
             job_applier.success_applies_num = 0
@@ -684,9 +683,7 @@ class TestGetApplyResult:
 
     def test_get_apply_result_limit_status(self, job_applier):
         """Test get_apply_result when apply_result is Limit"""
-        with (
-            patch.object(job_applier, "_save_company"),
-        ):
+        with (patch.object(job_applier, "_save_company"),):
             job_applier.cache = JobManagerCache()
             job_applier.applies_num = 0
             job_applier.success_applies_num = 10

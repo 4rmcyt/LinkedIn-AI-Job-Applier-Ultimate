@@ -8,12 +8,8 @@ from pathlib import Path
 
 import dotenv
 
-from config.constants import (
-    BROWSER_STORAGE_STATE,
-    RESUME_DIR,
-    SEARCH_CONFIG_FILE,
-)
 from config.app_config import RESTART_EVERY_DAY
+from config.constants import BROWSER_STORAGE_STATE, RESUME_DIR, SEARCH_CONFIG_FILE
 from config.logger_config import logger
 from src.job_manager.authenticator import LinkedInAuthenticator
 
@@ -31,7 +27,6 @@ from src.resume_builder.resume_manager import ResumeManager
 from src.resume_builder.style_manager import StyleManager
 from src.utils.browser_utils import create_playwright_browser, save_browser_session
 from src.utils.utils import load_yaml_file, save_yaml_file, validate_and_prompt_resume_completion
-
 
 # Create necessary directories if they don't exist
 os.makedirs(RESUME_DIR, exist_ok=True)
