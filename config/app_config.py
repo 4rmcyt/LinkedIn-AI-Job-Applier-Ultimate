@@ -86,7 +86,7 @@ EASY_APPLY_MODEL = "gemini-2.0-flash"
 APPLY_AGENT_MODEL = "gemini-flash-latest"
 
 """
-Model temperature
+Easy Apply model temperature
 the higher it is, the more creative the model, but hallucinations may occur
 the lower it is, the more strictly the model follows the prompt and invents less
 """

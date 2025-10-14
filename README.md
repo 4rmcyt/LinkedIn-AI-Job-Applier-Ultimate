@@ -151,7 +151,9 @@ This project enhances the original codebase with several powerful new features:
     *   `MINIMUM_WAIT_TIME_SEC`: Minimum time spent on one job application, this setting help to prevent ban for too frequent job applies
     *   `TG_CHAT_ID/TG_ERR_TOPIC_ID/TG_REPORT_TOPIC_ID`: Address of your chat in format "@name_of_your_chat" + IDs of topics where bot will send error messages and everyday report on the job applies done. You can find instruction how to create and set your Telegram chat below.
     *   `LLM_MODEL_TYPE`: Choose your LLM provider (e.g., "gemini").
-    *   `EASY_APPLY_MODEL`: Specify the exact model to use (e.g., "gemini-2.5-flash").
+    *   `EASY_APPLY_MODEL`: Specify the exact model to use for Easy Apply vacancies (e.g., "gemini-2.0-flash").
+    *   `APPLY_AGENT_MODEL`: Specify the exact agent model to use for Non-Easy Apply vacancies (e.g., "gemini-2.5-flash").
+
 
     ### Supported LLM models
 
