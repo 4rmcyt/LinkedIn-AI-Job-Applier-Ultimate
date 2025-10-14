@@ -470,6 +470,7 @@ class GPTAnswerer:
             "parse_resume": self._create_pydantic_chain(
                 prompts.parse_resume_template, ResumeStructure
             ),
+            "extract_skills_from_vacancy": self._create_chain(prompts.extract_skills_from_vacancy),
             "job_is_interesting": self._create_chain(prompts.job_is_interesting),
             "text_question": self._create_chain(prompts.text_question_answer_template),
             "numeric_question": self._create_chain(prompts.numeric_question_template),
@@ -575,6 +576,17 @@ class GPTAnswerer:
         )
         logger.debug(f"Structured resume parsing completed: {output}")
         return output.model_dump()
+
+    def extract_skills_from_vacancy(self, job_description: str) -> list[str]:
+        """Extract skills from vacancy"""
+        chain = self.chains["extract_skills_from_vacancy"]
+        output = chain.invoke({"job_description": job_description})
+        output = output.replace("[", "").replace("]", "")
+        output = output.replace("'", "").replace("\"", "")
+        output = output.split(",")
+        output = [skill.strip() for skill in output if skill.strip()]
+        logger.debug(f"Skills extracted from vacancy: {output}")
+        return output
 
     def answer_question_textual_wide_range(
         self, question: str, previous_questions: list[str]

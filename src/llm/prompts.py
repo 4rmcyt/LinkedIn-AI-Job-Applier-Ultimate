@@ -47,6 +47,29 @@ If there is no information about gender, TRY to infer it from the name.
 {resume}
 """
 
+# Prompt for extracting all skills required for a vacancy
+extract_skills_from_vacancy = """
+You are an expert in HR and job analysis. Extract all skills required for the role from the job description.
+
+## Instructions
+- Include both hard skills (e.g., programming languages, frameworks, tools, platforms, methodologies) and soft skills (e.g., communication, leadership, problem solving).
+- Normalize wording to canonical skill names; avoid duplicates.
+- Keep skills atomic (e.g., "python", "react", "project management", "sql", "docker").
+- Preserve capitalization only for conventional acronyms (e.g., SQL, AWS, NLP), otherwise use lowercase.
+- Exclude benefits, perks, company-specific internal tools, and generic phrases not representing skills.
+- If a technology family is mentioned (e.g., "cloud platforms"), include specific ones that appear (e.g., "aws", "gcp", "azure").
+
+## Output Format (strictly follow this format)
+- Return ONLY a sequence of strings with no commentary, no code fences, no extra text.
+- The sequence should be separated by commas.
+- Example format: "python, aws, communication"
+
+## Job Description
+```
+{job_description}
+```
+"""
+
 # Prompt for determining the degree of interest in the vacancy
 job_is_interesting = """
 You are an expert in recruitment.

@@ -60,9 +60,7 @@ class JobApplier:
         self.llm_answerer_component = None
         self.llm_agent_component = None
         self.resume_generator_manager = None
-        self.jobs_no_info = (
-            []
-        )  # vacancies to which applications were not sent due to missing information
+        self.jobs_no_info = []  # vacancies to which applications were not sent due to missing information
         self.job_key_skills = []  # key skills according to employer's opinion
         self.interesting_jobs = []
         self.page_num = 0
@@ -609,7 +607,8 @@ class JobApplier:
             job.company_description = await self._extract_company_description()
             job.recruiter_link = await self._get_job_recruiter()
             pause(1, 2)
-            await self._extract_skills_and_preferences(job)
+            # await self._extract_skills_and_preferences(job)
+            self._extract_skills_from_vacancy(job)
 
         except Exception as e:
             logger.warning(f"Could not get detailed job description: {e}")
@@ -726,93 +725,98 @@ class JobApplier:
                 company_description = element_text
                 return company_description
 
-    async def _extract_skills_and_preferences(self, job: Job):
-        """Extract skills information from skill match element (async)"""
-        try:
-            skills_buttons = self.page.locator("button[aria-label='Skills']")
-            if await skills_buttons.count() > 0:
-                await skills_buttons.first.click(timeout=1000)
-            else:
-                buttons = await find_elements_safely(self.page, "//button", "xpath")
-                for button in buttons:
-                    try:
-                        txt = (await button.text_content() or "").lower()
-                        if "skills" in txt:
-                            await button.click(timeout=1000)
-                            break
-                    except Exception:
-                        continue
-            pause()
-            # Wait for the skill page to appear
-            skill_element = "//*[starts-with(@class, 'job-details-preferences-and-skills__modal-section-insights-list-item')]"
-            skills = await find_elements_safely(self.page, skill_element, "xpath")
+    def _extract_skills_from_vacancy(self, job: Job) -> None:
+        """Extract skills from vacancy"""
+        skills = self.llm_answerer_component.extract_skills_from_vacancy(job.job_description)
+        self.job_key_skills = skills
 
-            job_types = [
-                "Full-time",
-                "Part-time",
-                "Contract",
-                "Temporary",
-                "Volunteer",
-                "Internship",
-                "Apprenticeship",
-                "Other",
-                "On-site",
-                "Hybrid",
-                "Remote",
-                "$",
-            ]
-            # Extract skills and preferences using clean text extraction
-            clean_texts = []
-            for s in skills:
-                text = await get_clean_text(s)
-                clean_texts.append(text)
-            clean_texts = [text for text in clean_texts if text]  # Remove empty strings
+    # async def _extract_skills_and_preferences(self, job: Job):
+    #     """Extract skills information from skill match element (async)"""
+    #     try:
+    #         skills_buttons = self.page.locator("button[aria-label='Skills']")
+    #         if await skills_buttons.count() > 0:
+    #             await skills_buttons.first.click(timeout=1000)
+    #         else:
+    #             buttons = await find_elements_safely(self.page, "//button", "xpath")
+    #             for button in buttons:
+    #                 try:
+    #                     txt = (await button.text_content() or "").lower()
+    #                     if "skills" in txt:
+    #                         await button.click(timeout=1000)
+    #                         break
+    #                 except Exception:
+    #                     continue
+    #         pause()
+    #         # Wait for the skill page to appear
+    #         skill_element = "//*[starts-with(@class, 'job-details-preferences-and-skills__modal-section-insights-list-item')]"
+    #         skills = await find_elements_safely(self.page, skill_element, "xpath")
 
-            job_skills = [text for text in clean_texts if not any([j in text for j in job_types])]
-            preferences = [text for text in clean_texts if any([j in text for j in job_types])]
+    #         job_types = [
+    #             "Full-time",
+    #             "Part-time",
+    #             "Contract",
+    #             "Temporary",
+    #             "Volunteer",
+    #             "Internship",
+    #             "Apprenticeship",
+    #             "Other",
+    #             "On-site",
+    #             "Hybrid",
+    #             "Remote",
+    #             "$",
+    #         ]
+    #         # Extract skills and preferences using clean text extraction
+    #         clean_texts = []
+    #         for s in skills:
+    #             text = await get_clean_text(s)
+    #             clean_texts.append(text)
+    #         clean_texts = [text for text in clean_texts if text]  # Remove empty strings
 
-            # Save skills and preferences
-            self.job_key_skills = job_skills
-            job.skills = ", ".join(job_skills)
-            job.preferences = ", ".join(preferences)
+    #         job_skills = [text for text in clean_texts if not any([j in text for j in job_types])]
+    #         preferences = [text for text in clean_texts if any([j in text for j in job_types])]
 
-            # Extract additional metadata from preferences
-            for pref in preferences:
-                pref_lower = pref.lower()
-                if any(
-                    job_type in pref_lower
-                    for job_type in [
-                        "full-time",
-                        "part-time",
-                        "contract",
-                        "temporary",
-                        "volunteer",
-                        "internship",
-                        "other",
-                    ]
-                ):
-                    job.employment_type = pref
-                elif any(
-                    level in pref_lower
-                    for level in ["entry", "mid", "senior", "lead", "principal", "director"]
-                ):
-                    job.experience_level = pref
-                elif "$" in pref or "salary" in pref_lower or "compensation" in pref_lower:
-                    job.salary_range = pref
-                elif any(work_type in pref_lower for work_type in ["remote", "on-site", "hybrid"]):
-                    if "remote" in pref_lower:
-                        job.is_remote = True
+    #         # Save skills and preferences
+    #         self.job_key_skills = job_skills
+    #         job.skills = ", ".join(job_skills)
+    #         job.preferences = ", ".join(preferences)
 
-            # Close the skill page
-            pause()
-        except Exception as e:
-            logger.warning(f"Could not wait for the skill page: {e}")
+    #         # Extract additional metadata from preferences
+    #         for pref in preferences:
+    #             pref_lower = pref.lower()
+    #             if any(
+    #                 job_type in pref_lower
+    #                 for job_type in [
+    #                     "full-time",
+    #                     "part-time",
+    #                     "contract",
+    #                     "temporary",
+    #                     "volunteer",
+    #                     "internship",
+    #                     "other",
+    #                 ]
+    #             ):
+    #                 job.employment_type = pref
+    #             elif any(
+    #                 level in pref_lower
+    #                 for level in ["entry", "mid", "senior", "lead", "principal", "director"]
+    #             ):
+    #                 job.experience_level = pref
+    #             elif "$" in pref or "salary" in pref_lower or "compensation" in pref_lower:
+    #                 job.salary_range = pref
+    #             elif any(work_type in pref_lower for work_type in ["remote", "on-site", "hybrid"]):
+    #                 if "remote" in pref_lower:
+    #                     job.is_remote = True
 
-        if skills:
-            try:
-                await self.page.locator("button[aria-label='Dismiss']").first.click(timeout=1000)
-            except Exception as e:
-                logger.warning(f"Could not close the skill page: {e}")
+    #         # Close the skill page
+    #         pause()
+    #     except Exception as e:
+    #         logger.warning(f"Could not wait for the skill page: {e}")
+
+    #     if skills:
+    #         try:
+    #             await self.page.locator("button[aria-label='Dismiss']").first.click(timeout=1000)
+    #         except Exception as e:
+    #             logger.warning(f"Could not close the skill page: {e}")
 
     async def _get_job_recruiter(self):
         """Get job recruiter information (async)"""
