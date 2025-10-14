@@ -1,0 +1,11 @@
+- check agent pipline with headless mode
+
+- Add tests for:
+    - job_manager (those methods that don't interact with the browser)
+
+Finsihing moves:
+- Remove address of your tg chat from app_config.py
+- Create new repo for this project
+- Remove playwright examples
+- Take the video of its work
+- Write an article for Medium, Reddit, Dev.to, Hashnode, Opensource.com

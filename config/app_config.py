@@ -1,0 +1,87 @@
+"""This file contains application settings"""
+
+"""Maximum number of applications"""
+MAX_APPLIES_NUM = 50
+
+"""
+If this mode is activated - the browser will be launched in headless mode
+"""
+HEADLESS_MODE = False
+
+"""
+If this mode is activated - apply to all vacancies indiscriminately,
+otherwise ask LLM to select only those vacancies that suit you
+by interests or by tech stack
+"""
+MONKEY_MODE = True
+
+"""
+In this mode app doesn't apply to the jobs, only creates resumes, cover letters and gathers skill statistics
+- resumes are created in data/resume
+- cover letters are created in data/output/cover_letters
+- skill statistics are gathered in data/output/skill_stat.yaml
+"""
+TEST_MODE = False
+
+
+"""
+In this mode app doesn't apply to the jobs or create resumes and cover letters, only gathers information for interesting jobs and
+their skill statistics and saves them to the files data/output/interesting_jobs.yaml and data/output/skill_stat.yaml."""
+COLLECT_INFO_MODE = False
+
+"""
+In this mode app applies only the jobs with Easy Apply
+If this mode is deactivated, app will apply to the jobs with Easy Apply and try to apply to the jobs with 3rd party applications
+WARNING: applying to the jobs with 3rd party applications is not guaranteed to be successful, but is guaranteed to consume at least 10-100x more tokens
+"""
+EASY_APPLY_ONLY_MODE = False
+
+"""
+If LLM evaluated the 'interest' level of the job not below this threshold - the job is considered interesting for application.
+Otherwise not.
+"""
+JOB_IS_INTERESTING_THRESH = 70
+
+"""Minimum time spent on one job application"""
+MINIMUM_WAIT_TIME_SEC = 10
+
+"""Telegram chat address and corresponding topic IDs for sending"""
+TG_CHAT_ID = "@linkedin_feedback"
+TG_ERR_TOPIC_ID = 2
+TG_REPORT_TOPIC_ID = 3
+
+"""
+Logging level
+Possible values:
+    - "DEBUG"
+    - "INFO"
+    - "WARNING"
+    - "ERROR"
+    - "CRITICAL"
+"""
+MINIMUM_LOG_LEVEL = "DEBUG"
+
+"""
+LLM type
+Possible values:
+    - "openai"
+    - "gigachat"
+    - "claude"
+    - "ollama"
+    - "gemini"
+    - "huggingface"
+"""
+# LLM_MODEL_TYPE = "openai"
+LLM_MODEL_TYPE = "gemini"
+
+# LLM models
+# EASY_APPLY_MODEL = "gpt-4o-mini"
+EASY_APPLY_MODEL = "gemini-2.0-flash"
+APPLY_AGENT_MODEL = "gemini-flash-latest"
+
+"""
+Model temperature
+the higher it is, the more creative the model, but hallucinations may occur
+the lower it is, the more strictly the model follows the prompt and invents less
+"""
+TEMPERATURE = 0.4
