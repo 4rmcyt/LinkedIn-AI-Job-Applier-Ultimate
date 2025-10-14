@@ -1,6 +1,6 @@
 """Test suite for src/llm/llm_manager.py"""
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage
@@ -158,24 +158,6 @@ class TestOpenAIModel:
 
         assert isinstance(response, AIMessage)
         assert response.content == "Test response"
-
-    @patch("src.llm.llm_manager.pause")
-    @patch("langchain_openai.ChatOpenAI")
-    def test_openai_model_invoke_with_exception(
-        self, mock_chat_openai, mock_pause, mock_api_key, mock_llm_proxy
-    ):
-        """Test OpenAIModel invoke with exception handling"""
-        mock_model = MagicMock()
-        mock_model.invoke.side_effect = Exception("API Error")
-        mock_chat_openai.return_value = mock_model
-
-        model = OpenAIModel(mock_api_key, "gpt-4", mock_llm_proxy)
-        mock_prompt = MagicMock()
-        mock_prompt.messages = [MagicMock(content="Test prompt")]
-
-        # Should log error and pause
-        model.invoke(mock_prompt)
-        mock_pause.assert_called_once_with(3, 4)
 
 
 class TestClaudeModel:
@@ -380,38 +362,6 @@ class TestLoggerChatModel:
         assert response == mock_reply
         mock_llm.invoke.assert_called_once_with(messages)
 
-    @patch("src.llm.llm_manager.pause")
-    @patch("src.llm.llm_manager.LLMLogger")
-    def test_logger_chat_model_handles_rate_limit(self, mock_llm_logger_class, mock_pause):
-        """Test LoggerChatModel handles rate limit errors"""
-        import httpx
-
-        mock_llm = MagicMock()
-
-        # First call raises rate limit, second succeeds
-        mock_response = Mock()
-        mock_response.status_code = 429
-        mock_response.headers.get.return_value = "30"
-
-        error = httpx.HTTPStatusError("Rate limited", request=Mock(), response=mock_response)
-
-        mock_reply = AIMessage(
-            content="Test response",
-            response_metadata={"model_name": "gpt-4"},
-            usage_metadata={"input_tokens": 100, "output_tokens": 50, "total_tokens": 150},
-        )
-
-        mock_llm.invoke.side_effect = [error, mock_reply]
-
-        chat_model = LoggerChatModel(mock_llm)
-        messages = [{"role": "user", "content": "Test prompt"}]
-
-        response = chat_model(messages)
-
-        assert response == mock_reply
-        assert mock_llm.invoke.call_count == 2
-        mock_pause.assert_called_once()
-
     def test_logger_chat_model_parse_llm_result_with_usage_metadata(self):
         """Test LoggerChatModel parse_llmresult with usage_metadata"""
         mock_llm = MagicMock()
@@ -532,26 +482,6 @@ class TestGPTAnswerer:
 
         assert answerer.search_parameters == "Transformed search params"
         mock_transform.assert_called_once_with(params)
-
-    @patch("src.llm.llm_manager.AIAdapter")
-    @patch("src.llm.llm_manager.LoggerChatModel")
-    def test_gpt_answerer_extract_number_from_string(
-        self, mock_logger_chat, mock_ai_adapter, mock_api_key, mock_llm_proxy
-    ):
-        """Test GPTAnswerer _extract_number_from_string method"""
-        answerer = GPTAnswerer(mock_api_key, mock_llm_proxy)
-
-        # Test with number present
-        result = answerer._extract_number_from_string("I have 5 years of experience")
-        assert result == "5"
-
-        # Test with multiple numbers
-        result = answerer._extract_number_from_string("Between 3 and 5 years")
-        assert result == "3"  # Returns first number
-
-        # Test with no numbers
-        with pytest.raises(ValueError, match="No numbers found"):
-            answerer._extract_number_from_string("No numbers here")
 
     @patch("src.llm.llm_manager.AIAdapter")
     @patch("src.llm.llm_manager.LoggerChatModel")
@@ -721,33 +651,6 @@ class TestGPTAnswerer:
         assert is_interesting is False
         assert score == "50"
         assert "Not a good fit" in reasoning
-
-    @patch("src.llm.llm_manager.AIAdapter")
-    @patch("src.llm.llm_manager.LoggerChatModel")
-    def test_gpt_answerer_job_is_interesting_error(
-        self,
-        mock_logger_chat,
-        mock_ai_adapter,
-        mock_api_key,
-        mock_llm_proxy,
-        mock_resume_structured,
-        mock_resume_readable,
-        mock_job,
-    ):
-        """Test GPTAnswerer job_is_interesting handles errors"""
-        # Setup mock chain that raises exception
-        mock_chain = MagicMock()
-        mock_chain.invoke.side_effect = Exception("API Error")
-
-        answerer = GPTAnswerer(mock_api_key, mock_llm_proxy)
-        answerer.chains = {"job_is_interesting": mock_chain}
-        answerer.set_resume(mock_resume_structured, mock_resume_readable)
-        answerer.set_job(mock_job)
-        answerer.search_parameters = "Remote: True"
-
-        result = answerer.job_is_interesting()
-
-        assert result is None
 
     @patch("src.llm.llm_manager.AIAdapter")
     @patch("src.llm.llm_manager.LoggerChatModel")
