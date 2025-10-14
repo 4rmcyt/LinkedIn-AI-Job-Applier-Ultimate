@@ -134,7 +134,7 @@ async def safe_click(
         pause_time = random.uniform(0.1, 0.3)
         await asyncio.sleep(pause_time)
 
-        await target.click()
+        await target.click(timeout=timeout)
         logger.debug(f"Successfully clicked: {selector}")
         return True
 

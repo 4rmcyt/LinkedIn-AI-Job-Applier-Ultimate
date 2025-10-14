@@ -42,25 +42,6 @@ class SearchCustomizer:
     async def _set_basic_search_terms(self):
         """Set basic search parameters (keywords and location) - async"""
         try:
-            # Enable Easy Apply filter
-            if EASY_APPLY_ONLY_MODE is True:
-                easy_apply_selectors = [
-                    "//button[contains(., 'Easy Apply')]",
-                    "button[aria-label*='Easy Apply']",
-                    ".jobs-search-results-list__filter-button[aria-label*='Easy Apply']",
-                ]
-
-                easy_apply_clicked = False
-                for selector in easy_apply_selectors:
-                    if await safe_click(self.page, selector):
-                        logger.info("Easy Apply filter is enabled")
-                        easy_apply_clicked = True
-                        pause()
-                        break
-
-                if not easy_apply_clicked:
-                    logger.warning("Could not find Easy Apply filter button")
-
             # Set job title/keywords
             if self.positions:
                 keyword_selectors = [
@@ -344,6 +325,7 @@ class SearchCustomizer:
                 await self._set_experience_level_filter()
                 await self._set_job_type_filter()
                 await self._set_work_location_filter()
+                await self._set_easy_apply_filter()
 
                 # Apply all filters
                 if not await self._apply_filters():
@@ -384,6 +366,51 @@ class SearchCustomizer:
         except Exception as e:
             logger.error(f"Error checking blacklist: {e}")
             return False
+
+    async def _set_easy_apply_filter(self):
+        """Set Easy Apply filter toggle (async)"""
+        if not EASY_APPLY_ONLY_MODE:
+            return
+
+        try:
+            # First check if Easy Apply is already enabled
+            input_selectors = [
+                "//h3[contains(., 'Easy Apply')]/following::input[@role='switch'][1]",
+                "input[role='switch'][data-artdeco-toggle-button='true']",
+            ]
+
+            for input_selector in input_selectors:
+                input_element = await find_element_safely(self.page, input_selector)
+                if input_element:
+                    aria_checked = await input_element.get_attribute("aria-checked")
+                    if aria_checked == "true":
+                        logger.info("Easy Apply filter is already enabled")
+                        return
+                    break
+
+            # Easy Apply is a toggle switch - click on the label or parent div, not the input
+            easy_apply_selectors = [
+                # Click on the parent div toggle container
+                "//h3[contains(., 'Easy Apply')]/following::div[contains(@class, 'artdeco-toggle')][1]",
+                # Alternative: find label by text
+                "label[data-artdeco-toggle-label='true']:has(span:text('Toggle Easy Apply filter'))",
+                # Fallback: click on the toggle text span
+                "//h3[contains(., 'Easy Apply')]/following::span[@data-artdeco-toggle-text='true'][1]",
+            ]
+
+            easy_apply_toggled = False
+            for selector in easy_apply_selectors:
+                if await safe_click(self.page, selector):
+                    logger.info("Easy Apply filter enabled")
+                    easy_apply_toggled = True
+                    pause()
+                    break
+
+            if not easy_apply_toggled:
+                logger.warning("Could not find or toggle Easy Apply filter")
+
+        except Exception as e:
+            logger.error(f"Error setting Easy Apply filter: {e}")
 
 
 if __name__ == "__main__":
