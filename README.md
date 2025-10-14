@@ -31,7 +31,7 @@ This is an active fork of the original [Jobs_Applier_AI_Agent_AIHawk](https://gi
 
 This project enhances the original codebase with several powerful new features:
 
-*   **🌐 Universal Job Application:** Applies to **ALL** job vacancies (not just Easy Apply) thanks to the browser-use library.
+*   **🌐 Universal Job Application:** Applies to **ALL** job vacancies (not just Easy Apply) thanks to the [browser-use](https://github.com/browser-use/browser-use) library.
 *   **🔒 Data Anonymization:** Protects your privacy by replacing personal data with mock information before sending it to the LLM provider, ensuring your sensitive information remains secure.
     *   *Note: Auto resume parsing and applying of non-Easy Apply vacancies don't use anonymization. Additionally, country, city, and birth date are not anonymized to maintain the quality of LLM responses.*
 *   **🎭 Playwright Integration:** Now uses Playwright instead of Selenium for faster, more reliable and secure browser automation with better performance and modern web standards support.
@@ -143,6 +143,7 @@ This project enhances the original codebase with several powerful new features:
     *   `TEST_MODE`: If `True`, the bot generates resumes and cover letters but does not actually submit applications.
     *   `COLLECT_INFO_MODE`: If `True`, the bot doesn't apply to the jobs or create resumes and cover letters, only gathers information for interesting jobs and their skill statistics and saves them to the files data/output/interesting_jobs.yaml and data/output/skill_stat.yaml.
     *   `EASY_APPLY_ONLY_MODE`: If `True`, bot applies only the jobs with Easy Apply. Else bot will apply to the jobs with Easy Apply and try to apply to the jobs with 3rd party applications. **WARNING**: applying to the jobs with 3rd party applications is not guaranteed to be successful, but is guaranteed to consume at least 10-100x more tokens!
+    *   `RESTART_EVERY_DAY`: If `True`, bot will automatically restart the search every 24 hours when LinkedIn resets the search limits. So you don't have to restart it manually - just run & forget.
     *   `JOB_IS_INTERESTING_THRESH`: LLM evaluated the 'interest' level of the job from 1 to 100. If job 'interest' level not below this threshold - the job is considered interesting for bot. Otherwise not. Because of LinkedIn limits number of daily applications to 50, recommended value of this setting is 70+, so the bot will apply only vacancies that match your resume
     *   `MINIMUM_WAIT_TIME_SEC`: Minimum time spent on one job application, this setting help to prevent ban for too frequent job applies
     *   `TG_CHAT_ID/TG_ERR_TOPIC_ID/TG_REPORT_TOPIC_ID`: Address of your chat in format "@name_of_your_chat" + IDs of topics where bot will send error messages and everyday report on the job applies done. You can find instruction how to create and set your Telegram chat below.
@@ -317,6 +318,7 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 ## 🙏 Acknowledgements
 
 *   This project is a fork of and builds upon the excellent work of the original [Jobs_Applier_AI_Agent_AIHawk](https://github.com/feder-cr/Jobs_Applier_AI_Agent_AIHawk) project.
+*   Non-Easy Apply vacancies are applied using [browser-use](https://github.com/browser-use/browser-use) project.
 *   System instructions for the LLM were adapted from this [GitHub repository](https://github.com/DenisSergeevitch/chatgpt-custom-instructions/blob/main/v2.md).
 *   The FAANGPath resume style is based on this [Overleaf template](https://www.overleaf.com/latex/templates/faangpath-simple-template/npsfpdqnxmbc).
 

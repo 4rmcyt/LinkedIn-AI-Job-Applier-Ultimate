@@ -40,7 +40,7 @@ EASY_APPLY_ONLY_MODE = False
 If this mode is activated, app will check if the last search was less than a day ago. 
 This is useful if you want bot to automatically restart the search every 24 hours when LinkedIn resets the search limits.
 """
-CHECK_LAST_SEARCH_TIME = False
+RESTART_EVERY_DAY = False
 
 """
 If LLM evaluated the 'interest' level of the job not below this threshold - the job is considered interesting for application.

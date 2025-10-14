@@ -12,8 +12,8 @@ from config.constants import (
     BROWSER_STORAGE_STATE,
     RESUME_DIR,
     SEARCH_CONFIG_FILE,
-    CHECK_LAST_SEARCH_TIME,
 )
+from config.app_config import RESTART_EVERY_DAY
 from config.logger_config import logger
 from src.job_manager.authenticator import LinkedInAuthenticator
 
@@ -177,7 +177,7 @@ async def create_and_run_bot(
         bot.set_parameters(search_config)
 
         # Check if the last search was less than a day ago
-        if CHECK_LAST_SEARCH_TIME and not apply_component.check_the_last_search_time():
+        if RESTART_EVERY_DAY and not apply_component.check_the_last_search_time():
             logger.warning(
                 "Last search was less than a day ago, finishing work. If you want to restart the search, delete the file data/output/last_run.yaml file"
             )
@@ -211,44 +211,47 @@ async def create_and_run_bot(
 
 
 def main() -> None:
-    try:
-        # create output folder if it doesn't exist
-        data = Path("data")
-        output_folder = data / "output"
-        output_folder.mkdir(exist_ok=True)
+    while True:
+        try:
+            # create output folder if it doesn't exist
+            data = Path("data")
+            output_folder = data / "output"
+            output_folder.mkdir(exist_ok=True)
 
-        # validate config files
-        config_validator = ConfigValidator()
-        secrets = config_validator.validate_secrets()
-        search_config = config_validator.validate_search_config(SEARCH_CONFIG_FILE)
-        resume_text = config_validator.validate_resume_text(RESUME_TEXT_FILE)
-        resume_structured = config_validator.validate_resume_structured(RESUME_STRUCTURED_FILE)
+            # validate config files
+            config_validator = ConfigValidator()
+            secrets = config_validator.validate_secrets()
+            search_config = config_validator.validate_search_config(SEARCH_CONFIG_FILE)
+            resume_text = config_validator.validate_resume_text(RESUME_TEXT_FILE)
+            resume_structured = config_validator.validate_resume_structured(RESUME_STRUCTURED_FILE)
 
-        logger.info("Starting LinkedIn Job Applier...")
-        logger.info(f"Search config loaded with {len(search_config)} parameters")
+            logger.info("Starting LinkedIn Job Applier...")
+            logger.info(f"Search config loaded with {len(search_config)} parameters")
 
-        # Run LinkedIn bot (async)
-        asyncio.run(create_and_run_bot(search_config, secrets, resume_text, resume_structured))
-        logger.info("LinkedIn bot completed successfully")
+            # Run LinkedIn bot (async)
+            asyncio.run(create_and_run_bot(search_config, secrets, resume_text, resume_structured))
+            logger.info("LinkedIn bot completed successfully")
 
-        # Wait 1 hour total before next run
-        if CHECK_LAST_SEARCH_TIME:
-            time.sleep(3600)
-
-    except ConfigError as ce:
-        logger.error(f"Configuration error: {str(ce)}")
-    except FileNotFoundError as fnf:
-        tb_str = traceback.format_exc()
-        logger.error(f"File not found: {str(fnf)}\n{tb_str}")
-    except RuntimeError as re:
-        tb_str = traceback.format_exc()
-        logger.error(f"Runtime error: {str(re)}\n{tb_str}")
-    except Exception as e:
-        tb_str = traceback.format_exc()
-        logger.error(f"Unknown error: {str(e)}\n{tb_str}")
-    finally:
-        logger.info("Program completed")
-        # time.sleep(600)  # Commented out for testing
+        except ConfigError as ce:
+            logger.error(f"Configuration error: {str(ce)}")
+        except FileNotFoundError as fnf:
+            tb_str = traceback.format_exc()
+            logger.error(f"File not found: {str(fnf)}\n{tb_str}")
+        except RuntimeError as re:
+            tb_str = traceback.format_exc()
+            logger.error(f"Runtime error: {str(re)}\n{tb_str}")
+        except Exception as e:
+            tb_str = traceback.format_exc()
+            logger.error(f"Unknown error: {str(e)}\n{tb_str}")
+        finally:
+            logger.info("Program completed")
+            # Wait 1 hour total before next run
+            if RESTART_EVERY_DAY:
+                logger.info("Waiting 1 hour before next run")
+                time.sleep(3600)
+            else:
+                logger.info("Exiting program")
+                break
 
 
 if __name__ == "__main__":
