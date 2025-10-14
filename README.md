@@ -35,7 +35,7 @@ This project enhances the original codebase with several powerful new features:
 
 *   **🌐 Universal Job Application:** Applies to **ALL** job vacancies (not just Easy Apply) thanks to the [browser-use](https://github.com/browser-use/browser-use) library.
 *   **🔒 Data Anonymization:** Protects your privacy by replacing personal data with mock information before sending it to the LLM provider, ensuring your sensitive information remains secure.
-    *   *Note: Auto resume parsing and applying of non-Easy Apply vacancies don't use anonymization. Additionally, country, city, and birth date are not anonymized to maintain the quality of LLM responses.*
+    *   *Note: Auto resume parsing and applying of Non-Easy Apply vacancies don't use anonymization. Additionally, country, city, and birth date are not anonymized to maintain the quality of LLM responses.*
 *   **🎭 Playwright Integration:** Now uses Playwright instead of Selenium for faster, more reliable and secure browser automation with better performance and modern web standards support.
 *   **🖥️ Headless Mode:** Run the bot in headless mode if you want to use the bot in server environment or while working with your computer. This allows the bot to operate without a visible browser window while maintaining full functionality.
 *   **📊 Skill Statistics:** Analyzes job descriptions to identify the most in-demand skills, helping you tailor your resume effectively.
@@ -54,7 +54,7 @@ This project enhances the original codebase with several powerful new features:
     *   Enhances question-answering logic to avoid LLM "hallucinations" by skipping questions where it lacks sufficient information.
 *   **🔐 Secure Secrets Management:** Stores sensitive keys and credentials in a `.env` file for better security.
 *   **🕒 Automated Scheduling:** A built-in timer allows the bot to run automatically every 24 hours.
-*   **💻 Numerous improvements that simplify development and debugging:** advanced logging, pre-commit hooks, fast and easy installation using uv, etc
+*   **💻 Numerous improvements that simplify development and debugging:** advanced logging, pre-commit hooks, fast and easy installation using uv, etc.
 
 
 ## 🚀 Getting Started
@@ -71,8 +71,8 @@ This project enhances the original codebase with several powerful new features:
 
     ```bash
     # Clone the repository
-    git clone https://github.com/beatwad/LinkedIn_AI_Job_Applier_Ultimate.git
-    cd LinkedIn_Job_Applier_Ultimate
+    git clone https://github.com/beatwad/LinkedIn-AI-Job-Applier-Ultimate.git
+    cd LinkedIn-AI-Job-Applier-Ultimate
 
     # Create and activate a virtual environment
     python -m venv venv
@@ -90,7 +90,7 @@ This project enhances the original codebase with several powerful new features:
     uv pip install -r requirements.txt
     ```
 
-3.  **Install additional soft**
+3.  **Install additional software**
     ```bash
     # Install Chromium browser for Playwright
     playwright install chromium
@@ -115,13 +115,13 @@ This project enhances the original codebase with several powerful new features:
     # Optional proxy for LLM requests
     llm_proxy="http://your_proxy_url:port"
 
-    # Your Telegram Bot Token for sending of error message and reports
+    # Your Telegram Bot Token for sending error messages and reports
     tg_token="your_telegram_bot_token"
     ```
 
 2.  **Job Search Parameters (`config/search_config.yaml`):**
     Customize your job search by editing this file. You can define job titles, locations, experience levels, and more.
-    Settings are the same as LinkedIn has. Example of search_config file can be found in `examples/config/search_config.yaml`
+    Settings mirror LinkedIn’s. Example of search_config file can be found in `examples/config/search_config.yaml`
 
     ```yaml
     # Example: search for Mid-Senior level remote software engineer roles
@@ -139,19 +139,18 @@ This project enhances the original codebase with several powerful new features:
 3.  **Application Settings (`config/app_config.py`):**
     Fine-tune the bot's behavior in this file. Key settings include:
     *   `MAX_APPLIES_NUM`: The maximum number of jobs to apply for in a single run.
-    *   `HEADLESS_MODE`: If this mode is activated - the browser will be launched in headless mode. Convinient if you plan to
+    *   `HEADLESS_MODE`: If this mode is activated - the browser will be launched in headless mode. Convenient if you plan to
     use your computer while bot is working + everything works faster.
     *   `MONKEY_MODE`: If `True`, applies to all jobs found. If `False`, the LLM selects only the most suitable jobs.
     *   `TEST_MODE`: If `True`, the bot generates resumes and cover letters but does not actually submit applications.
     *   `COLLECT_INFO_MODE`: If `True`, the bot doesn't apply to the jobs or create resumes and cover letters, only gathers information for interesting jobs and their skill statistics and saves them to the files data/output/interesting_jobs.yaml and data/output/skill_stat.yaml.
-    *   `EASY_APPLY_ONLY_MODE`: If `True`, bot applies only the jobs with Easy Apply. Else bot will apply to the jobs with Easy Apply and try to apply to the jobs with 3rd party applications. **WARNING**: applying to the jobs with 3rd party applications is not guaranteed to be successful, but is guaranteed to consume at least 10-100x more tokens!
+    *   `EASY_APPLY_ONLY_MODE`: If `True`, bot applies only the jobs with Easy Apply. Else bot will apply to the jobs with Easy Apply and try to apply to the jobs with 3rd party applications. **WARNING**: applying to the jobs with 3rd-party applications is not guaranteed to be successful, but is guaranteed to consume at least 10-100x more tokens!
     *   `RESTART_EVERY_DAY`: If `True`, bot will automatically restart the search every 24 hours when LinkedIn resets the search limits. So you don't have to restart it manually - just run & forget.
-    *   `JOB_IS_INTERESTING_THRESH`: LLM evaluated the 'interest' level of the job from 1 to 100. If job 'interest' level not below this threshold - the job is considered interesting for bot. Otherwise not. Because of LinkedIn limits number of daily applications to 50, recommended value of this setting is 70+, so the bot will apply only vacancies that match your resume
+    *   `JOB_IS_INTERESTING_THRESH`: LLM evaluated the 'interest' level of the job from 1 to 100. If job 'interest' level not below this threshold - the job is considered interesting for bot. Otherwise not. Because of LinkedIn limits number of daily applications to 50, recommended value of this setting is 70+, so the bot will apply only to vacancies that match your resume
     *   `MINIMUM_WAIT_TIME_SEC`: Minimum time spent on one job application, this setting help to prevent ban for too frequent job applies
     *   `TG_CHAT_ID/TG_ERR_TOPIC_ID/TG_REPORT_TOPIC_ID`: Address of your chat in format "@name_of_your_chat" + IDs of topics where bot will send error messages and everyday report on the job applies done. You can find instruction how to create and set your Telegram chat below.
     *   `LLM_MODEL_TYPE`: Choose your LLM provider (e.g., "gemini").
     *   `EASY_APPLY_MODEL`: Specify the exact model to use (e.g., "gemini-2.5-flash").
-    *   `REMOTE_BROWSER_CDP_URL`: this se
 
     ### Supported LLM models
 
@@ -176,29 +175,29 @@ This project enhances the original codebase with several powerful new features:
     - Model pricing used in reports is taken from an internal map for common models; others fall back to default per-token prices.
 
 4.  **Resume text for LLM (`data/resumes/resume_text.txt`):**
-    Resume text must contain information about your first and last names and your gender (that is neccessary for the correct work of anonymization functions)
+    Resume text must contain information about your first and last names and your gender (that is necessary for the correct work of anonymization functions)
     You have two options:
-    *   **Automatic Parsing (recommended):** Create a `resume_text.txt` file that contatins all available inforamtion about your resume in text format. The bot will use the LLM to parse it into a structured format on the first run. These structured resume data are stored in `data/resumes/structured_resume.yaml`
-    *   **Manual Structure:** Create a `resume_text.txt` AND `structured_resume.yaml` files and fill out the second file manually for precise control. Why use this option instead of first? Because if you select first option - all data from your resume text will be sent to LLM for creation of structured_resume file - for some of people how cares about their privacy this would be considered as unacceptable. I want to point out that Automatic Parsing and non-Easy Apply vacancies applying are the only two functions of this bot that send not anonymized user's personal information to LLM. All other bot functions that interact with LLM, anonimyze personal information before sending to LLM.
+    *   **Automatic Parsing (recommended):** Create a `resume_text.txt` file that contains all available information about your resume in text format. The bot will use the LLM to parse it into a structured format on the first run. These structured resume data are stored in `data/resumes/structured_resume.yaml`
+    *   **Manual Structure:** Create a `resume_text.txt` AND `structured_resume.yaml` files and fill out the second file manually for precise control. Why use this option instead of first? Because if you select the first option, all data from your resume text will be sent to the LLM to create the structured_resume file — for some people who care about their privacy this would be unacceptable. I want to point out that Automatic Parsing and Non-Easy Apply vacancies applying are the only two functions of this bot that send not anonymized user's personal information to LLM. All other bot functions that interact with LLM anonymize personal information before sending to LLM.
     Examples of `resume_text.txt` and `structured_resume.yaml` files can be found in `examples/data/resumes` folder
 
 5. **Resume generation:**
     You have two options:
-    *   **Ready Made Resume (recommended):** Take your ready-made resume in PDF format, name it as `resume.txt` and put it into `data/resumes/` The bot will use this resume for applying jobs.
-    *   **Automatic Creation:** Don't put your ready-made resume in `data/resumes/` and app will create a new resume for every job it applies to. Using this mode, the bot can create resumes tailored to each specific vacancy, but the price is probabiliy of hallucinations which can lead to spoiled resume file. Generated resume will be stored in `data\resumes\generated_resumes\` folder.
+    *   **Ready Made Resume (recommended):** Take your ready-made resume in PDF format, name it as `resume.pdf` and put it into `data/resumes/` The bot will use this resume for applying jobs.
+    *   **Automatic Creation:** Don't put your ready-made resume in `data/resumes/` and app will create a new resume for every job it applies to. Using this mode, the bot can create resumes tailored to each specific vacancy, but the price is probability of hallucinations which can lead to spoiled resume file. Generated resume will be stored in `data/resumes/generated_resumes/` folder.
 
     ### How to create resume using bot
     1.  Fill file `data/resumes/resume_text.txt` with information from your resume. Example of resume_text.txt file can be found in `examples` folder.
-    2   Run the bot to create file `data/resumes/structured_resume.yaml` and fill it automatically of fill it manually.
+    2.  Run the bot to create the file `data/resumes/structured_resume.yaml` and fill it automatically or fill it manually.
     3.  Run this command
 
         ```bash
         python src/resume_builder/resume_manager.py
         ```
-    3.  Select resume style (first style FAANGPath is recommended).
-    4.  Output file is `test_generated_resume.pdf` in root directory
-    5.  Carefully read the resume, look for **No info** text in it. If you find it - that means that some critical information in your resume text is missing and you must add it to your resume file(s) and repeat the resume creation process.
-    6.  If you are satisfied with quality of your resume - you can rename output file to `resume.pdf` and move it to `data/resumes/` folder - bot will use this resume by default.
+    4.  Select resume style (first style FAANGPath is recommended).
+    5.  Output file is `test_generated_resume.pdf` in root directory
+    6.  Carefully read the resume, look for **No info** text in it. If you find it - that means that some critical information in your resume text is missing and you must add it to your resume file(s) and repeat the resume creation process.
+    7.  If you are satisfied with the quality of your resume - you can rename the output file to `resume.pdf` and move it to the `data/resumes/` folder - the bot will use this resume by default.
 
 ## ▶️ Usage
 
@@ -208,13 +207,12 @@ Once you have completed the installation and configuration steps, you can run th
 python main.py
 ```
 If bot finds out that there are no information about some fields in your `structured_resume.yaml` file - it will output warning, list of fields with no information and propose two options:
-- press `1` to finish bot execution, consider what information is missing and add it to `data/resume/resume_text.txt`. Then delete `structured_resume.yaml` and restart bot OR fill missing fields in `structured_resume.yaml` manually if you don't want LLM to re-generate it automatically because of privacy issues.
-- press `2` to continue anyway
+- press `y` to continue anyway
+- press `n` to finish bot execution, consider what information is missing and add it to `data/resumes/resume_text.txt`. Then delete `structured_resume.yaml` and restart bot OR fill missing fields in `structured_resume.yaml` manually if you don't want LLM to re-generate it automatically because of privacy issues.
 
-If 30 seconds have been passed and yuoyou select `2` or all fields in `structured_resume.yaml` file are filled - the bot will continue work.
+If 30 seconds pass or you select `y` or all fields in the `structured_resume.yaml` file are filled, the bot will continue work.
 
 The bot will log its progress in the console and create detailed log files in the `logs/` directory. Upon completion, it will send a report to your configured Telegram chat.
-
 
 ### Output files (`data/output/`)
 
@@ -226,6 +224,35 @@ The bot will log its progress in the console and create detailed log files in th
 - **skill_stat.yaml**: Aggregated statistics of the most frequently requested skills gathered from job descriptions, sorted by descending frequency.
 - **skipped.yaml**: Companies and jobs that were intentionally skipped (e.g., blacklist, missing info, not interesting), with reasons.
 - **success.yaml**: Companies and jobs where the bot successfully submitted an application, including basic job info.
+
+## 💵 Vacancy application cost
+
+### Easy Apply
+
+What operations the LLM performs to apply to a vacancy:
+- determine if vacancy is interesting for applying or not
+- extract key skills that are necessary for this vacancy
+- create resume for this vacancy (if necessary)
+- write cover letter (if necessary)
+- answer questions (from 1-2 to 20+ per vacancy)
+
+Total token usage:
+- **input tokens**: 5000-15000
+- **output tokens**: 100-5000
+
+For default model (gemini-2.0-flash) the cost will be `$0.0005 - $0.0035`, not so much money, huh?
+
+And this is calculation for the paid plan. If you're on the free plan - you will pay nothing 😉, but may face some quota errors (look [🐞 Troubleshooting](#-troubleshooting) paragraph below)
+
+### Non-Easy Apply
+
+What operations the LLM performs to apply to a vacancy:
+- scan HTML page or take screenshot and send these data to LLM
+- make necessary actions to apply vacancy using browser (click, scroll, type, select, etc.)
+
+This is agentic flow and it consumes **A LOT** of tokens. You can multiply previous cost values like 10x-100x times!
+
+So we do not recommend you to use this mode until you have enough money for that and understand what you are doing.
 
 ## ✅ Running Tests
 
@@ -247,16 +274,28 @@ pytest
 
 ## 🐞 Troubleshooting
 
-### 1. Incorrect Information in Job Applications
+### 1. LLM API errors
+
+**Issue:** Bot throws errors like:
+```bash
+google.api_core.exceptions.ResourceExhausted: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits.
+```
+
+**Solution:**
+
+- increase MINIMUM_WAIT_TIME_SEC in `config/app_config.py` to 15-30 sec
+- move from free plan to paid
+
+### 2. Incorrect Information in Job Applications
 
 **Issue:** Bot provides inaccurate data for experience, salary, and notice period
 
 **Solution:**
 
-- Update prompts for professional experience specificity (can be found in `src\llm\prompts.py`)
+- Update prompts for professional experience specificity (can be found in `src/llm/prompts.py`)
 - Add fields in `structured_resume.yaml` for experience, expected salary, and notice period
 
-### 2. YAML Configuration Errors
+### 3. YAML Configuration Errors
 
 **Error Message:**
 
@@ -264,7 +303,7 @@ yaml.scanner.ScannerError: while scanning a simple key
 
 **structured_resume.yaml**
 
-If error happens when `structured_resume.yaml` is processed - delete it and restart the bot - it will parse resume_text.txt file and genereates new correct `structured_resume.yaml` file.
+If error happens when `structured_resume.yaml` is processed - delete it and restart the bot - it will parse resume_text.txt file and generates new correct `structured_resume.yaml` file.
 
 **search_config.yaml**
 If error happens when `search_config.yaml` is processed:
@@ -273,7 +312,7 @@ If error happens when `search_config.yaml` is processed:
 - Use a YAML validator tool
 - Avoid unnecessary special characters or quotes
 
-### 3. Bot Logs In But Doesn't Apply to Jobs
+### 4. Bot Logs In But Doesn't Apply to Jobs
 
 **Issue:** Bot doesn't start at all or starts without applying
 
@@ -291,7 +330,7 @@ If error happens when `search_config.yaml` is processed:
 - Use the latest version of the script
 - Verify all dependencies are installed and updated
 - Check internet connection stability
-- Clear browser cache and cookies if issues persist (by deleting `chrome_profile` folder in root directory)
+- Clear browser cache and cookies if issues persist (by deleting all files in the `browser_session` folder in the root directory)
 
 ## 📨 Telegram Instruction
 
@@ -301,13 +340,13 @@ If error happens when `search_config.yaml` is processed:
 
 3. Make group public (Tap on group name -> Edit -> Group Type -> Public)
 
-3. Set group's permanent link, e.g. t.me/linkedin_bot_feedback.
+4. Set group's permanent link, e.g. t.me/linkedin_bot_feedback.
 
-4. Set TG_CHAT_ID in `config/app_config.py` with this link, e.g. TG_CHAT_ID = "@linkedin_bot_feedback"
+5. Set TG_CHAT_ID in `config/app_config.py` with this link, e.g. TG_CHAT_ID = "@linkedin_bot_feedback"
 
-5. Create two topics: one for errors and another for reports
+6. Create two topics: one for errors and another for reports
 
-5. Send a message to every topic in the chat. Than click on that message and select *Copy Message Link*. You will get a link like: https://t.me/c/194xxxx987/11/13, so the group Topic ID is 11. Set TG_ERR_TOPIC_ID in `config/app_config.py` with Error Topic ID and TG_REPORT_TOPIC_ID - with Report Topic ID.
+7. Send a message to every topic in the chat. Then click on that message and select *Copy Message Link*. You will get a link like: https://t.me/c/194xxxx987/11/13, so the group Topic ID is 11. Set TG_ERR_TOPIC_ID in `config/app_config.py` with Error Topic ID and TG_REPORT_TOPIC_ID - with Report Topic ID.
 
 ## 🤝 Contributing
 

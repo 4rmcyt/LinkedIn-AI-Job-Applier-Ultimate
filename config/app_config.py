@@ -34,7 +34,7 @@ In this mode app applies only the jobs with Easy Apply
 If this mode is deactivated, app will apply to the jobs with Easy Apply and try to apply to the jobs with 3rd party applications
 WARNING: applying to the jobs with 3rd party applications is not guaranteed to be successful, but is guaranteed to consume at least 10-100x more tokens
 """
-EASY_APPLY_ONLY_MODE = False
+EASY_APPLY_ONLY_MODE = True
 
 """
 If this mode is activated, app will check if the last search was less than a day ago. 

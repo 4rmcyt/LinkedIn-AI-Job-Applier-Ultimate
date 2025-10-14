@@ -59,7 +59,7 @@ class ApplyAgent:
             task=task,
             browser=self.browser,
             llm=self.llm,
-            use_vision=True,
+            use_vision=False,
             use_thinking=False,
             save_conversation_path=Path(LOG_DIR).absolute() / "apply_agent_conversation",
             available_file_paths=available_file_paths,
