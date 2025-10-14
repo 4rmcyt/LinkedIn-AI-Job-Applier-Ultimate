@@ -1,7 +1,5 @@
-- check agent pipline with headless mode
-
-- Add tests for:
-    - job_manager (those methods that don't interact with the browser)
+- for test_llm_manager mock telegram error sending
+- check agent in headless mode
 
 Finsihing moves:
 - Remove address of your tg chat from app_config.py

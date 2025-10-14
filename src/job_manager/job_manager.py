@@ -1122,7 +1122,7 @@ class JobApplier:
                             "again to the same company",
                         )
                     for job_info in my_companies[comp]:
-                        if job_title == job_info.job_title:
+                        if job_title == job_info["job_title"]:
                             logger.warning("The vacancy has already been encountered, skipping")
                             return True, "The vacancy has already been encountered"
         return False, ""
