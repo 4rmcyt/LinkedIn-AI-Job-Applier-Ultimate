@@ -5,8 +5,10 @@ import os
 import time
 import traceback
 from pathlib import Path
+from threading import Lock
 
 import dotenv
+from pynput import keyboard as pynput_kb
 
 from config.app_config import RESTART_EVERY_DAY
 from config.constants import BROWSER_STORAGE_STATE, RESUME_DIR, SEARCH_CONFIG_FILE
@@ -35,6 +37,11 @@ os.makedirs(RESUME_DIR, exist_ok=True)
 RESUME_STRUCTURED_FILE = Path(RESUME_DIR) / "structured_resume.yaml"
 RESUME_TEXT_FILE = Path(RESUME_DIR) / "resume_text.txt"
 READY_MADE_RESUME = Path(RESUME_DIR) / "resume.pdf"
+
+# Global pause state for keyboard control
+paused = False
+pause_lock = Lock()
+ctrl_pressed = False
 
 
 class ConfigError(Exception):
@@ -99,6 +106,49 @@ class ConfigValidator:
                 logger.warning("Resume template not found, creating new one")
                 return {}
             raise ConfigError(f"Structured resume validation error: {str(e)}")
+
+
+def on_press(key):
+    """Handle key press events"""
+    global paused, ctrl_pressed
+    try:
+        # Track Ctrl key state
+        if key in (pynput_kb.Key.ctrl_l, pynput_kb.Key.ctrl_r):
+            ctrl_pressed = True
+        # Check for 'x' key when Ctrl is pressed
+        elif hasattr(key, "char") and key.char == "x" and ctrl_pressed:
+            with pause_lock:
+                paused = not paused
+                if paused:
+                    logger.warning("⏸️  PAUSED - Press Ctrl+X to continue")
+                else:
+                    logger.info("▶️  RESUMED")
+    except AttributeError:
+        pass
+
+
+def on_release(key):
+    """Handle key release events"""
+    global ctrl_pressed
+    # Reset Ctrl key state
+    if key in (pynput_kb.Key.ctrl_l, pynput_kb.Key.ctrl_r):
+        ctrl_pressed = False
+
+
+def start_keyboard_listener():
+    """Start keyboard listener in background thread"""
+    listener = pynput_kb.Listener(on_press=on_press, on_release=on_release)
+    listener.daemon = True
+    listener.start()
+    logger.info("Keyboard listener started - Press Ctrl+X to pause/resume")
+
+
+async def check_pause():
+    """Check if execution is paused and wait if needed"""
+    global paused
+    if paused:
+        while paused:
+            await asyncio.sleep(0.5)
 
 
 async def create_and_run_bot(
@@ -170,6 +220,7 @@ async def create_and_run_bot(
         # Set bot facade
         bot = BotFacade(resume_anonymizer, search_component, apply_component, llm_agent_component)
         bot.set_parameters(search_config)
+        bot.set_pause_checker(check_pause)
 
         # Check if the last search was less than a day ago
         if RESTART_EVERY_DAY and not apply_component.check_the_last_search_time():
@@ -206,6 +257,9 @@ async def create_and_run_bot(
 
 
 def main() -> None:
+    # Start keyboard listener for pause/resume functionality
+    start_keyboard_listener()
+
     while True:
         try:
             # create output folder if it doesn't exist

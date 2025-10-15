@@ -40,6 +40,7 @@ This project enhances the original codebase with several powerful new features:
 *   **🎯 Improved Intelligent Resume Generation:** Uses AI to tailor every generated resume to the current vacancy for maximum match, adapting skills, experience, projects and achivements to the job description.
 *   **🎭 Playwright Integration:** Now uses Playwright instead of Selenium for faster, more reliable and secure browser automation with better performance and modern web standards support.
 *   **🖥️ Headless Mode:** Run the bot in headless mode if you want to use the bot in server environment or while working with your computer. This allows the bot to operate without a visible browser window while maintaining full functionality.
+*   **⏸️ Pause/Resume Control:** Pause the bot at any time by pressing `Ctrl+X` and continue when ready, giving you full control over execution without stopping the entire process.
 *   **📊 Skill Statistics:** Analyzes job descriptions to identify the most in-demand skills, helping you tailor your resume effectively.
 *   **🧠 Intelligent Error Handling:** If LinkedIn's Easy Apply feature encounters errors (e.g., incorrectly filled fields), the bot will attempt to fix them automatically.
 *   **☑️ Smart Checkbox Handling:** Automatically detects and answers checkbox questions in LinkedIn Easy Apply forms with intelligent context-aware responses.
@@ -225,6 +226,8 @@ If bot finds out that there are no information about some fields in your `struct
 If 30 seconds pass or you select `y` or all fields in the `structured_resume.yaml` file are filled, the bot will continue work.
 
 The bot will log its progress in the console and create detailed log files in the `logs/` directory. Upon completion, it will send a report to your configured Telegram chat.
+
+**Pause/Resume:** While the bot is running, and you see that it behaves incorrectly - you can pause it by pressing `Ctrl+X`. Press `Ctrl+X` again to resume. This is useful if you need to temporarily stop the bot without terminating the entire process. **Bot won't stop immediately**, usually couple of seconds may pass after you press Ctrl + X.
 
 ### Output files (`data/output/`)
 

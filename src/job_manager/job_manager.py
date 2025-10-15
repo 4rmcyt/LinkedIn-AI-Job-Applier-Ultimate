@@ -60,6 +60,7 @@ class JobApplier:
         self.llm_answerer_component = None
         self.llm_agent_component = None
         self.resume_generator_manager = None
+        self.pause_checker = None
         self.jobs_no_info = (
             []
         )  # vacancies to which applications were not sent due to missing information
@@ -121,6 +122,12 @@ class JobApplier:
         Set resume generator manager for writing resumes
         """
         self.resume_generator_manager = resume_generator_manager
+
+    def set_pause_checker(self, pause_checker):
+        """
+        Set pause checker function for pausing execution
+        """
+        self.pause_checker = pause_checker
 
     async def get_vacancies_from_page(self) -> List[Any]:
         """Parse job vacancies from current LinkedIn page (async)"""
@@ -193,6 +200,7 @@ class JobApplier:
             self.llm_answerer_component,
             self.resume_anonymizer,
             self.resume_generator_manager,
+            self.pause_checker,
             ANSWERS_FILE,
             RESUME_DIR,
             COVER_LETTER_DIR,
@@ -211,6 +219,10 @@ class JobApplier:
         self.resume_improvement_recommendations()
         # continue until the maximum number of applications is reached
         while self.success_applies_num < self.max_applies_num and self.applies_num < 400:
+            # Check if execution is paused
+            if self.pause_checker:
+                await self.pause_checker()
+
             # go through all pages until they are finished
             vacancies = await self.get_vacancies_from_page()
             if len(vacancies) == 0:
@@ -218,6 +230,10 @@ class JobApplier:
                     logger.warning("No vacancies found for the search query")
                 break
             for vacancy in vacancies:
+                # Check if execution is paused before processing each job
+                if self.pause_checker:
+                    await self.pause_checker()
+
                 url = vacancy.get("url")
                 try:
                     result = await self.apply_job(vacancy)

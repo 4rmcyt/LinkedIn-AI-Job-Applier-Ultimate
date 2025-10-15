@@ -101,6 +101,12 @@ class BotFacade:
         self.apply_component.set_resume_generator_manager(resume_generator_manager)
         logger.info("Resume manager successfully started")
 
+    def set_pause_checker(self, pause_checker) -> None:
+        """Set pause checker function for pausing execution"""
+        logger.info("Setting pause checker function")
+        self.apply_component.set_pause_checker(pause_checker)
+        logger.info("Pause checker successfully set")
+
     async def start_apply(self) -> None:
         """Start resume sending process (async)"""
         self.state.validate_state(
