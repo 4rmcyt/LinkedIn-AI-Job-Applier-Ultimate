@@ -311,13 +311,12 @@ class JobApplier:
                     ) = self.llm_answerer_component.job_is_interesting(job.model_dump())
                 if job_is_interesting:
                     # extract skills from the vacancy
-                    self.job_key_skills = self._extract_skills_from_vacancy(job)
-                    job.skills = self.job_key_skills
+                    job.skills = self._extract_skills_from_vacancy(job)
                     # set the vacancy to answerer
                     self.llm_answerer_component.set_job(job.model_dump())
                     # update the list of required skills for the vacancy and save job info to file
                     # only if the vacancy was scored and considered interesting
-                    if score > 0:
+                    if int(score) > 0:
                         self._update_skill_stat(self.job_key_skills)
                         self._save_interesting_job(job, score, reasoning)
                 # apply to the vacancy only if it's interesting

@@ -1,5 +1,4 @@
-- check without monkey mode
-- check COLLECT_INFO_MODE
+- find out if it's possible to halt bot using key combination like Ctrl + X
 
 Finsihing moves:
 - Remove address of your tg chat from app_config.py

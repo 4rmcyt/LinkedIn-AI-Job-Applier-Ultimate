@@ -37,6 +37,7 @@ This project enhances the original codebase with several powerful new features:
 *   **🌐 Universal Job Application:** Applies to **ALL** job vacancies (not just Easy Apply) thanks to the [browser-use](https://github.com/browser-use/browser-use) library.
 *   **🔒 Data Anonymization:** Protects your privacy by replacing personal data with mock information before sending it to the LLM provider, ensuring your sensitive information remains secure.
     *   *Note: Auto resume parsing and applying of Non-Easy Apply vacancies don't use anonymization. Additionally, country, city, and birth date are not anonymized to maintain the quality of LLM responses.*
+*   **🎯 Improved Intelligent Resume Generation:** Uses AI to tailor every generated resume to the current vacancy for maximum match, adapting skills, experience, projects and achivements to the job description.
 *   **🎭 Playwright Integration:** Now uses Playwright instead of Selenium for faster, more reliable and secure browser automation with better performance and modern web standards support.
 *   **🖥️ Headless Mode:** Run the bot in headless mode if you want to use the bot in server environment or while working with your computer. This allows the bot to operate without a visible browser window while maintaining full functionality.
 *   **📊 Skill Statistics:** Analyzes job descriptions to identify the most in-demand skills, helping you tailor your resume effectively.
@@ -154,21 +155,23 @@ This project enhances the original codebase with several powerful new features:
     *   `EASY_APPLY_MODEL`: Specify the exact model to use for Easy Apply vacancies (e.g., "gemini-2.0-flash").
     *   `APPLY_AGENT_MODEL`: Specify the exact agent model to use for Non-Easy Apply vacancies (e.g., "gemini-2.5-flash").
 
-
-    ### Supported LLM models
+    **Supported LLM models**
 
     The bot supports multiple LLM providers. Configure them in `config/app_config.py` using `LLM_MODEL_TYPE` and `EASY_APPLY_MODEL`.
 
-    - **Gemini (Google)**
+    **Gemini (Google)**
     - Set: `LLM_MODEL_TYPE = "gemini"`
     - Examples: `gemini-flash-latest`, `gemini-2.5-flash`, `gemini-2.5-flash-lite`, `gemini-2.0-flash`
-    - **OpenAI**
+
+    **OpenAI**
     - Set: `LLM_MODEL_TYPE = "openai"`
     - Examples: `gpt-4o`, `gpt-4o-mini`
-    - **Claude (Anthropic)**
+
+    **Claude (Anthropic)**
     - Set: `LLM_MODEL_TYPE = "claude"`
     - Examples: `claude-3-5-sonnet`, `claude-4-opus` (use any valid Claude model ID)
-    - **Ollama (local/server)**
+
+    **Ollama (local/server)**
     - Set: `LLM_MODEL_TYPE = "ollama"`
     - Examples: `llama3`, `qwen2.5` (any model available in your Ollama)
 
@@ -177,11 +180,15 @@ This project enhances the original codebase with several powerful new features:
     - Provide your API key in `.env` as `llm_api_key`. Optionally set `llm_proxy`.
     - Model pricing used in reports is taken from an internal map for common models; others fall back to default per-token prices.
 
-4.  **Resume text for LLM (`data/resumes/resume_text.txt`):**
-    Resume text must contain information about your first and last names and your gender (that is necessary for the correct work of anonymization functions)
-    You have two options:
-    *   **Automatic Parsing (recommended):** Create a `resume_text.txt` file that contains all available information about your resume in text format. The bot will use the LLM to parse it into a structured format on the first run. These structured resume data are stored in `data/resumes/structured_resume.yaml`
-    *   **Manual Structure:** Create a `resume_text.txt` AND `structured_resume.yaml` files and fill out the second file manually for precise control. Why use this option instead of first? Because if you select the first option, all data from your resume text will be sent to the LLM to create the structured_resume file — for some people who care about their privacy this would be unacceptable. I want to point out that Automatic Parsing and Non-Easy Apply vacancies applying are the only two functions of this bot that send not anonymized user's personal information to LLM. All other bot functions that interact with LLM anonymize personal information before sending to LLM.
+4.  **Resume files for LLM (`data/resumes/resume_text.txt` and `data/resumes/structured_resume.yaml`):**
+    Resume text must contain information about your first and last names and your gender (that is necessary for the correct work of anonymization functions).
+    Bot needs to resume files for correct work:
+    *   **raw resume text file** (`resume_text.txt`) which contains all available information about your resume in text format and is used to answer the questions and write cover letters (I find out that using full resume text for these tasks is more reliable + saves input token + you don't need to determine which resume section you have to use)
+    *   **structured resume file** (`structured_resume.yaml`) which is used for tailored resume generation
+
+    Resume text file is mandatory, you need to create it by yourself. But with structured resume file you have two options:
+    *   **Automatic Parsing (recommended):** The bot will use the LLM to parse your resume text file into a structured format on the first run and save it in `data/resumes/structured_resume.yaml`. Just add raw resume text to your project and run the bot - it will do the rest.
+    *   **Manual Structure:** fill out file `structured_resume.yaml` manually for precise control. Why use this option instead of first? Because if you select the first option, all data from your resume text will be sent to the LLM to create the structured_resume file — for some people who care about their privacy this would be unacceptable. I want to point out that Automatic Parsing and Non-Easy Apply vacancies applying are the only two functions of this bot that send not anonymized user's personal information to LLM. All other bot functions anonymize personal information before sending it to LLM.
     Examples of `resume_text.txt` and `structured_resume.yaml` files can be found in `examples/data/resumes` folder
 
 5. **Resume generation:**
@@ -189,7 +196,9 @@ This project enhances the original codebase with several powerful new features:
     *   **Automatic Creation (recommended):** Don't put your ready-made resume in `data/resumes/` and app will create a new resume for every job it applies to. Using this mode, the bot can create resumes tailored to each specific vacancy. Generated resume will be stored in `data/resumes/generated_resumes/` folder. Some of resume sections are the same for each vacancy (e.g. header), so bot generates these sections once and then stores them in `data/resumes/templates/<section_name>.html`. Netx time bot will load these sections from corresponding file instead of generation. If you think that some of these sections were generated incorrectly - just delete corresponding files so LLM will re-generate them.
     *   **Ready Made Resume (recommended):** Take your ready-made resume in PDF format, name it as `resume.pdf` and put it into `data/resumes/` The bot will use this resume for applying jobs.
 
-    ### How to create resume using bot
+    **I also recommend to test resume generation before starting applying jobs**.
+
+    ### How to test resume generation using bot
     1.  Fill file `data/resumes/resume_text.txt` with information from your resume. Example of resume_text.txt file can be found in `examples` folder.
     2.  Run the bot to create the file `data/resumes/structured_resume.yaml` and fill it automatically or fill it manually.
     3.  Run this command
@@ -199,7 +208,7 @@ This project enhances the original codebase with several powerful new features:
         ```
     4.  Select resume style (first style FAANGPath is recommended).
     5.  Output file is `test_generated_resume.pdf` in root directory
-    6.  Carefully read the resume, look for **No info** text in it. If you find it - that means that some critical information in your resume text is missing and you must add it to your resume file(s) and repeat the resume creation process.
+    6.  Carefully read the resume, look for **No info**, **N/A** or **None** text in it. If you find it - that means that some critical information in your resume text is missing and you must add it to your resume file(s) and repeat the resume creation process.
     7.  If you are satisfied with the quality of your resume - you can rename the output file to `resume.pdf` and move it to the `data/resumes/` folder - the bot will use this resume by default.
 
 ## ▶️ Usage
