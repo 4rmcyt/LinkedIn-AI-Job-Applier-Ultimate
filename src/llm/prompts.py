@@ -380,7 +380,10 @@ Act as an HR expert and resume writer specializing in ATS-friendly resumes. Your
 
 1. Contact Information: Include your full name, city, state/area/region (if applicable), and country, phone number, email address, LinkedIn profile, and GitHub profile. Exclude any information that is not provided.
 2. Formatting: Ensure the contact details are presented clearly and are easy to read. Phone code and phone number should be separated by a space.
-3. If state/area/region and/or country are not provided, do not include them in the header. Also NEVER include zip code.
+
+To implement this:
+- If any of the contact information fields (e.g., state/area/region and/or country, LinkedIn profile, GitHub profile) are not provided (i.e., None, No info), omit them from the header.
+- NEVER include zip code
 
 ##My information
   {personal_information}
@@ -395,11 +398,19 @@ Act as an HR expert and resume writer with a specialization in creating ATS-frie
 
 1. Institution Name and Location: Specify the university or educational institution’s name and location.
 2. Degree and Field of Study: Clearly indicate the degree earned and the field of study.
-3. Grade: Include your Grade if it is strong and relevant.
+3. Grade: Include your Grade if it is strong and relevant, otherwise skip it.
 4. Relevant Coursework: List key courses with their grades to showcase your academic strengths.
+5. Job Alignment: Prioritize and emphasize education that directly matches the job requirements, using similar terminology and highlighting relevant technologies, methodologies, or skills mentioned in the job description.
+
+To implement this, follow these steps:
+- If the exam details are not provided (i.e., None, No info), skip the coursework section when filling out the template.
+- If the exam details are available, fill out the coursework section accordingly.
 
 ##My information
   {education_details}
+
+##Job Description
+  {job_description}
 """
     + prompt_education_template
 )
@@ -407,15 +418,24 @@ Act as an HR expert and resume writer with a specialization in creating ATS-frie
 
 prompt_working_experience = (
     """
-Act as an HR expert and resume writer with a specialization in creating ATS-friendly resumes. Your task is to detail the work experience for a resume. For each job entry, ensure you include:
+Act as an HR expert and resume writer with a specialization in creating ATS-friendly resumes. Your task is to detail the work experience for a resume, tailoring it to match the target job requirements. For each job entry, ensure you include:
 
 1. Company Name and Location: Provide the name of the company and its location.
-2. Job Title: Clearly state your job title.
+2. Job Title: Clearly state your job title, mentioning the job title from the target position or a close variant if possible.
 3. Dates of Employment: Include the start and end dates of your employment.
-4. Responsibilities and Achievements: Describe your key responsibilities and notable achievements, emphasizing measurable results and specific contributions.
+4. Responsibilities and Achievements: Describe your key responsibilities and notable achievements, emphasizing measurable results and specific contributions that directly align with what the job asks for.
+5. Job Alignment: Prioritize and emphasize experience that directly matches the job requirements, using similar terminology and highlighting relevant technologies, methodologies, or skills mentioned in the job description.
+6. Quantified Results: Quantify achievements that align with the company's goals and the specific role requirements.
+
+To implement this:
+- If any of the work experience details (e.g., responsibilities, achievements) are not provided (i.e., None, No info), omit those sections when filling out the template.
+
 
 ##My information
   {experience_details}
+
+##Job Description
+  {job_description}
 """
     + prompt_working_experience_template
 )
@@ -423,14 +443,21 @@ Act as an HR expert and resume writer with a specialization in creating ATS-frie
 
 prompt_side_projects = (
     """
-Act as an HR expert and resume writer with a specialization in creating ATS-friendly resumes. Your task is to highlight notable side projects. For each project, ensure you include:
+Act as an HR expert and resume writer with a specialization in creating ATS-friendly resumes. Your task is to highlight notable side projects that are most relevant to the target job. For each project, ensure you include:
 
 1. Project Name and Link: Provide the name of the project and include a link to the GitHub repository or project page.
 2. Project Details: Describe any notable recognition or achievements related to the project, such as GitHub stars or community feedback.
 3. Technical Contributions: Highlight your specific contributions and the technologies used in the project.
+4. Job Relevance: Prioritize and emphasize projects that align with the job requirements, using similar technologies or demonstrating relevant skills.
+
+To implement this:
+- If any of the project details (e.g., link, achievements) are not provided (i.e., None, No info), omit those sections when filling out the template.
 
 ##My information
   {projects}
+
+##Job Description
+  {job_description}
 """
     + prompt_side_projects_template
 )
@@ -438,13 +465,21 @@ Act as an HR expert and resume writer with a specialization in creating ATS-frie
 
 prompt_achievements = (
     """
-Act as an HR expert and resume writer with a specialization in creating ATS-friendly resumes. Your task is to list significant achievements. For each achievement, ensure you include:
+Act as an HR expert and resume writer with a specialization in creating ATS-friendly resumes. Your task is to list significant achievements that are most relevant to the target job. For each achievement, ensure you include:
 
 1. Award or Recognition: Clearly state the name of the award, recognition, scholarship, or honor.
 2. Description: Provide a brief description of the achievement and its relevance to your career or academic journey.
+3. Job Alignment: Prioritize achievements that demonstrate skills, qualities, or experiences directly relevant to the job requirements.
+
+To implement this:
+- If any of the achievement details (e.g., certifications, descriptions) are not provided (i.e., None, No info), omit those sections when filling out the template.
+
 
 ##My information
   {achievements}
+
+##Job Description
+  {job_description}
 """
     + prompt_achievements_template
 )
@@ -452,16 +487,15 @@ Act as an HR expert and resume writer with a specialization in creating ATS-frie
 
 prompt_certifications = (
     """
-Act as an HR expert and resume writer with a specialization in creating ATS-friendly resumes. Your task is to list significant certifications based on the provided details. For each certification, ensure you include:
+Act as an HR expert and resume writer with a specialization in creating ATS-friendly resumes. Your task is to list significant certifications that are most relevant to the target job. For each certification, ensure you include:
 
 1. Certification Name: Clearly state the name of the certification.
 2. Description: Provide a brief description of the certification and its relevance to your professional or academic career.
-
-Ensure that the certifications are clearly presented and effectively highlight your qualifications.
+3. Job Relevance: Prioritize certifications that directly align with the job requirements, technologies, or industry standards mentioned in the job description.
 
 To implement this:
-
-If any of the certification details (e.g., descriptions) are not provided (i.e., None), omit those sections when filling out the template.
+- Ensure that the certifications are clearly presented and effectively highlight your qualifications that match the job requirements.
+- If any of the certification details (e.g., descriptions) are not provided (i.e., None, No info), omit those sections when filling out the template.
 
 ##My information
   {certifications}
@@ -475,16 +509,25 @@ If any of the certification details (e.g., descriptions) are not provided (i.e.,
 
 prompt_additional_skills = (
     """
-Act as an HR expert and resume writer with a specialization in creating ATS-friendly resumes. Your task is to list additional skills relevant to the job. For each skill, ensure you include:
+Act as an HR expert and resume writer with a specialization in creating ATS-friendly resumes. Your task is to list additional skills that are most relevant to the target job. For each skill, ensure you include:
 
 1. Skill Category: Clearly state the category or type of skill.
-2. Specific Skills: List the specific skills or technologies within each category.
+2. Specific Skills: List the specific skills or technologies within each category, prioritizing those mentioned in the job description.
 3. Proficiency and Experience: Briefly describe your experience and proficiency level.
+4. Job Alignment: Emphasize skills that directly match the job requirements and use terminology from the job description when appropriate.
+
+To implement this:
+- Ensure that the skills listed are relevant and accurately reflect your expertise in the field.
+- If any of the skill details (e.g., languages, interests, skills) are not provided (i.e., None, No info), omit those sections when filling out the template.
+
 
 ##My information
   {languages}
   {interests}
   {skills}
+
+##Job Description
+  {job_description}
 """
     + prompt_additional_skills_template
 )
@@ -566,5 +609,5 @@ Each section should contain:
 {text}
 ```
 ---
-##Analysis result of this vacancy
+## Job Description Summary
 """

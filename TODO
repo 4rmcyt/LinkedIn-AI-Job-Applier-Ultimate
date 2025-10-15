@@ -1,3 +1,6 @@
+- check without monkey mode
+- check COLLECT_INFO_MODE
+
 Finsihing moves:
 - Remove address of your tg chat from app_config.py
 - Write an article for Medium, Reddit, Dev.to, Hashnode, Opensource.com

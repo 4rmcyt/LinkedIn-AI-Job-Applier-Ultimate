@@ -298,23 +298,30 @@ class JobApplier:
                 logger.warning(f"Skipping the vacancy for the reason: {reason}")
                 pause(1, 2)
             else:
-                # set the vacancy to answerer and agent for evaluation
-                self.llm_answerer_component.set_job(job.model_dump())
                 if MONKEY_MODE is True and COLLECT_INFO_MODE is False:
                     # in 'monkey mode' any vacancy is considered interesting
                     job_is_interesting = True
+                    score = 0
+                    reasoning = "Monkey mode"
                 else:
-                    # otherwise ask LLM to evaluate if the vacancy is interesting or not
                     (
                         job_is_interesting,
                         score,
                         reasoning,
-                    ) = self.llm_answerer_component.job_is_interesting()
-                    self._save_interesting_job(job, score, reasoning)
-                # apply to the vacancy only if it is interesting
+                    ) = self.llm_answerer_component.job_is_interesting(job.model_dump())
                 if job_is_interesting:
-                    # update the list of required skills for the vacancy only if the vacancy is interesting
-                    self._update_skill_stat(self.job_key_skills)
+                    # extract skills from the vacancy
+                    self.job_key_skills = self._extract_skills_from_vacancy(job)
+                    job.skills = self.job_key_skills
+                    # set the vacancy to answerer
+                    self.llm_answerer_component.set_job(job.model_dump())
+                    # update the list of required skills for the vacancy and save job info to file
+                    # only if the vacancy was scored and considered interesting
+                    if score > 0:
+                        self._update_skill_stat(self.job_key_skills)
+                        self._save_interesting_job(job, score, reasoning)
+                # apply to the vacancy only if it's interesting
+                if job_is_interesting:
                     if EASY_APPLY_ONLY_MODE is False:
                         apply_url = await self._check_apply_button()
                         if apply_url:
@@ -353,6 +360,7 @@ class JobApplier:
 
     async def easy_apply(self, job: Job) -> Tuple[str, str]:
         """Apply to the vacancy using LinkedIn Easy Apply functionality (async)"""
+        # set the vacancy to answerer and agent for evaluation
         try:
             if COLLECT_INFO_MODE is True:
                 # if we are in the mode of collecting information for interesting jobs and skill statistics -
@@ -608,9 +616,7 @@ class JobApplier:
             job.job_description = await self._extract_job_description()
             job.company_description = await self._extract_company_description()
             job.recruiter_link = await self._get_job_recruiter()
-            pause(1, 2)
-            # await self._extract_skills_and_preferences(job)
-            self._extract_skills_from_vacancy(job)
+            # job.skills = self._extract_skills_from_vacancy(job)
 
         except Exception as e:
             logger.warning(f"Could not get detailed job description: {e}")
@@ -719,18 +725,20 @@ class JobApplier:
             ".jobs-company__box .jobs-company__description",
             ".jobs-company__overview .jobs-company__description",
         ]
-
         for selector in about_company_selectors:
             element_text = await get_element_text(self.page, selector)
             if element_text:
-                element_text = " ".join(element_text.split("\n")[:-1])
+                element_list = element_text.split("\n")
+                if len(element_list) > 1:
+                    element_text = " ".join(element_list[:-1])
                 company_description = element_text
                 return company_description
 
-    def _extract_skills_from_vacancy(self, job: Job) -> None:
+    def _extract_skills_from_vacancy(self, job: Job) -> List[str]:
         """Extract skills from vacancy"""
         skills = self.llm_answerer_component.extract_skills_from_vacancy(job.job_description)
         self.job_key_skills = skills
+        return str(skills).replace("[", "").replace("]", "").replace("'", "").replace('"', "")
 
     # async def _extract_skills_and_preferences(self, job: Job):
     #     """Extract skills information from skill match element (async)"""

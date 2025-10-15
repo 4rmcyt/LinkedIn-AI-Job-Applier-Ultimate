@@ -54,11 +54,6 @@ def transform_vacancy_data(data: Dict[str, Any]) -> str:
         if val:
             main_info_lines.append(f"{label}: {val}")  # No indent for top-level info
 
-    # Add job URL if available
-    job_url = _format_value(data.get("url"))
-    if job_url:
-        main_info_lines.append(f"Vacancy URL: {job_url}")
-
     if main_info_lines:
         content_lines.extend(main_info_lines)
 

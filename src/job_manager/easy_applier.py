@@ -81,7 +81,7 @@ class EasyApplier:
         :param job: A job object with the job details.
         :return: None
         """
-        logger.info(f"Applying to job: {job}")
+        logger.info(f"Applying to job: {job.job_title} at {job.company_name}")
 
         # Check for Easy Apply daily limit before attempting to apply
         if await self._check_easy_apply_limit():
@@ -263,7 +263,7 @@ class EasyApplier:
 
     async def _fill_application_form(self, job: Job):
         """Fill out application form with loop for multi-step forms (async)"""
-        logger.info(f"Filling out application form for job: {job}")
+        logger.info(f"Filling out application form for job: {job.job_title}")
         while True:
             self.previous_question_texts = []
             await self._fill_up(job)
@@ -377,7 +377,7 @@ class EasyApplier:
 
     async def _fill_up(self, job: Job) -> None:
         """Fill up form sections (async)"""
-        logger.info(f"Filling up form sections for job: {job}")
+        logger.info(f"Filling up form sections for job: {job.job_title}")
 
         try:
             # Wait for the Easy Apply modal to be present

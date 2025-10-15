@@ -21,8 +21,7 @@ In this mode app doesn't apply to the jobs, only creates resumes, cover letters 
 - cover letters are created in data/output/cover_letters
 - skill statistics are gathered in data/output/skill_stat.yaml
 """
-TEST_MODE = False
-
+TEST_MODE = True
 
 """
 In this mode app doesn't apply to the jobs or create resumes and cover letters, only gathers information for interesting jobs and

@@ -25,7 +25,7 @@ from config.app_config import (
     LLM_MODEL_TYPE,
     TEMPERATURE,
 )
-from config.constants import LOG_DIR, PRICE_DICT
+from config.constants import LOG_DIR, PRICE_DICT, RESUME_DIR
 from config.logger_config import logger
 from src.pydantic_models.log_models import LLMCall
 from src.pydantic_models.prompt_models import ResumeStructure
@@ -466,18 +466,28 @@ class GPTAnswerer:
         self.job = None
         self.ai_adapter = AIAdapter(llm_api_key, llm_proxy)
         self.llm_cheap = LoggerChatModel(self.ai_adapter)
+        self.resume_template_dir = Path(RESUME_DIR) / "templates"
         self.chains = {
             "parse_resume": self._create_pydantic_chain(
                 prompts.parse_resume_template, ResumeStructure
             ),
+            "resume_improvement": self._create_chain(prompts.resume_improve),
             "extract_skills_from_vacancy": self._create_chain(prompts.extract_skills_from_vacancy),
+            "summarize_job_description": self._create_chain(prompts.summarize_prompt_template),
             "job_is_interesting": self._create_chain(prompts.job_is_interesting),
             "text_question": self._create_chain(prompts.text_question_answer_template),
             "numeric_question": self._create_chain(prompts.numeric_question_template),
             "text_question_with_error": self._create_chain(
                 prompts.text_question_with_error_template
             ),
-            "resume_improvement": self._create_chain(prompts.resume_improve),
+            "prompt_cover_letter": self._create_chain(prompts.coverletter_template),
+            "prompt_header": self._create_chain(prompts.prompt_header),
+            "prompt_education": self._create_chain(prompts.prompt_education),
+            "prompt_working_experience": self._create_chain(prompts.prompt_working_experience),
+            "prompt_side_projects": self._create_chain(prompts.prompt_side_projects),
+            "prompt_achievements": self._create_chain(prompts.prompt_achievements),
+            "prompt_certifications": self._create_chain(prompts.prompt_certifications),
+            "prompt_additional_skills": self._create_chain(prompts.prompt_additional_skills),
         }
 
     @staticmethod
@@ -534,7 +544,8 @@ class GPTAnswerer:
     def set_job(self, job: Dict[str, Any]) -> None:
         """Add job description."""
         self.job = job
-        self.job_readable = transform_vacancy_data(job)
+        text = transform_vacancy_data(job)
+        self.job_readable = self.summarize_job_description(text)
         logger.info(f"Adding job description: {self.job_readable}")
 
     def set_search_parameters(self, parameters: dict) -> None:
@@ -542,20 +553,9 @@ class GPTAnswerer:
         logger.info(f"Setting job search parameters: {parameters}")
         self.search_parameters = transform_search_config_data(parameters)
 
-    def summarize_job_description(self, text: str) -> str:
-        """Create brief job description"""
-        logger.info(f"Creating brief job description: '{text}'")
-        prompts.summarize_prompt_template = self._preprocess_template_string(
-            prompts.summarize_prompt_template
-        )
-        prompt = ChatPromptTemplate.from_template(prompts.summarize_prompt_template)
-        chain = prompt | self.llm_cheap | StrOutputParser()
-        output = chain.invoke({"text": text})
-        logger.debug(f"Generated brief description: {output}")
-        return output
-
     def _create_chain(self, template: str) -> ChatPromptTemplate:
         """Create a chain for a specific resume section."""
+        template = self._preprocess_template_string(template)
         prompt = ChatPromptTemplate.from_template(template)
         return prompt | self.llm_cheap | StrOutputParser()
 
@@ -564,6 +564,7 @@ class GPTAnswerer:
     ) -> Tuple[ChatPromptTemplate, PydanticOutputParser]:
         """Create a chain for a specific resume section."""
         parser = PydanticOutputParser(pydantic_object=pydantic_object)
+        template = self._preprocess_template_string(template)
         prompt = ChatPromptTemplate.from_template(template)
         return prompt | self.llm_cheap | parser, parser
 
@@ -586,6 +587,14 @@ class GPTAnswerer:
         output = output.split(",")
         output = [skill.strip() for skill in output if skill.strip()]
         logger.debug(f"Skills extracted from vacancy: {output}")
+        return output
+
+    def summarize_job_description(self, text: str) -> str:
+        """Create brief job description"""
+        logger.info(f"Creating brief job description: '{text}'")
+        chain = self.chains["summarize_job_description"]
+        output = chain.invoke({"text": text})
+        logger.debug(f"Generated brief description: {output}")
         return output
 
     def answer_question_textual_wide_range(
@@ -715,17 +724,18 @@ class GPTAnswerer:
         logger.info(f"Best options: {best_options}")
         return best_options
 
-    def job_is_interesting(self) -> bool | None:
+    def job_is_interesting(self, job: Dict[str, Any]) -> bool | None:
         """
         Ask LLM if the job is interesting with our resume, skills and interests.
         Return True if the job is interesting, False otherwise.
         """
         chain = self.chains["job_is_interesting"]
+        job_description = transform_vacancy_data(job)
         try:
             output = chain.invoke(
                 {
                     "resume": self.resume_readable,
-                    "job_description": self.job_readable,
+                    "job_description": job_description,
                     "search_parameters": self.search_parameters,
                 }
             )
@@ -770,7 +780,7 @@ class GPTAnswerer:
             additional_prompt += f"Email: {email}\n"
             invoke_dict["email"] = email
 
-        chain = self._create_chain(prompts.coverletter_template + additional_prompt)
+        chain = self.chains["prompt_cover_letter"]
         output = chain.invoke(invoke_dict)
         logger.debug(f"Cover letter generated: {output}")
         return output
@@ -792,9 +802,7 @@ class GPTAnswerer:
     def generate_header(self) -> str:
         """Generating resume header"""
         logger.info("Generating resume header")
-        header_prompt_template = self._preprocess_template_string(prompts.prompt_header)
-        prompt = ChatPromptTemplate.from_template(header_prompt_template)
-        chain = prompt | self.llm_cheap | StrOutputParser()
+        chain = self.chains["prompt_header"]
 
         output = chain.invoke(
             {
@@ -809,12 +817,11 @@ class GPTAnswerer:
     def generate_education_section(self) -> str:
         """Generating education section for resume"""
         logger.info("Generating education section for resume")
-        education_prompt_template = self._preprocess_template_string(prompts.prompt_education)
-        prompt = ChatPromptTemplate.from_template(education_prompt_template)
-        chain = prompt | self.llm_cheap | StrOutputParser()
+        chain = self.chains["prompt_education"]
         output = chain.invoke(
             {
                 "education_details": self.resume_structured["education_details"],
+                "job_description": self.job_readable,
             }
         )
         logger.debug(f"Education section generated: {output}")
@@ -825,14 +832,11 @@ class GPTAnswerer:
     def generate_work_experience_section(self) -> str:
         """Generating work experience section for resume"""
         logger.info("Generating work experience section for resume")
-        work_experience_prompt_template = self._preprocess_template_string(
-            prompts.prompt_working_experience
-        )
-        prompt = ChatPromptTemplate.from_template(work_experience_prompt_template)
-        chain = prompt | self.llm_cheap | StrOutputParser()
+        chain = self.chains["prompt_working_experience"]
         output = chain.invoke(
             {
                 "experience_details": self.resume_structured["experience_details"],
+                "job_description": self.job_readable,
             }
         )
         logger.debug(f"Work experience section generated: {output}")
@@ -843,18 +847,11 @@ class GPTAnswerer:
     def generate_side_projects_section(self) -> str:
         """Generating side projects section for resume"""
         logger.info("Generating side projects section for resume")
-
-        side_projects_prompt_template = self._preprocess_template_string(
-            prompts.prompt_side_projects
-        )
-
-        prompt = ChatPromptTemplate.from_template(side_projects_prompt_template)
-
-        chain = prompt | self.llm_cheap | StrOutputParser()
-
+        chain = self.chains["prompt_side_projects"]
         output = chain.invoke(
             {
                 "projects": self.resume_structured["projects"],
+                "job_description": self.job_readable,
             }
         )
         logger.debug(f"Side projects section generated: {output}")
@@ -865,15 +862,10 @@ class GPTAnswerer:
     def generate_achievements_section(self) -> str:
         """Generating achievements section for resume"""
         logger.info("Generating achievements section for resume")
-
-        achievements_prompt_template = self._preprocess_template_string(prompts.prompt_achievements)
-
-        prompt = ChatPromptTemplate.from_template(achievements_prompt_template)
-
-        chain = prompt | self.llm_cheap | StrOutputParser()
-
+        chain = self.chains["prompt_achievements"]
         input_data = {
             "achievements": self.resume_structured["achievements"],
+            "job_description": self.job_readable,
         }
 
         output = chain.invoke(input_data)
@@ -885,15 +877,7 @@ class GPTAnswerer:
     def generate_certifications_section(self) -> str:
         """Generate certifications section for resume"""
         logger.info("Generating certifications section for resume")
-
-        certifications_prompt_template = self._preprocess_template_string(
-            prompts.prompt_certifications
-        )
-
-        prompt = ChatPromptTemplate.from_template(certifications_prompt_template)
-
-        chain = prompt | self.llm_cheap | StrOutputParser()
-
+        chain = self.chains["prompt_certifications"]
         input_data = {
             "certifications": self.resume_structured["certifications"],
             "job_description": self.job_readable,
@@ -909,17 +893,13 @@ class GPTAnswerer:
         """Generate skills section for resume"""
         logger.info("Generating additional skills section for resume")
 
-        additional_skills_prompt_template = self._preprocess_template_string(
-            prompts.prompt_additional_skills
-        )
-        prompt = ChatPromptTemplate.from_template(additional_skills_prompt_template)
-        chain = prompt | self.llm_cheap | StrOutputParser()
-
+        chain = self.chains["prompt_additional_skills"]
         output = chain.invoke(
             {
                 "languages": self.resume_structured["languages"],
                 "skills": self.resume_structured["skills"],
                 "interests": self.resume_structured["interests"],
+                "job_description": self.job_readable,
             }
         )
         logger.debug(f"Additional skills section generated: {output}")
@@ -931,8 +911,13 @@ class GPTAnswerer:
         """Creating a resume from generated components"""
 
         def header_fn():
+            template_resume = self.load_resume_template("header")
+            if template_resume:
+                return template_resume
             if self.resume_structured["personal_information"] and self.job_readable:
-                return self.generate_header()
+                header = self.generate_header()
+                self.save_resume_template("header", header)
+                return header
             return ""
 
         def education_fn():
@@ -1008,3 +993,21 @@ class GPTAnswerer:
         full_resume += "  </main>\n"
         full_resume += "</body>"
         return full_resume
+
+    def load_resume_template(self, template_name: str) -> str:
+        """Load template resume"""
+        if not self.resume_template_dir.exists():
+            self.resume_template_dir.mkdir(parents=True)
+        try:
+            with open(
+                self.resume_template_dir / f"{template_name}.html", "r", encoding="utf-8"
+            ) as f:
+                resume_template = f.read()
+                return resume_template
+        except FileNotFoundError:
+            return ""
+
+    def save_resume_template(self, template_name: str, resume_template: str) -> None:
+        """Save template resume"""
+        with open(self.resume_template_dir / f"{template_name}.html", "w", encoding="utf-8") as f:
+            f.write(resume_template)
