@@ -263,6 +263,127 @@ class TestAIAdapter:
         with pytest.raises(ValueError, match="Unsupported model type"):
             AIAdapter(mock_api_key, mock_llm_proxy)
 
+    @patch("src.llm.llm_manager.FREE_TIER", False)
+    @patch("src.llm.llm_manager.LLM_MODEL_TYPE", "openai")
+    @patch("src.llm.llm_manager.EASY_APPLY_MODEL", "gpt-4")
+    @patch("src.llm.llm_manager.OpenAIModel")
+    @patch("src.llm.llm_manager.pause")
+    def test_ai_adapter_no_rate_limiting_when_free_tier_disabled(
+        self, mock_pause, mock_openai, mock_api_key, mock_llm_proxy
+    ):
+        """Test AIAdapter does not apply rate limiting when free tier is disabled"""
+        mock_model = MagicMock()
+        mock_model.invoke.return_value = AIMessage(content="Test response")
+        mock_openai.return_value = mock_model
+
+        adapter = AIAdapter(mock_api_key, mock_llm_proxy)
+
+        # Make multiple requests
+        for _ in range(5):
+            adapter.invoke("Test prompt")
+
+        # Verify pause was never called
+        mock_pause.assert_not_called()
+
+    @patch("src.llm.llm_manager.FREE_TIER", True)
+    @patch("src.llm.llm_manager.FREE_TIER_RPM_LIMIT", 3)
+    @patch("src.llm.llm_manager.LLM_MODEL_TYPE", "openai")
+    @patch("src.llm.llm_manager.EASY_APPLY_MODEL", "gpt-4")
+    @patch("src.llm.llm_manager.OpenAIModel")
+    @patch("src.llm.llm_manager.pause")
+    def test_ai_adapter_no_pause_under_rpm_limit(
+        self, mock_pause, mock_openai, mock_api_key, mock_llm_proxy
+    ):
+        """Test AIAdapter does not pause when requests are under RPM limit"""
+        mock_model = MagicMock()
+        mock_model.invoke.return_value = AIMessage(content="Test response")
+        mock_openai.return_value = mock_model
+
+        adapter = AIAdapter(mock_api_key, mock_llm_proxy)
+
+        # Make requests under the limit (3)
+        for _ in range(2):
+            adapter.invoke("Test prompt")
+
+        # Verify pause was not called
+        mock_pause.assert_not_called()
+
+    @patch("src.llm.llm_manager.FREE_TIER", True)
+    @patch("src.llm.llm_manager.FREE_TIER_RPM_LIMIT", 3)
+    @patch("src.llm.llm_manager.LLM_MODEL_TYPE", "openai")
+    @patch("src.llm.llm_manager.EASY_APPLY_MODEL", "gpt-4")
+    @patch("src.llm.llm_manager.OpenAIModel")
+    @patch("src.llm.llm_manager.pause")
+    @patch("src.llm.llm_manager.datetime")
+    def test_ai_adapter_pauses_when_rpm_limit_reached(
+        self, mock_datetime, mock_pause, mock_openai, mock_api_key, mock_llm_proxy
+    ):
+        """Test AIAdapter pauses when RPM limit is reached within 60 seconds"""
+        from datetime import datetime, timedelta
+
+        # Setup mock datetime
+        base_time = datetime(2024, 1, 1, 12, 0, 0)
+        mock_datetime.now.side_effect = [
+            base_time,  # First request
+            base_time + timedelta(seconds=10),  # Second request
+            base_time + timedelta(seconds=20),  # Third request
+            base_time + timedelta(seconds=30),  # Fourth request - triggers check
+            base_time + timedelta(seconds=30),  # During pause calculation
+        ]
+
+        mock_model = MagicMock()
+        mock_model.invoke.return_value = AIMessage(content="Test response")
+        mock_openai.return_value = mock_model
+
+        adapter = AIAdapter(mock_api_key, mock_llm_proxy)
+
+        # Make requests that hit the limit (3 requests in queue, 4th triggers pause)
+        for _ in range(4):
+            adapter.invoke("Test prompt")
+
+        # Verify pause was called
+        # Time delta = 30 seconds since first request
+        # Should pause for 60 - 30 = 30 seconds
+        assert mock_pause.call_count == 1
+        call_args = mock_pause.call_args[0]
+        assert call_args[0] == 30.0  # pause duration
+        assert call_args[1] == 31.0  # pause duration + 1
+
+    @patch("src.llm.llm_manager.FREE_TIER", True)
+    @patch("src.llm.llm_manager.FREE_TIER_RPM_LIMIT", 2)
+    @patch("src.llm.llm_manager.LLM_MODEL_TYPE", "openai")
+    @patch("src.llm.llm_manager.EASY_APPLY_MODEL", "gpt-4")
+    @patch("src.llm.llm_manager.OpenAIModel")
+    @patch("src.llm.llm_manager.pause")
+    @patch("src.llm.llm_manager.datetime")
+    def test_ai_adapter_no_pause_after_60_seconds(
+        self, mock_datetime, mock_pause, mock_openai, mock_api_key, mock_llm_proxy
+    ):
+        """Test AIAdapter does not pause if oldest request is older than 60 seconds"""
+        from datetime import datetime, timedelta
+
+        # Setup mock datetime - requests spaced more than 60 seconds apart
+        base_time = datetime(2024, 1, 1, 12, 0, 0)
+        mock_datetime.now.side_effect = [
+            base_time,  # First request
+            base_time + timedelta(seconds=30),  # Second request
+            base_time + timedelta(seconds=65),  # Third request - 65 seconds after first
+            base_time + timedelta(seconds=65),  # During check
+        ]
+
+        mock_model = MagicMock()
+        mock_model.invoke.return_value = AIMessage(content="Test response")
+        mock_openai.return_value = mock_model
+
+        adapter = AIAdapter(mock_api_key, mock_llm_proxy)
+
+        # Make 3 requests
+        for _ in range(3):
+            adapter.invoke("Test prompt")
+
+        # Verify pause was not called since 60+ seconds passed
+        mock_pause.assert_not_called()
+
 
 class TestLLMLogger:
     """Tests for LLMLogger class"""
