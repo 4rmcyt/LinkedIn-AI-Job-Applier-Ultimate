@@ -46,7 +46,9 @@ prompt_education_template = """
     </div>
 </section>
 ```
-The results should be provided in html format, Provide only the html code for the resume, without any explanations or additional text and also without ```html ```"""
+The results should be provided in html format, Provide only the html code for the resume, without any explanations or additional text and also without ```html ```
+Provide the Grade only if it is strong and relevant.
+"""
 
 
 prompt_working_experience_template = """

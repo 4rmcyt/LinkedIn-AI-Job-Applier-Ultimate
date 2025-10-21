@@ -27,6 +27,7 @@ dependencies = [
     "PyYAML==6.0.2",
     "reportlab==4.2.2",
     "telethon==1.39.0",
+    "pynput==1.8.1",
     "python-telegram-bot==21.9",
 ]
 

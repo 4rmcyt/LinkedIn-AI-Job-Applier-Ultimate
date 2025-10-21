@@ -5,10 +5,12 @@ import os
 import time
 import traceback
 from pathlib import Path
+from threading import Lock
 
 import dotenv
+from pynput import keyboard as pynput_kb
 
-from config.app_config import CHECK_LAST_SEARCH_TIME
+from config.app_config import RESTART_EVERY_DAY
 from config.constants import BROWSER_STORAGE_STATE, RESUME_DIR, SEARCH_CONFIG_FILE
 from config.logger_config import logger
 from src.job_manager.authenticator import LinkedInAuthenticator
@@ -35,6 +37,11 @@ os.makedirs(RESUME_DIR, exist_ok=True)
 RESUME_STRUCTURED_FILE = Path(RESUME_DIR) / "structured_resume.yaml"
 RESUME_TEXT_FILE = Path(RESUME_DIR) / "resume_text.txt"
 READY_MADE_RESUME = Path(RESUME_DIR) / "resume.pdf"
+
+# Global pause state for keyboard control
+paused = False
+pause_lock = Lock()
+ctrl_pressed = False
 
 
 class ConfigError(Exception):
@@ -99,6 +106,49 @@ class ConfigValidator:
                 logger.warning("Resume template not found, creating new one")
                 return {}
             raise ConfigError(f"Structured resume validation error: {str(e)}")
+
+
+def on_press(key):
+    """Handle key press events"""
+    global paused, ctrl_pressed
+    try:
+        # Track Ctrl key state
+        if key in (pynput_kb.Key.ctrl_l, pynput_kb.Key.ctrl_r):
+            ctrl_pressed = True
+        # Check for 'x' key when Ctrl is pressed
+        elif hasattr(key, "char") and key.char == "x" and ctrl_pressed:
+            with pause_lock:
+                paused = not paused
+                if paused:
+                    logger.warning("⏸️  PAUSED - Press Ctrl+X to continue")
+                else:
+                    logger.info("▶️  RESUMED")
+    except AttributeError:
+        pass
+
+
+def on_release(key):
+    """Handle key release events"""
+    global ctrl_pressed
+    # Reset Ctrl key state
+    if key in (pynput_kb.Key.ctrl_l, pynput_kb.Key.ctrl_r):
+        ctrl_pressed = False
+
+
+def start_keyboard_listener():
+    """Start keyboard listener in background thread"""
+    listener = pynput_kb.Listener(on_press=on_press, on_release=on_release)
+    listener.daemon = True
+    listener.start()
+    logger.info("Keyboard listener started - Press Ctrl+X to pause/resume")
+
+
+async def check_pause():
+    """Check if execution is paused and wait if needed"""
+    global paused
+    if paused:
+        while paused:
+            await asyncio.sleep(0.5)
 
 
 async def create_and_run_bot(
@@ -170,9 +220,10 @@ async def create_and_run_bot(
         # Set bot facade
         bot = BotFacade(resume_anonymizer, search_component, apply_component, llm_agent_component)
         bot.set_parameters(search_config)
+        bot.set_pause_checker(check_pause)
 
         # Check if the last search was less than a day ago
-        if CHECK_LAST_SEARCH_TIME and not apply_component.check_the_last_search_time():
+        if RESTART_EVERY_DAY and not apply_component.check_the_last_search_time():
             logger.warning(
                 "Last search was less than a day ago, finishing work. If you want to restart the search, delete the file data/output/last_run.yaml file"
             )
@@ -206,44 +257,50 @@ async def create_and_run_bot(
 
 
 def main() -> None:
-    try:
-        # create output folder if it doesn't exist
-        data = Path("data")
-        output_folder = data / "output"
-        output_folder.mkdir(exist_ok=True)
+    # Start keyboard listener for pause/resume functionality
+    start_keyboard_listener()
 
-        # validate config files
-        config_validator = ConfigValidator()
-        secrets = config_validator.validate_secrets()
-        search_config = config_validator.validate_search_config(SEARCH_CONFIG_FILE)
-        resume_text = config_validator.validate_resume_text(RESUME_TEXT_FILE)
-        resume_structured = config_validator.validate_resume_structured(RESUME_STRUCTURED_FILE)
+    while True:
+        try:
+            # create output folder if it doesn't exist
+            data = Path("data")
+            output_folder = data / "output"
+            output_folder.mkdir(exist_ok=True)
 
-        logger.info("Starting LinkedIn Job Applier...")
-        logger.info(f"Search config loaded with {len(search_config)} parameters")
+            # validate config files
+            config_validator = ConfigValidator()
+            secrets = config_validator.validate_secrets()
+            search_config = config_validator.validate_search_config(SEARCH_CONFIG_FILE)
+            resume_text = config_validator.validate_resume_text(RESUME_TEXT_FILE)
+            resume_structured = config_validator.validate_resume_structured(RESUME_STRUCTURED_FILE)
 
-        # Run LinkedIn bot (async)
-        asyncio.run(create_and_run_bot(search_config, secrets, resume_text, resume_structured))
-        logger.info("LinkedIn bot completed successfully")
+            logger.info("Starting LinkedIn Job Applier...")
+            logger.info(f"Search config loaded with {len(search_config)} parameters")
 
-        # Wait 1 hour total before next run
-        if CHECK_LAST_SEARCH_TIME:
-            time.sleep(3600)
+            # Run LinkedIn bot (async)
+            asyncio.run(create_and_run_bot(search_config, secrets, resume_text, resume_structured))
+            logger.info("LinkedIn bot completed successfully")
 
-    except ConfigError as ce:
-        logger.error(f"Configuration error: {str(ce)}")
-    except FileNotFoundError as fnf:
-        tb_str = traceback.format_exc()
-        logger.error(f"File not found: {str(fnf)}\n{tb_str}")
-    except RuntimeError as re:
-        tb_str = traceback.format_exc()
-        logger.error(f"Runtime error: {str(re)}\n{tb_str}")
-    except Exception as e:
-        tb_str = traceback.format_exc()
-        logger.error(f"Unknown error: {str(e)}\n{tb_str}")
-    finally:
-        logger.info("Program completed")
-        # time.sleep(600)  # Commented out for testing
+        except ConfigError as ce:
+            logger.error(f"Configuration error: {str(ce)}")
+        except FileNotFoundError as fnf:
+            tb_str = traceback.format_exc()
+            logger.error(f"File not found: {str(fnf)}\n{tb_str}")
+        except RuntimeError as re:
+            tb_str = traceback.format_exc()
+            logger.error(f"Runtime error: {str(re)}\n{tb_str}")
+        except Exception as e:
+            tb_str = traceback.format_exc()
+            logger.error(f"Unknown error: {str(e)}\n{tb_str}")
+        finally:
+            logger.info("Program completed")
+            # Wait 1 hour total before next run
+            if RESTART_EVERY_DAY:
+                logger.info("Waiting 1 hour before next run")
+                time.sleep(3600)
+            else:
+                logger.info("Exiting program")
+                break
 
 
 if __name__ == "__main__":

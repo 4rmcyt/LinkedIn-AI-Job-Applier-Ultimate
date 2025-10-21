@@ -610,7 +610,7 @@ class TestCreateAndRunBot:
             patch("main.JobApplier", return_value=mock_apply_component),
             patch("main.BotFacade", return_value=mock_bot_facade),
             patch("main.READY_MADE_RESUME", mock_resume_file),
-            patch("main.CHECK_LAST_SEARCH_TIME", True),
+            patch("main.RESTART_EVERY_DAY", True),
         ):
             result = await create_and_run_bot(search_config, secrets, "", resume_structured)
 

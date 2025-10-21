@@ -29,6 +29,7 @@ class EasyApplier:
         gpt_answerer: GPTAnswerer,
         resume_anonymizer: ResumeAnonymizer,
         resume_generator_manager,
+        pause_checker,
         answers_file: Path,
         resume_dir: Path,
         cover_letter_dir: Path,
@@ -39,6 +40,7 @@ class EasyApplier:
         self.gpt_answerer = gpt_answerer
         self.resume_anonymizer = resume_anonymizer
         self.resume_generator_manager = resume_generator_manager
+        self.pause_checker = pause_checker
         self.answers_file = answers_file
         self.resume_dir = resume_dir
         self.generated_resume_dir = Path(resume_dir) / "generated_resumes"
@@ -81,7 +83,7 @@ class EasyApplier:
         :param job: A job object with the job details.
         :return: None
         """
-        logger.info(f"Applying to job: {job}")
+        logger.info(f"Applying to job: {job.job_title} at {job.company_name}")
 
         # Check for Easy Apply daily limit before attempting to apply
         if await self._check_easy_apply_limit():
@@ -263,10 +265,15 @@ class EasyApplier:
 
     async def _fill_application_form(self, job: Job):
         """Fill out application form with loop for multi-step forms (async)"""
-        logger.info(f"Filling out application form for job: {job}")
+        logger.info(f"Filling out application form for job: {job.job_title}")
         while True:
             self.previous_question_texts = []
+            # Fill out application form
             await self._fill_up(job)
+            # Check if execution is paused
+            if self.pause_checker:
+                await self.pause_checker()
+            # Click 'Next' or 'Submit' or 'Confirm' button
             if await self._next_or_submit():
                 logger.debug("Application form submitted")
                 break
@@ -377,7 +384,7 @@ class EasyApplier:
 
     async def _fill_up(self, job: Job) -> None:
         """Fill up form sections (async)"""
-        logger.info(f"Filling up form sections for job: {job}")
+        logger.info(f"Filling up form sections for job: {job.job_title}")
 
         try:
             # Wait for the Easy Apply modal to be present

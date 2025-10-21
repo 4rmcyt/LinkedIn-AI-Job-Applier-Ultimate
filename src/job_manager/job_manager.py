@@ -60,6 +60,7 @@ class JobApplier:
         self.llm_answerer_component = None
         self.llm_agent_component = None
         self.resume_generator_manager = None
+        self.pause_checker = None
         self.jobs_no_info = (
             []
         )  # vacancies to which applications were not sent due to missing information
@@ -121,6 +122,12 @@ class JobApplier:
         Set resume generator manager for writing resumes
         """
         self.resume_generator_manager = resume_generator_manager
+
+    def set_pause_checker(self, pause_checker):
+        """
+        Set pause checker function for pausing execution
+        """
+        self.pause_checker = pause_checker
 
     async def get_vacancies_from_page(self) -> List[Any]:
         """Parse job vacancies from current LinkedIn page (async)"""
@@ -193,6 +200,7 @@ class JobApplier:
             self.llm_answerer_component,
             self.resume_anonymizer,
             self.resume_generator_manager,
+            self.pause_checker,
             ANSWERS_FILE,
             RESUME_DIR,
             COVER_LETTER_DIR,
@@ -211,6 +219,10 @@ class JobApplier:
         self.resume_improvement_recommendations()
         # continue until the maximum number of applications is reached
         while self.success_applies_num < self.max_applies_num and self.applies_num < 400:
+            # Check if execution is paused
+            if self.pause_checker:
+                await self.pause_checker()
+
             # go through all pages until they are finished
             vacancies = await self.get_vacancies_from_page()
             if len(vacancies) == 0:
@@ -218,6 +230,10 @@ class JobApplier:
                     logger.warning("No vacancies found for the search query")
                 break
             for vacancy in vacancies:
+                # Check if execution is paused before processing each job
+                if self.pause_checker:
+                    await self.pause_checker()
+
                 url = vacancy.get("url")
                 try:
                     result = await self.apply_job(vacancy)
@@ -298,23 +314,29 @@ class JobApplier:
                 logger.warning(f"Skipping the vacancy for the reason: {reason}")
                 pause(1, 2)
             else:
-                # set the vacancy to answerer and agent for evaluation
-                self.llm_answerer_component.set_job(job.model_dump())
                 if MONKEY_MODE is True and COLLECT_INFO_MODE is False:
                     # in 'monkey mode' any vacancy is considered interesting
                     job_is_interesting = True
+                    score = 0
+                    reasoning = "Monkey mode"
                 else:
-                    # otherwise ask LLM to evaluate if the vacancy is interesting or not
                     (
                         job_is_interesting,
                         score,
                         reasoning,
-                    ) = self.llm_answerer_component.job_is_interesting()
-                    self._save_interesting_job(job, score, reasoning)
-                # apply to the vacancy only if it is interesting
+                    ) = self.llm_answerer_component.job_is_interesting(job.model_dump())
                 if job_is_interesting:
-                    # update the list of required skills for the vacancy only if the vacancy is interesting
-                    self._update_skill_stat(self.job_key_skills)
+                    # extract skills from the vacancy
+                    job.skills = self._extract_skills_from_vacancy(job)
+                    # set the vacancy to answerer
+                    self.llm_answerer_component.set_job(job.model_dump())
+                    # update the list of required skills for the vacancy and save job info to file
+                    # only if the vacancy was scored and considered interesting
+                    if int(score) > 0:
+                        self._update_skill_stat(self.job_key_skills)
+                        self._save_interesting_job(job, score, reasoning)
+                # apply to the vacancy only if it's interesting
+                if job_is_interesting:
                     if EASY_APPLY_ONLY_MODE is False:
                         apply_url = await self._check_apply_button()
                         if apply_url:
@@ -353,6 +375,7 @@ class JobApplier:
 
     async def easy_apply(self, job: Job) -> Tuple[str, str]:
         """Apply to the vacancy using LinkedIn Easy Apply functionality (async)"""
+        # set the vacancy to answerer and agent for evaluation
         try:
             if COLLECT_INFO_MODE is True:
                 # if we are in the mode of collecting information for interesting jobs and skill statistics -
@@ -608,8 +631,7 @@ class JobApplier:
             job.job_description = await self._extract_job_description()
             job.company_description = await self._extract_company_description()
             job.recruiter_link = await self._get_job_recruiter()
-            pause(1, 2)
-            await self._extract_skills_and_preferences(job)
+            # job.skills = self._extract_skills_from_vacancy(job)
 
         except Exception as e:
             logger.warning(f"Could not get detailed job description: {e}")
@@ -718,101 +740,108 @@ class JobApplier:
             ".jobs-company__box .jobs-company__description",
             ".jobs-company__overview .jobs-company__description",
         ]
-
         for selector in about_company_selectors:
             element_text = await get_element_text(self.page, selector)
             if element_text:
-                element_text = " ".join(element_text.split("\n")[:-1])
+                element_list = element_text.split("\n")
+                if len(element_list) > 1:
+                    element_text = " ".join(element_list[:-1])
                 company_description = element_text
                 return company_description
 
-    async def _extract_skills_and_preferences(self, job: Job):
-        """Extract skills information from skill match element (async)"""
-        try:
-            skills_buttons = self.page.locator("button[aria-label='Skills']")
-            if await skills_buttons.count() > 0:
-                await skills_buttons.first.click(timeout=1000)
-            else:
-                buttons = await find_elements_safely(self.page, "//button", "xpath")
-                for button in buttons:
-                    try:
-                        txt = (await button.text_content() or "").lower()
-                        if "skills" in txt:
-                            await button.click(timeout=1000)
-                            break
-                    except Exception:
-                        continue
-            pause()
-            # Wait for the skill page to appear
-            skill_element = "//*[starts-with(@class, 'job-details-preferences-and-skills__modal-section-insights-list-item')]"
-            skills = await find_elements_safely(self.page, skill_element, "xpath")
+    def _extract_skills_from_vacancy(self, job: Job) -> List[str]:
+        """Extract skills from vacancy"""
+        skills = self.llm_answerer_component.extract_skills_from_vacancy(job.job_description)
+        self.job_key_skills = skills
+        return str(skills).replace("[", "").replace("]", "").replace("'", "").replace('"', "")
 
-            job_types = [
-                "Full-time",
-                "Part-time",
-                "Contract",
-                "Temporary",
-                "Volunteer",
-                "Internship",
-                "Apprenticeship",
-                "Other",
-                "On-site",
-                "Hybrid",
-                "Remote",
-                "$",
-            ]
-            # Extract skills and preferences using clean text extraction
-            clean_texts = []
-            for s in skills:
-                text = await get_clean_text(s)
-                clean_texts.append(text)
-            clean_texts = [text for text in clean_texts if text]  # Remove empty strings
+    # async def _extract_skills_and_preferences(self, job: Job):
+    #     """Extract skills information from skill match element (async)"""
+    #     try:
+    #         skills_buttons = self.page.locator("button[aria-label='Skills']")
+    #         if await skills_buttons.count() > 0:
+    #             await skills_buttons.first.click(timeout=1000)
+    #         else:
+    #             buttons = await find_elements_safely(self.page, "//button", "xpath")
+    #             for button in buttons:
+    #                 try:
+    #                     txt = (await button.text_content() or "").lower()
+    #                     if "skills" in txt:
+    #                         await button.click(timeout=1000)
+    #                         break
+    #                 except Exception:
+    #                     continue
+    #         pause()
+    #         # Wait for the skill page to appear
+    #         skill_element = "//*[starts-with(@class, 'job-details-preferences-and-skills__modal-section-insights-list-item')]"
+    #         skills = await find_elements_safely(self.page, skill_element, "xpath")
 
-            job_skills = [text for text in clean_texts if not any([j in text for j in job_types])]
-            preferences = [text for text in clean_texts if any([j in text for j in job_types])]
+    #         job_types = [
+    #             "Full-time",
+    #             "Part-time",
+    #             "Contract",
+    #             "Temporary",
+    #             "Volunteer",
+    #             "Internship",
+    #             "Apprenticeship",
+    #             "Other",
+    #             "On-site",
+    #             "Hybrid",
+    #             "Remote",
+    #             "$",
+    #         ]
+    #         # Extract skills and preferences using clean text extraction
+    #         clean_texts = []
+    #         for s in skills:
+    #             text = await get_clean_text(s)
+    #             clean_texts.append(text)
+    #         clean_texts = [text for text in clean_texts if text]  # Remove empty strings
 
-            # Save skills and preferences
-            self.job_key_skills = job_skills
-            job.skills = ", ".join(job_skills)
-            job.preferences = ", ".join(preferences)
+    #         job_skills = [text for text in clean_texts if not any([j in text for j in job_types])]
+    #         preferences = [text for text in clean_texts if any([j in text for j in job_types])]
 
-            # Extract additional metadata from preferences
-            for pref in preferences:
-                pref_lower = pref.lower()
-                if any(
-                    job_type in pref_lower
-                    for job_type in [
-                        "full-time",
-                        "part-time",
-                        "contract",
-                        "temporary",
-                        "volunteer",
-                        "internship",
-                        "other",
-                    ]
-                ):
-                    job.employment_type = pref
-                elif any(
-                    level in pref_lower
-                    for level in ["entry", "mid", "senior", "lead", "principal", "director"]
-                ):
-                    job.experience_level = pref
-                elif "$" in pref or "salary" in pref_lower or "compensation" in pref_lower:
-                    job.salary_range = pref
-                elif any(work_type in pref_lower for work_type in ["remote", "on-site", "hybrid"]):
-                    if "remote" in pref_lower:
-                        job.is_remote = True
+    #         # Save skills and preferences
+    #         self.job_key_skills = job_skills
+    #         job.skills = ", ".join(job_skills)
+    #         job.preferences = ", ".join(preferences)
 
-            # Close the skill page
-            pause()
-        except Exception as e:
-            logger.warning(f"Could not wait for the skill page: {e}")
+    #         # Extract additional metadata from preferences
+    #         for pref in preferences:
+    #             pref_lower = pref.lower()
+    #             if any(
+    #                 job_type in pref_lower
+    #                 for job_type in [
+    #                     "full-time",
+    #                     "part-time",
+    #                     "contract",
+    #                     "temporary",
+    #                     "volunteer",
+    #                     "internship",
+    #                     "other",
+    #                 ]
+    #             ):
+    #                 job.employment_type = pref
+    #             elif any(
+    #                 level in pref_lower
+    #                 for level in ["entry", "mid", "senior", "lead", "principal", "director"]
+    #             ):
+    #                 job.experience_level = pref
+    #             elif "$" in pref or "salary" in pref_lower or "compensation" in pref_lower:
+    #                 job.salary_range = pref
+    #             elif any(work_type in pref_lower for work_type in ["remote", "on-site", "hybrid"]):
+    #                 if "remote" in pref_lower:
+    #                     job.is_remote = True
 
-        if skills:
-            try:
-                await self.page.locator("button[aria-label='Dismiss']").first.click(timeout=1000)
-            except Exception as e:
-                logger.warning(f"Could not close the skill page: {e}")
+    #         # Close the skill page
+    #         pause()
+    #     except Exception as e:
+    #         logger.warning(f"Could not wait for the skill page: {e}")
+
+    #     if skills:
+    #         try:
+    #             await self.page.locator("button[aria-label='Dismiss']").first.click(timeout=1000)
+    #         except Exception as e:
+    #             logger.warning(f"Could not close the skill page: {e}")
 
     async def _get_job_recruiter(self):
         """Get job recruiter information (async)"""
@@ -1118,7 +1147,7 @@ class JobApplier:
                             "again to the same company",
                         )
                     for job_info in my_companies[comp]:
-                        if job_title == job_info.job_title:
+                        if job_title == job_info["job_title"]:
                             logger.warning("The vacancy has already been encountered, skipping")
                             return True, "The vacancy has already been encountered"
         return False, ""
