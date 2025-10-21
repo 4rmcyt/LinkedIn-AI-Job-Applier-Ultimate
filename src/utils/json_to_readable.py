@@ -49,6 +49,7 @@ def transform_vacancy_data(data: Dict[str, Any]) -> str:
     for key, label in [
         ("job_title", "Vacancy name"),
         ("company_name", "Company name"),
+        ("url", "Vacancy URL"),
     ]:
         val = _format_value(data.get(key))
         if val:

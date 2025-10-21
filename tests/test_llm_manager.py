@@ -263,6 +263,127 @@ class TestAIAdapter:
         with pytest.raises(ValueError, match="Unsupported model type"):
             AIAdapter(mock_api_key, mock_llm_proxy)
 
+    @patch("src.llm.llm_manager.FREE_TIER", False)
+    @patch("src.llm.llm_manager.LLM_MODEL_TYPE", "openai")
+    @patch("src.llm.llm_manager.EASY_APPLY_MODEL", "gpt-4")
+    @patch("src.llm.llm_manager.OpenAIModel")
+    @patch("src.llm.llm_manager.pause")
+    def test_ai_adapter_no_rate_limiting_when_free_tier_disabled(
+        self, mock_pause, mock_openai, mock_api_key, mock_llm_proxy
+    ):
+        """Test AIAdapter does not apply rate limiting when free tier is disabled"""
+        mock_model = MagicMock()
+        mock_model.invoke.return_value = AIMessage(content="Test response")
+        mock_openai.return_value = mock_model
+
+        adapter = AIAdapter(mock_api_key, mock_llm_proxy)
+
+        # Make multiple requests
+        for _ in range(5):
+            adapter.invoke("Test prompt")
+
+        # Verify pause was never called
+        mock_pause.assert_not_called()
+
+    @patch("src.llm.llm_manager.FREE_TIER", True)
+    @patch("src.llm.llm_manager.FREE_TIER_RPM_LIMIT", 3)
+    @patch("src.llm.llm_manager.LLM_MODEL_TYPE", "openai")
+    @patch("src.llm.llm_manager.EASY_APPLY_MODEL", "gpt-4")
+    @patch("src.llm.llm_manager.OpenAIModel")
+    @patch("src.llm.llm_manager.pause")
+    def test_ai_adapter_no_pause_under_rpm_limit(
+        self, mock_pause, mock_openai, mock_api_key, mock_llm_proxy
+    ):
+        """Test AIAdapter does not pause when requests are under RPM limit"""
+        mock_model = MagicMock()
+        mock_model.invoke.return_value = AIMessage(content="Test response")
+        mock_openai.return_value = mock_model
+
+        adapter = AIAdapter(mock_api_key, mock_llm_proxy)
+
+        # Make requests under the limit (3)
+        for _ in range(2):
+            adapter.invoke("Test prompt")
+
+        # Verify pause was not called
+        mock_pause.assert_not_called()
+
+    @patch("src.llm.llm_manager.FREE_TIER", True)
+    @patch("src.llm.llm_manager.FREE_TIER_RPM_LIMIT", 3)
+    @patch("src.llm.llm_manager.LLM_MODEL_TYPE", "openai")
+    @patch("src.llm.llm_manager.EASY_APPLY_MODEL", "gpt-4")
+    @patch("src.llm.llm_manager.OpenAIModel")
+    @patch("src.llm.llm_manager.pause")
+    @patch("src.llm.llm_manager.datetime")
+    def test_ai_adapter_pauses_when_rpm_limit_reached(
+        self, mock_datetime, mock_pause, mock_openai, mock_api_key, mock_llm_proxy
+    ):
+        """Test AIAdapter pauses when RPM limit is reached within 60 seconds"""
+        from datetime import datetime, timedelta
+
+        # Setup mock datetime
+        base_time = datetime(2024, 1, 1, 12, 0, 0)
+        mock_datetime.now.side_effect = [
+            base_time,  # First request
+            base_time + timedelta(seconds=10),  # Second request
+            base_time + timedelta(seconds=20),  # Third request
+            base_time + timedelta(seconds=30),  # Fourth request - triggers check
+            base_time + timedelta(seconds=30),  # During pause calculation
+        ]
+
+        mock_model = MagicMock()
+        mock_model.invoke.return_value = AIMessage(content="Test response")
+        mock_openai.return_value = mock_model
+
+        adapter = AIAdapter(mock_api_key, mock_llm_proxy)
+
+        # Make requests that hit the limit (3 requests in queue, 4th triggers pause)
+        for _ in range(4):
+            adapter.invoke("Test prompt")
+
+        # Verify pause was called
+        # Time delta = 30 seconds since first request
+        # Should pause for 60 - 30 = 30 seconds
+        assert mock_pause.call_count == 1
+        call_args = mock_pause.call_args[0]
+        assert call_args[0] == 30.0  # pause duration
+        assert call_args[1] == 31.0  # pause duration + 1
+
+    @patch("src.llm.llm_manager.FREE_TIER", True)
+    @patch("src.llm.llm_manager.FREE_TIER_RPM_LIMIT", 2)
+    @patch("src.llm.llm_manager.LLM_MODEL_TYPE", "openai")
+    @patch("src.llm.llm_manager.EASY_APPLY_MODEL", "gpt-4")
+    @patch("src.llm.llm_manager.OpenAIModel")
+    @patch("src.llm.llm_manager.pause")
+    @patch("src.llm.llm_manager.datetime")
+    def test_ai_adapter_no_pause_after_60_seconds(
+        self, mock_datetime, mock_pause, mock_openai, mock_api_key, mock_llm_proxy
+    ):
+        """Test AIAdapter does not pause if oldest request is older than 60 seconds"""
+        from datetime import datetime, timedelta
+
+        # Setup mock datetime - requests spaced more than 60 seconds apart
+        base_time = datetime(2024, 1, 1, 12, 0, 0)
+        mock_datetime.now.side_effect = [
+            base_time,  # First request
+            base_time + timedelta(seconds=30),  # Second request
+            base_time + timedelta(seconds=65),  # Third request - 65 seconds after first
+            base_time + timedelta(seconds=65),  # During check
+        ]
+
+        mock_model = MagicMock()
+        mock_model.invoke.return_value = AIMessage(content="Test response")
+        mock_openai.return_value = mock_model
+
+        adapter = AIAdapter(mock_api_key, mock_llm_proxy)
+
+        # Make 3 requests
+        for _ in range(3):
+            adapter.invoke("Test prompt")
+
+        # Verify pause was not called since 60+ seconds passed
+        mock_pause.assert_not_called()
+
 
 class TestLLMLogger:
     """Tests for LLMLogger class"""
@@ -460,11 +581,17 @@ class TestGPTAnswerer:
     ):
         """Test GPTAnswerer set_job method"""
         mock_transform.return_value = "Transformed job data"
+
+        # Mock the summarize chain
+        mock_chain = MagicMock()
+        mock_chain.invoke.return_value = "Brief job description"
+
         answerer = GPTAnswerer(mock_api_key, mock_llm_proxy)
+        answerer.chains["summarize_job_description"] = mock_chain
         answerer.set_job(mock_job)
 
         assert answerer.job == mock_job
-        assert answerer.job_readable == "Transformed job data"
+        assert answerer.job_readable == "Brief job description"
         mock_transform.assert_called_once_with(mock_job)
 
     @patch("src.llm.llm_manager.transform_search_config_data")
@@ -606,17 +733,22 @@ class TestGPTAnswerer:
         mock_job,
     ):
         """Test GPTAnswerer job_is_interesting returns True"""
-        # Setup mock chain
+        # Setup mock chain for job_is_interesting
         mock_chain = MagicMock()
         mock_chain.invoke.return_value = "Score: 85\nReasoning: Great match for skills"
 
+        # Setup mock chain for summarize_job_description
+        mock_summarize_chain = MagicMock()
+        mock_summarize_chain.invoke.return_value = "Brief job description"
+
         answerer = GPTAnswerer(mock_api_key, mock_llm_proxy)
-        answerer.chains = {"job_is_interesting": mock_chain}
+        answerer.chains["job_is_interesting"] = mock_chain
+        answerer.chains["summarize_job_description"] = mock_summarize_chain
         answerer.set_resume(mock_resume_structured, mock_resume_readable)
         answerer.set_job(mock_job)
         answerer.search_parameters = "Remote: True"
 
-        is_interesting, score, reasoning = answerer.job_is_interesting()
+        is_interesting, score, reasoning = answerer.job_is_interesting(mock_job)
 
         assert is_interesting is True
         assert score == "85"
@@ -636,17 +768,22 @@ class TestGPTAnswerer:
         mock_job,
     ):
         """Test GPTAnswerer job_is_interesting returns False"""
-        # Setup mock chain
+        # Setup mock chain for job_is_interesting
         mock_chain = MagicMock()
         mock_chain.invoke.return_value = "Score: 50\nReasoning: Not a good fit"
 
+        # Setup mock chain for summarize_job_description
+        mock_summarize_chain = MagicMock()
+        mock_summarize_chain.invoke.return_value = "Brief job description"
+
         answerer = GPTAnswerer(mock_api_key, mock_llm_proxy)
-        answerer.chains = {"job_is_interesting": mock_chain}
+        answerer.chains["job_is_interesting"] = mock_chain
+        answerer.chains["summarize_job_description"] = mock_summarize_chain
         answerer.set_resume(mock_resume_structured, mock_resume_readable)
         answerer.set_job(mock_job)
         answerer.search_parameters = "Remote: True"
 
-        is_interesting, score, reasoning = answerer.job_is_interesting()
+        is_interesting, score, reasoning = answerer.job_is_interesting(mock_job)
 
         assert is_interesting is False
         assert score == "50"
@@ -665,19 +802,23 @@ class TestGPTAnswerer:
         mock_job,
     ):
         """Test GPTAnswerer write_cover_letter method"""
-        # Setup mock chain
+        # Setup mock chain for cover letter
         mock_chain = MagicMock()
         mock_chain.invoke.return_value = "Dear Hiring Manager,\n\nI am writing..."
 
+        # Setup mock chain for summarize_job_description
+        mock_summarize_chain = MagicMock()
+        mock_summarize_chain.invoke.return_value = "Brief job description"
+
         answerer = GPTAnswerer(mock_api_key, mock_llm_proxy)
-        answerer._create_chain = MagicMock(return_value=mock_chain)
+        answerer.chains["summarize_job_description"] = mock_summarize_chain
+        answerer.chains["prompt_cover_letter"] = mock_chain
         answerer.set_resume(mock_resume_structured, mock_resume_readable)
         answerer.set_job(mock_job)
 
         result = answerer.write_cover_letter()
 
         assert "Dear Hiring Manager" in result
-        answerer._create_chain.assert_called_once()
 
     @patch("src.llm.llm_manager.AIAdapter")
     @patch("src.llm.llm_manager.LoggerChatModel")
@@ -720,10 +861,19 @@ class TestGPTAnswerer:
         mock_job,
     ):
         """Test GPTAnswerer generate_html_resume method"""
+        # Setup mock chain for summarize_job_description
+        mock_summarize_chain = MagicMock()
+        mock_summarize_chain.invoke.return_value = "Brief job description"
+
         # Setup mock methods
         answerer = GPTAnswerer(mock_api_key, mock_llm_proxy)
+        answerer.chains["summarize_job_description"] = mock_summarize_chain
         answerer.set_resume(mock_resume_structured, mock_resume_readable)
         answerer.set_job(mock_job)
+
+        # Mock load_resume_template to return empty string so generate methods are called
+        answerer.load_resume_template = MagicMock(return_value="")
+        answerer.save_resume_template = MagicMock()
 
         answerer.generate_header = MagicMock(return_value="<header>Header</header>")
         answerer.generate_education_section = MagicMock(return_value="<section>Education</section>")
