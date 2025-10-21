@@ -1,14 +1,19 @@
-# LinkedIn AI Job Applier Ultimate - AI-Powered Automated LinkedIn Job Applier
-
-
 <p align="center">
   <img src="assets/logo.png" alt="A sample image" width="40%">
 </p>
 
+# LinkedIn AI Job Applier Ultimate
 
-This project is an AI-powered bot that automates the process of applying for jobs on LinkedIn. It intelligently parses your resume, customizes applications, answers questions using an LLM, gathers statistics of the most important for employers skills and sends you detailed reports, significantly streamlining your job search.
+**🤖🔍 This project is an AI-powered bot that automates the process of applying for jobs on LinkedIn. It intelligently parses your resume, customizes applications, answers questions using an LLM, gathers statistics of the most important for employers skills and sends you detailed reports, significantly streamlining your job search.
 
 This is an active fork of the original [Jobs_Applier_AI_Agent_AIHawk](https://github.com/feder-cr/Jobs_Applier_AI_Agent_AIHawk) project, which is currently inactive. This version introduces numerous new features, bug fixes, and performance improvements.
+
+## 🚀 If you have any questions about this bot - contact me in Telegram chat 🚀
+
+### LinkedIn AI Job Applier Chat 👇
+
+[![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white
+)](https://t.me/linkedin_auto_job)
 
 ---
 
