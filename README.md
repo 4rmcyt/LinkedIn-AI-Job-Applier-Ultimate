@@ -151,6 +151,8 @@ This project enhances the original codebase with several powerful new features:
     *   `RESTART_EVERY_DAY`: If `True`, bot will automatically restart the search every 24 hours when LinkedIn resets the search limits. So you don't have to restart it manually - just run & forget.
     *   `JOB_IS_INTERESTING_THRESH`: LLM evaluated the 'interest' level of the job from 1 to 100. If job 'interest' level not below this threshold - the job is considered interesting for bot. Otherwise not. Because of LinkedIn limits number of daily applications to 50, recommended value of this setting is 70+, so the bot will apply only to vacancies that match your resume
     *   `MINIMUM_WAIT_TIME_SEC`: Minimum time spent on one job application, this setting help to prevent ban for too frequent job applies
+    *   `FREE_TIER`: If `True`, the bot will try to decrease RPM (requests per minute) to avoid rate limit errors when using free tier LLM services.
+    *   `FREE_TIER_RPM_LIMIT`: desired RPM limit, application will try not to exceed this limit
     *   `TG_CHAT_ID/TG_ERR_TOPIC_ID/TG_REPORT_TOPIC_ID`: Address of your chat in format "@name_of_your_chat" + IDs of topics where bot will send error messages and everyday report on the job applies done. You can find instruction how to create and set your Telegram chat below.
     *   `LLM_MODEL_TYPE`: Choose your LLM provider (e.g., "gemini").
     *   `EASY_APPLY_MODEL`: Specify the exact model to use for Easy Apply vacancies (e.g., "gemini-2.0-flash").

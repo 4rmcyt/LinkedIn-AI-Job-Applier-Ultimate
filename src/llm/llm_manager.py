@@ -3,8 +3,9 @@ import re
 import textwrap
 import traceback
 from abc import ABC, abstractmethod
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -21,6 +22,8 @@ from pydantic import BaseModel
 import src.llm.prompts as prompts
 from config.app_config import (
     EASY_APPLY_MODEL,
+    FREE_TIER,
+    FREE_TIER_RPM_LIMIT,
     JOB_IS_INTERESTING_THRESH,
     LLM_MODEL_TYPE,
     TEMPERATURE,
@@ -181,27 +184,41 @@ class AIAdapter:
     """Class for accessing LLM models from different companies via API"""
 
     def __init__(self, api_key: str, llm_proxy: str, llm_api_url: str = None):
+        self.model_type = LLM_MODEL_TYPE
+        self.easy_apply_model = EASY_APPLY_MODEL
+        self.free_tier = FREE_TIER
+        self.free_tier_rpm_limit = FREE_TIER_RPM_LIMIT
+        self.free_tier_request_queue = deque(maxlen=self.free_tier_rpm_limit)
         self.model = self._create_model(api_key, llm_proxy, llm_api_url)
 
     def _create_model(self, api_key: str, llm_proxy: str, llm_api_url: str) -> AIModel:
-        logger.info(f"Using {LLM_MODEL_TYPE} from {EASY_APPLY_MODEL}")
+        logger.info(f"Using {self.model_type} from {self.easy_apply_model}")
 
-        if LLM_MODEL_TYPE == "gemini":
-            return GeminiModel(api_key, EASY_APPLY_MODEL, llm_proxy)
-        elif LLM_MODEL_TYPE == "openai":
-            return OpenAIModel(api_key, EASY_APPLY_MODEL, llm_proxy)
-        elif LLM_MODEL_TYPE == "claude":
-            return ClaudeModel(api_key, EASY_APPLY_MODEL)
-        elif LLM_MODEL_TYPE == "ollama":
-            return OllamaModel(EASY_APPLY_MODEL, llm_api_url)
-        # elif LLM_MODEL_TYPE == "xai":
-        #     return xAIModel(api_key, EASY_APPLY_MODEL)
-        # elif LLM_MODEL_TYPE == "huggingface":
-        #     return HuggingFaceModel(api_key, EASY_APPLY_MODEL)
+        if self.model_type == "gemini":
+            return GeminiModel(api_key, self.easy_apply_model, llm_proxy)
+        elif self.model_type == "openai":
+            return OpenAIModel(api_key, self.easy_apply_model, llm_proxy)
+        elif self.model_type == "claude":
+            return ClaudeModel(api_key, self.easy_apply_model)
+        elif self.model_type == "ollama":
+            return OllamaModel(self.easy_apply_model, llm_api_url)
+        # elif self.model_type == "xai":
+        #     return xAIModel(api_key, self.easy_apply_model)
+        # elif self.model_type == "huggingface":
+        #     return HuggingFaceModel(api_key, self.easy_apply_model)
         else:
             raise ValueError(f"Unsupported model type: {LLM_MODEL_TYPE}")
 
     def invoke(self, prompt: str) -> str:
+        if self.free_tier:
+            # if free tier mode is activated and current model RPM is greater than the limit,
+            # wait for the specified time before invoking the model to avoid rate limit errors
+            if len(self.free_tier_request_queue) >= self.free_tier_rpm_limit:
+                first_request_timestamp = self.free_tier_request_queue.popleft()
+                time_delta = datetime.now() - first_request_timestamp
+                if time_delta < timedelta(seconds=60):
+                    pause(60 - time_delta.total_seconds(), 60 - time_delta.total_seconds() + 1)
+            self.free_tier_request_queue.append(datetime.now())
         return self.model.invoke(prompt)
 
 

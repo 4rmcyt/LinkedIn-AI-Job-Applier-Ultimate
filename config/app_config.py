@@ -13,7 +13,7 @@ If this mode is activated - apply to all vacancies indiscriminately,
 otherwise ask LLM to select only those vacancies that suit you
 by interests or by tech stack
 """
-MONKEY_MODE = True
+MONKEY_MODE = False
 
 """
 In this mode app doesn't apply to the jobs, only creates resumes, cover letters and gathers skill statistics
@@ -21,7 +21,7 @@ In this mode app doesn't apply to the jobs, only creates resumes, cover letters 
 - cover letters are created in data/output/cover_letters
 - skill statistics are gathered in data/output/skill_stat.yaml
 """
-TEST_MODE = True
+TEST_MODE = False
 
 """
 In this mode app doesn't apply to the jobs or create resumes and cover letters, only gathers information for interesting jobs and
@@ -49,6 +49,16 @@ JOB_IS_INTERESTING_THRESH = 70
 
 """Minimum time spent on one job application"""
 MINIMUM_WAIT_TIME_SEC = 10
+
+"""
+If this mode is activated, app will try to decrease RPM to avoid rate limit errors
+"""
+FREE_TIER = False
+
+"""
+Free tier mode wait time in seconds
+"""
+FREE_TIER_RPM_LIMIT = 15
 
 """Telegram chat address and corresponding topic IDs for sending"""
 TG_CHAT_ID = "@linkedin_feedback"
