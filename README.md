@@ -69,7 +69,7 @@ This project enhances the original codebase with several powerful new features:
 
 ### Prerequisites
 
-*   Python 3.12+
+*   Python 3.12
 *   Git
 *   [uv](https://github.com/astral-sh/uv) (optional, for faster installation)
 
