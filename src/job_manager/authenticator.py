@@ -108,11 +108,10 @@ class LinkedInAuthenticator:
                 "button[type='submit']",
                 "button[data-id='sign-in-form__submit-btn']",
                 ".btn__primary--large",
-                "button:has-text('Sign in')",
             ]
 
             for selector in login_selectors:
-                if await safe_click(self.page, selector):
+                if await safe_click(self.page, selector, timeout=10000):
                     logger.info(f"Login button clicked using selector: {selector}")
                     break
             else:

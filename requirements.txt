@@ -10,7 +10,7 @@ langchain-core==0.3.51
 langchain-google-genai
 langchain-ollama
 langchain-openai
-Levenshtein==0.25.1
+Levenshtein==0.27.1
 loguru==0.7.2
 playwright
 pydantic>=2.0.02
@@ -19,3 +19,6 @@ reportlab==4.2.2
 telethon==1.39.0
 pynput==1.8.1
 python-telegram-bot==21.9
+# pytest>=6.0
+# pytest-asyncio
+# pytest-cov

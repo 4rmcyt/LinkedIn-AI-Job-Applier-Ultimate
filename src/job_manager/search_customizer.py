@@ -293,7 +293,7 @@ class SearchCustomizer:
             ]
 
             for selector in apply_selectors:
-                if await safe_click(self.page, selector):
+                if await safe_click(self.page, selector, timeout=10000):
                     pause()
                     logger.info("Filters applied")
                     return True

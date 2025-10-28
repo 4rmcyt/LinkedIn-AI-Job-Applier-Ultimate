@@ -1169,7 +1169,7 @@ class JobApplier:
 
         page_clicked = False
         for selector in next_page_selectors:
-            if await safe_click(self.page, selector):
+            if await safe_click(self.page, selector, timeout=10000):
                 logger.debug(f"Clicked next page using selector: {selector}")
                 page_clicked = True
                 break
