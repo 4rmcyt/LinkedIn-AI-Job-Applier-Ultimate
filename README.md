@@ -392,10 +392,11 @@ If error happens when `search_config.yaml` is processed:
 
 ### General Troubleshooting Tips
 
-- Use the latest version of the script
+- Use the latest version of the bot
 - Verify all dependencies are installed and updated
 - Check internet connection stability
 - Clear browser cache and cookies if issues persist (by deleting all files in the `browser_session` folder in the root directory)
+- In some cases users with Premium LinkedIn subscription have different LinkedIn user interface, which may lead to errors in bot's work, e.g. bot can't parse information about job. If you face similar errors - try to use bot with user account without Premium.
 
 ## 📨 Telegram Instruction
 
