@@ -1,4 +1,5 @@
 import os
+import sys
 import tempfile
 import webbrowser
 from pathlib import Path
@@ -27,25 +28,55 @@ class ResumeManager:
         ]
         return inquirer.prompt(questions)["selection"]
 
-    def choose_style(self):
-        """Choose resume style"""
+    def is_interactive_mode(self) -> bool:
+        """Check if running in interactive mode (TTY available)"""
+        return sys.stdin.isatty()
+
+    def choose_default_style(self):
+        """Choose default resume style without user interaction (for Docker/headless mode)"""
         styles = self.style_manager.get_styles()
         if not styles:
             logger.warning("No available styles")
             return None
+
+        # Use the first available style (typically FAANGPath which is recommended)
+        default_style = list(styles.keys())[0]
+        self.selected_style = default_style
+        logger.info(f"Non-interactive mode: Using default resume style '{default_style}'")
+
+    def choose_style(self):
+        """Choose resume style (interactive or default based on environment)"""
+        # Check if running in non-interactive mode (Docker, no TTY)
+        if not self.is_interactive_mode():
+            logger.info("Running in non-interactive mode (Docker/headless)")
+            self.choose_default_style()
+            return
+
+        # Interactive mode - prompt user
+        styles = self.style_manager.get_styles()
+        if not styles:
+            logger.warning("No available styles")
+            return None
+
         final_style_choice = "Create your own style in CSS"
         formatted_choices = self.style_manager.format_choices(styles)
         formatted_choices.append(final_style_choice)
-        selected_choice = self.prompt_user(
-            formatted_choices, "Which resume style would you like to use?"
-        )
-        if selected_choice == final_style_choice:
-            tutorial_url = "https://github.com/feder-cr/lib_resume_builder_AIHawk/blob/main/how_to_contribute/web_designer.md"
-            logger.info("\nOpening tutorial in your browser...")
-            webbrowser.open(tutorial_url)
-            exit()
-        else:
-            self.selected_style = selected_choice.split(" (")[0]
+
+        try:
+            selected_choice = self.prompt_user(
+                formatted_choices, "Which resume style would you like to use?"
+            )
+            if selected_choice == final_style_choice:
+                tutorial_url = "https://github.com/feder-cr/lib_resume_builder_AIHawk/blob/main/how_to_contribute/web_designer.md"
+                logger.info("\nOpening tutorial in your browser...")
+                webbrowser.open(tutorial_url)
+                exit()
+            else:
+                self.selected_style = selected_choice.split(" (")[0]
+        except Exception as e:
+            logger.warning(f"Could not get interactive input: {e}")
+            logger.info("Falling back to default style selection")
+            self.choose_default_style()
 
     async def pdf_base64(self) -> str:
         """Create PDF file from generated HTML template"""

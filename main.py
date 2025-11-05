@@ -8,7 +8,15 @@ from pathlib import Path
 from threading import Lock
 
 import dotenv
-from pynput import keyboard as pynput_kb
+
+# Try to import pynput for keyboard control (optional, not available in Docker)
+try:
+    from pynput import keyboard as pynput_kb
+
+    PYNPUT_AVAILABLE = True
+except (ImportError, Exception) as e:
+    PYNPUT_AVAILABLE = False
+    pynput_kb = None
 
 from config.app_config import RESTART_EVERY_DAY
 from config.constants import BROWSER_STORAGE_STATE, RESUME_DIR, SEARCH_CONFIG_FILE
@@ -110,6 +118,9 @@ class ConfigValidator:
 
 def on_press(key):
     """Handle key press events"""
+    if not PYNPUT_AVAILABLE:
+        return
+
     global paused, ctrl_pressed
     try:
         # Track Ctrl key state
@@ -129,6 +140,9 @@ def on_press(key):
 
 def on_release(key):
     """Handle key release events"""
+    if not PYNPUT_AVAILABLE:
+        return
+
     global ctrl_pressed
     # Reset Ctrl key state
     if key in (pynput_kb.Key.ctrl_l, pynput_kb.Key.ctrl_r):
@@ -137,10 +151,17 @@ def on_release(key):
 
 def start_keyboard_listener():
     """Start keyboard listener in background thread"""
-    listener = pynput_kb.Listener(on_press=on_press, on_release=on_release)
-    listener.daemon = True
-    listener.start()
-    logger.info("Keyboard listener started - Press Ctrl+X to pause/resume")
+    if not PYNPUT_AVAILABLE:
+        logger.info("Keyboard control disabled (pynput not available - Docker/headless mode)")
+        return
+
+    try:
+        listener = pynput_kb.Listener(on_press=on_press, on_release=on_release)
+        listener.daemon = True
+        listener.start()
+        logger.info("Keyboard listener started - Press Ctrl+X to pause/resume")
+    except Exception as e:
+        logger.warning(f"Could not start keyboard listener: {e}")
 
 
 async def check_pause():

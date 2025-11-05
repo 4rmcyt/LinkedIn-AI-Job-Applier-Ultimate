@@ -75,6 +75,8 @@ This project enhances the original codebase with several powerful new features:
 
 ### Installation
 
+#### Option 1: Local Installation
+
 1.  **Clone repository and create virtual environment**
 
     ```bash
@@ -103,6 +105,35 @@ This project enhances the original codebase with several powerful new features:
     # Install Chromium browser for Playwright
     playwright install chromium
     ```
+
+#### Option 2: Docker Installation
+
+1.  **Clone repository**
+
+    ```bash
+    git clone https://github.com/beatwad/LinkedIn-AI-Job-Applier-Ultimate.git
+    cd LinkedIn-AI-Job-Applier-Ultimate
+    ```
+
+2.  **Build Docker image**
+
+    ```bash
+    docker build -t linkedin .
+    ```
+
+3.  **Run Docker container**
+
+    ```bash
+    docker run -v $(pwd)/data:/app/data \
+               -v $(pwd)/browser_session:/app/browser_session \
+               -v $(pwd)/logs:/app/logs \
+               linkedin
+    ```
+
+    **⚠️ IMPORTANT:** When running from Docker:
+    - You **MUST** set `HEADLESS_MODE = True` in `config/app_config.py`. Docker containers don't support graphical interfaces, so the browser must run in headless mode.
+    - The **Ctrl+X pause/resume feature will not work** in Docker (keyboard control requires an X server). The bot will run continuously without the ability to pause.
+    - **Resume style selection is automatic** - the bot will use the default style (FAANGPath) instead of prompting for selection, since Docker doesn't support interactive prompts.
 
 ## 🔧 Configuration
 
@@ -191,7 +222,7 @@ This project enhances the original codebase with several powerful new features:
 4.  **Resume files for LLM (`data/resumes/resume_text.txt` and `data/resumes/structured_resume.yaml`):**
     Resume text must contain information about your first and last names and your gender (that is necessary for the correct work of anonymization functions).
     Bot needs to resume files for correct work:
-    *   **raw resume text file** (`resume_text.txt`) which contains all available information about your resume in text format and is used to answer the questions and write cover letters (I find out that using full resume text for these tasks is more reliable + saves input token + you don't need to determine which resume section you have to use)
+    *   **raw resume text file** (`resume_text.txt`) which contains all available information about your resume in text format and is used to answer the questions and write cover letters (I find out that using full resume text for these tasks is more reliable + saves input token + you don't need to determine which resume section you have to use). **TIP**: Try to add to this file as much information about youself as possible - that will let bot to answer questions more precisely and better tailor your resume to a specific vacancy.
     *   **structured resume file** (`structured_resume.yaml`) which is used for tailored resume generation
 
     Resume text file is mandatory, you need to create it by yourself. But with structured resume file you have two options:
