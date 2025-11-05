@@ -84,7 +84,7 @@ This project enhances the original codebase with several powerful new features:
     git clone https://github.com/beatwad/LinkedIn-AI-Job-Applier-Ultimate.git
     cd LinkedIn-AI-Job-Applier-Ultimate
 
-    # Create and activate a virtual environment
+    # Create and activate a virtual environment (can miss this step if using uv)
     python -m venv venv
     source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
     ```
@@ -98,6 +98,12 @@ This project enhances the original codebase with several powerful new features:
 
     ```bash
     uv pip install -r requirements.txt
+    ```
+
+    or
+
+    ```bash
+    uv sync
     ```
 
 3.  **Install additional software**
@@ -257,6 +263,12 @@ Once you have completed the installation and configuration steps, you can run th
 ```bash
 python main.py
 ```
+or
+
+```bash
+uv run python main.py
+```
+
 If bot finds out that there are no information about some fields in your `structured_resume.yaml` file - it will output warning, list of fields with no information and propose two options:
 - press `y` to continue anyway
 - press `n` to finish bot execution, consider what information is missing and add it to `data/resumes/resume_text.txt`. Then delete `structured_resume.yaml` and restart bot OR fill missing fields in `structured_resume.yaml` manually if you don't want LLM to re-generate it automatically because of privacy issues.

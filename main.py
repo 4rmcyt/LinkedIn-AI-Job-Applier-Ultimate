@@ -282,6 +282,7 @@ def main() -> None:
     start_keyboard_listener()
 
     while True:
+        should_exit = False
         try:
             # create output folder if it doesn't exist
             data = Path("data")
@@ -321,7 +322,10 @@ def main() -> None:
                 time.sleep(3600)
             else:
                 logger.info("Exiting program")
-                break
+                should_exit = True
+
+        if should_exit:
+            break
 
 
 if __name__ == "__main__":
