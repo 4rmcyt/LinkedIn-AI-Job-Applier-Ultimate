@@ -627,14 +627,33 @@ class JobApplier:
 
         try:
             job.job_title = await self._extract_job_title()
-            job.company_name = await self._extract_company_name()
-            job.job_description = await self._extract_job_description()
-            job.company_description = await self._extract_company_description()
-            job.recruiter_link = await self._get_job_recruiter()
-            # job.skills = self._extract_skills_from_vacancy(job)
-
         except Exception as e:
-            logger.warning(f"Could not get detailed job description: {e}")
+            job.job_title = ""
+            logger.warning(f"Could not extract job title: {e}")
+
+        try:
+            job.company_name = await self._extract_company_name()
+        except Exception as e:
+            job.company_name = ""
+            logger.warning(f"Could not extract company name: {e}")
+
+        try:
+            job.job_description = await self._extract_job_description()
+        except Exception as e:
+            job.job_description = ""
+            logger.warning(f"Could not extract job description: {e}")
+
+        try:
+            job.company_description = await self._extract_company_description()
+        except Exception as e:
+            job.company_description = ""
+            logger.warning(f"Could not extract company description: {e}")
+
+        try:
+            job.recruiter_link = await self._get_job_recruiter()
+        except Exception as e:
+            job.recruiter_link = ""
+            logger.warning(f"Could not extract recruiter link: {e}")
 
         return job
 
