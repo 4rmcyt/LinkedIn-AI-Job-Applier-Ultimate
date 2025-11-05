@@ -146,7 +146,7 @@ This project enhances the original codebase with several powerful new features:
 1.  **Secrets (`.env` file):**
     Create a `.env` file in the root directory by copying the example file:
     ```bash
-    cp .env.example .env
+    cp .env_example .env
     ```
     Now, fill in the required values in your `.env` file:
     ```env
