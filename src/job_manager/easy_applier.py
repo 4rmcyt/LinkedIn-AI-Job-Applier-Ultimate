@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, List, Tuple
 
 from httpx import HTTPStatusError
+from inquirer.shortcuts import password
 from playwright.sync_api import Page
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase.pdfmetrics import stringWidth
@@ -108,13 +109,12 @@ class EasyApplier:
             logger.info("Attempting to click 'Easy Apply' button")
             while True:
                 # Click 'Easy Apply' button
-                easy_apply_button = await self._find_easy_apply_button(job)
-                if not easy_apply_button:
+                result = await self._find_easy_apply_button(job)
+                if result is False:
                     return (
                         "Skip",
                         "No clickable 'Easy Apply' button found, maybe you already applied to this job",
                     )
-                await easy_apply_button.click(timeout=1000)
                 logger.debug("'Easy Apply' button clicked successfully")
                 pause()
                 # Click 'Continue Applying' button if it appears
@@ -127,6 +127,7 @@ class EasyApplier:
                     logger.debug("Redirected to premium page, trying again")
 
             logger.info("Filling out application form")
+            pause(2, 3)
             await self._fill_application_form(job)
             logger.info(f"Successfully applied to job: {job.job_title}")
             return "Success", ""
@@ -206,13 +207,8 @@ class EasyApplier:
 
     async def _find_easy_apply_button(self, job: Job) -> Any:
         """Find Easy Apply button with retries (async)"""
-        logger.debug("Searching for 'Easy Apply' button")
+        logger.debug("Searching for 'Easy Apply' button and try to click")
         attempt = 0
-
-        easy_apply_selectors = [
-            '//button[contains(@class, "jobs-apply-button") and contains(., "Easy Apply")]',
-            '//button[contains(text(), "Easy Apply") or text()="Easy Apply"]',
-        ]
 
         while attempt < 2:
             await self.check_for_premium_redirect(job)
@@ -222,21 +218,22 @@ class EasyApplier:
                 logger.warning("Easy Apply daily limit detected while searching for button")
                 return None
 
-            for selector in easy_apply_selectors:
-                try:
-                    logger.debug(f"Attempting search using {selector}")
-                    buttons = await find_elements_safely(self.page, selector, "xpath")
-                    if not buttons:
-                        raise Exception("Buttons not found")
-                    for button in buttons:
-                        if not (await button.is_visible() and await button.is_enabled()):
-                            logger.debug("Button not visible or not enabled")
-                            continue
-                        logger.debug("Found 'Easy Apply' button, attempting to click")
-                        return button
+            easy_apply_selectors = [
+                '//a[contains(., "Apply")]',
+            ]
 
-                except Exception:
-                    logger.warning(f"Timeout during search using {selector}")
+            for selector in easy_apply_selectors:
+                easy_apply_buttons = await find_elements_safely(self.page, selector, "xpath")
+
+            for button in easy_apply_buttons:
+                try:
+                    if not (await button.is_visible() and await button.is_enabled()):
+                        logger.debug("Apply button is not visible or enabled")
+                        continue
+                    await button.first.click(timeout=1000)
+                    return True
+                except Exception as e:
+                    logger.debug(f"Failed to click easy apply button: {e}")
 
             await self.check_for_premium_redirect(job)
 
@@ -250,7 +247,7 @@ class EasyApplier:
         logger.warning(
             f"No clickable 'Easy Apply' button found after 2 attempts. page url: {page_url}"
         )
-        return None
+        return False
 
     async def _click_continue_applying_button(self) -> None:
         """Click continue applying button if present (async)"""
@@ -283,7 +280,7 @@ class EasyApplier:
         logger.info("Clicking 'Next' or 'Submit' button")
         next_button = await find_element_safely(
             self.page,
-            "//button[contains(@class, 'artdeco-button--primary')]",
+            "//button[contains(@class, 'artdeco-button--primary') or contains(@class, 'artdeco-button__text')]",
             "xpath",
         )
         button_text = (await next_button.text_content() or "").lower()
@@ -1775,13 +1772,21 @@ if __name__ == "__main__":
 
     RESUME_STRUCTURED_FILE = Path(RESUME_DIR) / "structured_resume.yaml"
     RESUME_TEXT_FILE = Path(RESUME_DIR) / "resume_text.txt"
+    paused = False
+
+    async def check_pause():
+        """Check if execution is paused and wait if needed"""
+        global paused
+        if paused:
+            while paused:
+                await asyncio.sleep(0.5)
 
     async def test_easy_applier():
         """Test EasyApplier with a real LinkedIn job posting (async)"""
         logger.info("Starting EasyApplier test...")
 
         # Test job URL
-        job_url = "https://linkedin.com/jobs/view/4312822860"
+        job_url = "https://www.linkedin.com/jobs/view/4316301154"
         # Initialize Playwright browser
         try:
             browser, context, page = await create_playwright_browser()
@@ -1834,6 +1839,7 @@ if __name__ == "__main__":
                 gpt_answerer,
                 resume_anonymizer,
                 resume_generator_manager,
+                check_pause,
                 ANSWERS_FILE,
                 RESUME_DIR,
                 COVER_LETTER_DIR,

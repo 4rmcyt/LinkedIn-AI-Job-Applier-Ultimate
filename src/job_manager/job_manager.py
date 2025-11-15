@@ -61,9 +61,7 @@ class JobApplier:
         self.llm_agent_component = None
         self.resume_generator_manager = None
         self.pause_checker = None
-        self.jobs_no_info = (
-            []
-        )  # vacancies to which applications were not sent due to missing information
+        self.jobs_no_info = []  # vacancies to which applications were not sent due to missing information
         self.job_key_skills = []  # key skills according to employer's opinion
         self.interesting_jobs = []
         self.page_num = 0
@@ -274,6 +272,7 @@ class JobApplier:
         # Navigate to job page
         try:
             await self.page.goto(vacancy["url"])
+            pause(3, 4)
         except Exception as e:
             logger.error(f"Failed to navigate to job URL: {vacancy['url']}, error: {e}")
             await self._new_page.close()
@@ -630,8 +629,7 @@ class JobApplier:
             job.company_name = await self._extract_company_name()
             job.job_description = await self._extract_job_description()
             job.company_description = await self._extract_company_description()
-            job.recruiter_link = await self._get_job_recruiter()
-            # job.skills = self._extract_skills_from_vacancy(job)
+            # job.recruiter_link = await self._get_job_recruiter()
 
         except Exception as e:
             logger.warning(f"Could not get detailed job description: {e}")
@@ -640,22 +638,11 @@ class JobApplier:
 
     async def _extract_company_name(self) -> str:
         """Extract company name from the job page using multiple selector strategies (async)"""
-        company_name_selectors = [
-            ".job-details-jobs-unified-top-card__company-name a",
-            ".jobs-unified-top-card__company-name a",
-            "*[class*='company-name'] a",
-            "a[data-control-name='job_details_topcard_company_url']",
-        ]
-
-        for selector in company_name_selectors:
-            company_name = await get_element_text(self.page, selector)
-            if company_name:
-                logger.debug(f"Found company name '{company_name}' using selector: {selector}")
-                return company_name
-
-        # Fallback to xpath approach
         xpath_selectors = [
-            "//*[contains(@class, 'company-name')]",
+            # New LinkedIn UI: find a elements with company link pattern
+            "//a[contains(@href, '/company/')]",
+            "//a[contains(@class, '_53f57f34') and contains(@class, '_9d7df06f')]",
+            "//p[contains(@class, '_5dd8419e')]//a",
         ]
 
         for xpath_selector in xpath_selectors:
@@ -664,8 +651,12 @@ class JobApplier:
                 try:
                     text = await get_clean_text(element)
                     if text:
-                        logger.debug(f"Found company name '{text}' using xpath: {xpath_selector}")
-                        return text
+                        text = text.strip()
+                        if text and len(text) > 1:  # Ensure it's a meaningful company name
+                            logger.debug(
+                                f"Found company name '{text}' using xpath: {xpath_selector}"
+                            )
+                            return text
                 except Exception:
                     continue
 
@@ -674,22 +665,8 @@ class JobApplier:
 
     async def _extract_job_title(self) -> str:
         """Extract job title from the job page using multiple selector strategies (async)"""
-        job_title_selectors = [
-            ".job-details-jobs-unified-top-card__job-title h1",
-            ".jobs-unified-top-card__job-title h1",
-            "*[class*='job-title'] h1",
-            "h1.jobs-unified-top-card__job-title-link",
-        ]
-
-        for selector in job_title_selectors:
-            job_title = await get_element_text(self.page, selector)
-            if job_title:
-                logger.debug(f"Found job title '{job_title}' using selector: {selector}")
-                return job_title
-
-        # Fallback to xpath approach
         xpath_selectors = [
-            "//*[contains(@class, 'job-title')]",
+            "//p[contains(@class, '_6ffc9cf5') or contains(@class, '_53f57f34')]",
         ]
 
         for xpath_selector in xpath_selectors:
@@ -698,8 +675,11 @@ class JobApplier:
                 try:
                     text = await get_clean_text(element)
                     if text:
-                        logger.debug(f"Found job title '{text}' using xpath: {xpath_selector}")
-                        return text
+                        # Clean up the text - take first line and strip
+                        text = text.strip().split("\n")[0].strip()
+                        if text and len(text) > 3:  # Ensure it's a meaningful title
+                            logger.debug(f"Found job title '{text}' using xpath: {xpath_selector}")
+                            return text
                 except Exception:
                     continue
 
@@ -709,139 +689,137 @@ class JobApplier:
     async def _extract_job_description(self) -> str:
         """Extract "About the job" section using multiple selector strategies (async)"""
         about_job_selectors = [
-            ".jobs-box__html-content",
-            ".jobs-description",
-            "[data-test-id='job-description']",
-            ".jobs-description-content",
-            ".jobs-box__html-content .jobs-description-content__text",
-            ".job-details-job-description__content",
-            ".jobs-description__container .jobs-description-content__text",
+            # Try to find element after "About the job" heading
+            (
+                "//h2[contains(text(), 'About the job')]/following::p[1]//span[@data-testid='expandable-text-box']",
+                "xpath",
+            ),
+            ("//h2[contains(text(), 'About the job')]/following::p[1]", "xpath"),
         ]
 
-        for selector in about_job_selectors:
-            job_description = await get_element_text(self.page, selector)
-            if job_description:
-                logger.debug(f"Found job description using selector: {selector}")
-                # Clean up the text
-                job_description = job_description.strip()
-                if len(job_description) > 50:  # Ensure it's substantial content
-                    return job_description
+        job_description = None
+        for selector, by in about_job_selectors:
+            try:
+                if by == "xpath":
+                    element = await find_element_safely(self.page, selector, by)
+                    if element:
+                        job_description = await get_clean_text(element)
+                else:
+                    job_description = await get_element_text(self.page, selector)
 
-        logger.debug("Could not extract job description from job page")
+                if job_description:
+                    logger.debug(f"Found job description using selector: {selector}")
+                    # Clean up the text
+                    job_description = job_description.strip()
+                    if len(job_description) > 50:  # Ensure it's substantial content
+                        break
+            except Exception as e:
+                logger.debug(f"Selector '{selector}' failed: {e}")
+                continue
+
+        if not job_description:
+            logger.debug("Could not extract job description from job page")
+            return None
+
+        # Also extract "Requirements added by the job poster" section
+        requirements_text = await self._extract_requirements_section()
+        if requirements_text:
+            job_description = f"{job_description}\n\n{requirements_text}"
+
+        return job_description
+
+    async def _extract_requirements_section(self) -> str:
+        """Extract "Requirements added by the job poster" section (async)"""
+        try:
+            requirements_parts = []
+
+            # Get all requirement paragraphs after the "Requirements added by the job poster" heading
+            requirements_xpath = (
+                "//p[contains(text(), 'Requirements added by the job poster')]/following-sibling::p"
+            )
+            requirement_elements = await find_elements_safely(
+                self.page, requirements_xpath, "xpath"
+            )
+
+            if requirement_elements:
+                for element in requirement_elements:
+                    try:
+                        text = await get_clean_text(element)
+                        if text and text.strip():
+                            # Stop if we hit a horizontal rule or another section
+                            # Check if this element is before an <hr> or another heading
+                            text = text.strip()
+                            if text.startswith("•") or text.startswith("-"):
+                                requirements_parts.append(text)
+                            else:
+                                # Might be the end of requirements section
+                                break
+                    except Exception:
+                        continue
+
+            if requirements_parts:
+                requirements_text = "Requirements added by the job poster\n\n" + "\n".join(
+                    requirements_parts
+                )
+                logger.debug("Found requirements section")
+                return requirements_text
+
+        except Exception as e:
+            logger.debug(f"Could not extract requirements section: {e}")
+
         return None
 
     async def _extract_company_description(self) -> str:
         """Extract company description from the job page (async)"""
         company_description = None
         about_company_selectors = [
-            ".jobs-company__box",
-            ".jobs-company__description",
-            ".jobs-company__overview",
-            ".jobs-company__box .jobs-company__description",
-            ".jobs-company__overview .jobs-company__description",
+            # More specific: Find expandable text box that comes after "About the company" but before next major section
+            (
+                "//h2[contains(text(), 'About the company')]/following::span[@data-testid='expandable-text-box'][not(ancestor::h2[contains(text(), 'About the job')])][1]",
+                "xpath",
+            ),
         ]
-        for selector in about_company_selectors:
-            element_text = await get_element_text(self.page, selector)
-            if element_text:
-                element_list = element_text.split("\n")
-                if len(element_list) > 1:
-                    element_text = " ".join(element_list[:-1])
-                company_description = element_text
-                return company_description
+
+        for selector, by in about_company_selectors:
+            try:
+                if by == "xpath":
+                    element = await find_element_safely(self.page, selector, by)
+                    if element:
+                        element_text = await get_clean_text(element)
+                    else:
+                        element_text = None
+                else:
+                    element_text = await get_element_text(self.page, selector)
+
+                if element_text:
+                    # Clean up the text - remove "more" button text if present
+                    element_text = element_text.strip()
+                    # Remove the "… more" button text that might be at the end
+                    element_text = re.sub(r"\s*…\s*more\s*$", "", element_text, flags=re.IGNORECASE)
+                    element_text = element_text.strip()
+
+                    if len(element_text) > 20:  # Ensure it's substantial content
+                        # Split by newlines and join, but keep meaningful structure
+                        element_list = element_text.split("\n")
+                        if len(element_list) > 1:
+                            # Join lines but preserve paragraphs (double newlines)
+                            company_description = "\n".join(element_list)
+                        else:
+                            company_description = element_text
+                        logger.debug(f"Found company description using selector: {selector}")
+                        return company_description
+            except Exception as e:
+                logger.debug(f"Selector '{selector}' failed: {e}")
+                continue
+
+        logger.debug("Could not extract company description from job page")
+        return None
 
     def _extract_skills_from_vacancy(self, job: Job) -> List[str]:
         """Extract skills from vacancy"""
         skills = self.llm_answerer_component.extract_skills_from_vacancy(job.job_description)
         self.job_key_skills = skills
         return str(skills).replace("[", "").replace("]", "").replace("'", "").replace('"', "")
-
-    # async def _extract_skills_and_preferences(self, job: Job):
-    #     """Extract skills information from skill match element (async)"""
-    #     try:
-    #         skills_buttons = self.page.locator("button[aria-label='Skills']")
-    #         if await skills_buttons.count() > 0:
-    #             await skills_buttons.first.click(timeout=1000)
-    #         else:
-    #             buttons = await find_elements_safely(self.page, "//button", "xpath")
-    #             for button in buttons:
-    #                 try:
-    #                     txt = (await button.text_content() or "").lower()
-    #                     if "skills" in txt:
-    #                         await button.click(timeout=1000)
-    #                         break
-    #                 except Exception:
-    #                     continue
-    #         pause()
-    #         # Wait for the skill page to appear
-    #         skill_element = "//*[starts-with(@class, 'job-details-preferences-and-skills__modal-section-insights-list-item')]"
-    #         skills = await find_elements_safely(self.page, skill_element, "xpath")
-
-    #         job_types = [
-    #             "Full-time",
-    #             "Part-time",
-    #             "Contract",
-    #             "Temporary",
-    #             "Volunteer",
-    #             "Internship",
-    #             "Apprenticeship",
-    #             "Other",
-    #             "On-site",
-    #             "Hybrid",
-    #             "Remote",
-    #             "$",
-    #         ]
-    #         # Extract skills and preferences using clean text extraction
-    #         clean_texts = []
-    #         for s in skills:
-    #             text = await get_clean_text(s)
-    #             clean_texts.append(text)
-    #         clean_texts = [text for text in clean_texts if text]  # Remove empty strings
-
-    #         job_skills = [text for text in clean_texts if not any([j in text for j in job_types])]
-    #         preferences = [text for text in clean_texts if any([j in text for j in job_types])]
-
-    #         # Save skills and preferences
-    #         self.job_key_skills = job_skills
-    #         job.skills = ", ".join(job_skills)
-    #         job.preferences = ", ".join(preferences)
-
-    #         # Extract additional metadata from preferences
-    #         for pref in preferences:
-    #             pref_lower = pref.lower()
-    #             if any(
-    #                 job_type in pref_lower
-    #                 for job_type in [
-    #                     "full-time",
-    #                     "part-time",
-    #                     "contract",
-    #                     "temporary",
-    #                     "volunteer",
-    #                     "internship",
-    #                     "other",
-    #                 ]
-    #             ):
-    #                 job.employment_type = pref
-    #             elif any(
-    #                 level in pref_lower
-    #                 for level in ["entry", "mid", "senior", "lead", "principal", "director"]
-    #             ):
-    #                 job.experience_level = pref
-    #             elif "$" in pref or "salary" in pref_lower or "compensation" in pref_lower:
-    #                 job.salary_range = pref
-    #             elif any(work_type in pref_lower for work_type in ["remote", "on-site", "hybrid"]):
-    #                 if "remote" in pref_lower:
-    #                     job.is_remote = True
-
-    #         # Close the skill page
-    #         pause()
-    #     except Exception as e:
-    #         logger.warning(f"Could not wait for the skill page: {e}")
-
-    #     if skills:
-    #         try:
-    #             await self.page.locator("button[aria-label='Dismiss']").first.click(timeout=1000)
-    #         except Exception as e:
-    #             logger.warning(f"Could not close the skill page: {e}")
 
     async def _get_job_recruiter(self):
         """Get job recruiter information (async)"""
@@ -863,29 +841,20 @@ class JobApplier:
     async def _check_apply_button(self) -> str:
         """Check if the apply button is present and return the URL of the apply button (async).
         If no apply button is found, return an empty string."""
-        easy_apply_selectors = [
-            '//button[contains(@class, "jobs-apply-button") and contains(., "Easy Apply")]',
-            '//button[contains(text(), "Easy Apply") or text()="Easy Apply"]',
-        ]
-        for selector in easy_apply_selectors:
-            easy_apply_buttons = await find_elements_safely(self.page, selector, "xpath")
-            if len(easy_apply_buttons) > 0:
-                return None
-
         apply_selectors = [
-            '//button[contains(@class, "jobs-apply-button") and contains(., "Apply")]',
-            '//button[contains(text(), "Apply") or text()="Apply"]',
+            '//a[contains(., "Apply")]',
         ]
         for selector in apply_selectors:
             apply_buttons = await find_elements_safely(self.page, selector, "xpath")
+
             if len(apply_buttons) > 0:
                 return await self._get_button_link(apply_buttons)
         return None
 
     async def _get_button_link(self, apply_buttons: List[Any]) -> str:
         """Get the link of the button (Playwright context) - async."""
-        try:
-            for button in apply_buttons:
+        for button in apply_buttons:
+            try:
                 if not (await button.is_visible() and await button.is_enabled()):
                     logger.debug("Apply button is not visible or enabled")
                     continue
@@ -899,11 +868,10 @@ class JobApplier:
                 await new_page.close()
                 logger.debug(f"Apply button link is obtained successfully: {link}")
                 return link
-            logger.warning("No apply button found")
-            return ""
-        except Exception:
-            logger.warning("Failed to get the link of the apply button")
-            return ""
+            except Exception as e:
+                logger.debug(f"Failed to get the link of the apply button: {e}")
+        logger.warning("No apply button found")
+        return ""
 
     def _check_the_previous_apply_number(self) -> bool:
         """
@@ -1003,11 +971,15 @@ class JobApplier:
 
         seen_companies = companies
 
-        job_info = JobInfo(
-            job_title=company_job_title,
-            url=vacancy["url"],
-            skip_reason=reason,
-        )
+        try:
+            job_info = JobInfo(
+                job_title=company_job_title,
+                url=vacancy["url"],
+                skip_reason=reason,
+            )
+        except Exception as e:
+            logger.warning(f"Error in saving job info: {e}")
+            return
 
         # Check by company_id and/or by job title
         if company_name:

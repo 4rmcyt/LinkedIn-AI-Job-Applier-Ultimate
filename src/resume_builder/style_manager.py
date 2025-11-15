@@ -40,10 +40,17 @@ class StyleManager:
 
     def format_choices(self, styles_to_files: Dict[str, Tuple[str, str]]) -> List[str]:
         """Create list of resume styles for selection"""
-        return [
+        list_of_choices = [
             f"{style_name} (style author -> {author_link})"
             for style_name, (file_name, author_link) in styles_to_files.items()
         ]
+        for i, choice in enumerate(list_of_choices):
+            if choice.startswith("FAANGPath"):
+                break
+        if i > 0:
+            list_of_choices = list_of_choices[:i] + list_of_choices[i + 1 :]
+            list_of_choices = [choice] + list_of_choices
+        return list_of_choices
 
     def get_style_path(self, selected_style: str) -> Path:
         """Get path to style"""
