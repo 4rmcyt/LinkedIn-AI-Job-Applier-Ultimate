@@ -146,7 +146,7 @@ This project enhances the original codebase with several powerful new features:
 1.  **Secrets (`.env` file):**
     Create a `.env` file in the root directory by copying the example file:
     ```bash
-    cp .env.example .env
+    cp .env_example .env
     ```
     Now, fill in the required values in your `.env` file:
     ```env
@@ -392,10 +392,11 @@ If error happens when `search_config.yaml` is processed:
 
 ### General Troubleshooting Tips
 
-- Use the latest version of the script
+- Use the latest version of the bot
 - Verify all dependencies are installed and updated
 - Check internet connection stability
 - Clear browser cache and cookies if issues persist (by deleting all files in the `browser_session` folder in the root directory)
+- In some cases users with Premium LinkedIn subscription have different LinkedIn user interface, which may lead to errors in bot's work, e.g. bot can't parse information about job. If you face similar errors - try to use bot with user account without Premium.
 
 ## 📨 Telegram Instruction
 
