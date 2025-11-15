@@ -15,8 +15,14 @@ from config.logger_config import logger
 from src.job_manager.resume_anonymizer import ResumeAnonymizer
 from src.llm.llm_manager import GPTAnswerer
 from src.pydantic_models.job_models import Job, Question
-from src.utils.browser_utils import find_element_safely, find_elements_safely
-from src.utils.utils import ConfigError, load_yaml_file, pause, sanitize_text, save_yaml_file
+from src.utils.browser_utils import find_element_safely, find_elements_safely, get_clean_text
+from src.utils.utils import (
+    ConfigError,
+    load_yaml_file,
+    pause,
+    sanitize_text,
+    save_yaml_file,
+)
 
 
 class NoInfoException(Exception):
@@ -275,15 +281,35 @@ class EasyApplier:
                 logger.debug("Application form submitted")
                 break
 
+    async def _find_next_or_submit_button(self) -> Any:
+        """Find 'Next' or 'Submit' or 'Review' button (async)"""
+        logger.info("Finding 'Next' or 'Submit' or 'Review' button")
+        # Find all elements with class="artdeco-button__text" and filter by specific text
+        elements = await find_elements_safely(self.page, ".artdeco-button__text", "css")
+        target_texts = ["next", "review", "submit application"]
+
+        # Filter elements by text content
+        next_button = None
+        button_text = None
+
+        for element in elements:
+            text = await get_clean_text(element)
+            if text.lower() in target_texts:
+                next_button = element
+                button_text = text.lower()
+                break
+
+        return next_button, button_text
+
     async def _next_or_submit(self) -> bool:
-        """Click 'Next' or 'Submit' or 'Confirm' button (async)"""
-        logger.info("Clicking 'Next' or 'Submit' button")
-        next_button = await find_element_safely(
-            self.page,
-            "//button[contains(@class, 'artdeco-button--primary') or contains(@class, 'artdeco-button__text')]",
-            "xpath",
-        )
-        button_text = (await next_button.text_content() or "").lower()
+        """Click 'Next' or 'Submit' or 'Review' button"""
+        logger.info("Clicking 'Next' or 'Submit' or 'Review' button")
+        next_button, button_text = await self._find_next_or_submit_button()
+
+        if next_button is None or button_text is None:
+            logger.error("No 'Next' or 'Submit' button found on the page")
+            raise Exception("Could not find 'Next' or 'Submit' button to proceed with application")
+
         if "submit application" in button_text:
             logger.debug("Submit button found, submitting application")
             await self._unfollow_company()
@@ -294,18 +320,19 @@ class EasyApplier:
                 return True
             return await self._check_and_fix_errors(next_button)
         await self._check_and_fix_errors(next_button)
+        return False
 
     async def _unfollow_company(self) -> None:
         """Unfollow company checkbox (async)"""
         try:
-            logger.debug("Unfollowing company")
             follow_checkbox = await find_element_safely(
                 self.page,
-                "//label[contains(.,'to stay up to date with their page.')]",
-                "xpath",
+                "label[for='follow-company-checkbox']",
+                "css",
             )
             if follow_checkbox:
                 await follow_checkbox.click(timeout=1000)
+
         except Exception as e:
             logger.warning(f"Failed to unfollow company: {e}")
 
@@ -322,11 +349,7 @@ class EasyApplier:
                 logger.info(f"Found {len(error_texts)} errors")
                 await self._fill_textbox_question_errors()
                 pause(1, 2)
-                next_button = await find_element_safely(
-                    self.page,
-                    "//button[contains(@class, 'artdeco-button--primary')]",
-                    "xpath",
-                )
+                next_button, _ = await self._find_next_or_submit_button()
                 try:
                     await next_button.click(timeout=1000)
                 except Exception as e:
@@ -384,17 +407,43 @@ class EasyApplier:
         logger.info(f"Filling up form sections for job: {job.job_title}")
 
         try:
-            # Wait for the Easy Apply modal to be present
-            easy_apply_modal = await find_element_safely(
-                self.page, "//*[contains(@class, 'jobs-easy-apply-modal')]", "xpath"
-            )
-            logger.debug("Easy Apply modal found")
+            # Wait for the Easy Apply modal content to be present with explicit wait
+            modal_content = None
+            logger.debug("Waiting for Easy Apply modal to appear...")
 
-            # Look for form elements in the modal content
-            modal_content = easy_apply_modal.locator(
-                "xpath=.//*[contains(@class, 'jobs-easy-apply-modal__content')]"
-            ).first
-            logger.debug("Modal content found")
+            # Try to wait for the modal to be visible
+            try:
+                # Wait up to 10 seconds for the modal to appear
+                await self.page.wait_for_selector(
+                    ".jobs-easy-apply-modal__content", state="visible", timeout=10000
+                )
+                logger.debug("Modal selector found via wait_for_selector")
+            except Exception as e:
+                logger.warning(f"wait_for_selector failed: {e}")
+
+            # Try multiple selectors to find the modal content
+            modal_selectors = [
+                ".jobs-easy-apply-modal__content",  # CSS selector
+                ".artdeco-modal__content",  # Fallback CSS
+                "//*[contains(@class, 'jobs-easy-apply-modal__content')]",  # XPath
+            ]
+
+            for selector in modal_selectors:
+                selector_type = (
+                    "css" if selector.startswith(".") or selector.startswith("[") else "xpath"
+                )
+                modal_content = await find_element_safely(self.page, selector, selector_type)
+                if modal_content is not None:
+                    logger.debug(f"Easy Apply modal content found with selector: {selector}")
+                    break
+
+            if modal_content is None:
+                logger.error("Easy Apply modal content not found on the page with any selector")
+                raise Exception(
+                    "Easy Apply modal content not found. The Easy Apply dialog may not be open."
+                )
+
+            logger.debug("Easy Apply modal content found successfully")
 
             # Track processed file inputs to avoid duplicate processing
             processed_file_inputs = set()
@@ -1099,7 +1148,7 @@ class EasyApplier:
                     break
 
             if existing_answer:
-                await self._select_radio(radios, existing_answer.model_dump()["answer"])
+                await self._select_radio(section, radios, existing_answer.model_dump()["answer"])
                 logger.debug("Selected existing radio answer")
                 return True
 
@@ -1399,7 +1448,7 @@ class EasyApplier:
         question_text = "\n".join(deduplicated_question_list)
         return question_text
 
-    async def _select_radio(self, radios: List[Any], answer: str) -> None:
+    async def _select_radio(self, section: Any, radios: List[Any], answer: str) -> None:
         """Select radio button based on answer (async)"""
         logger.debug(f"Selecting radio option: {answer}")
         for radio in radios:
@@ -1410,7 +1459,7 @@ class EasyApplier:
                 # Look for label with matching 'for' attribute
                 radio_id = await radio.get_attribute("id")
                 if radio_id:
-                    label = self.page.locator(f"//label[@for='{radio_id}']").first
+                    label = section.locator(f"label[for='{radio_id}']").first
                     radio_text = (await label.text_content() or "").strip().lower()
 
                 logger.debug(f"Radio button text extracted: '{radio_text}'")
@@ -1421,7 +1470,7 @@ class EasyApplier:
                         # First try clicking the associated label (most reliable for LinkedIn)
                         radio_id = await radio.get_attribute("id")
                         if radio_id:
-                            label = self.page.locator(f"//label[@for='{radio_id}']").first
+                            label = section.locator(f"label[for='{radio_id}']").first
                             await label.click(timeout=1000)
                             logger.debug(f"Clicked radio label: {radio_text}")
                             return
@@ -1786,7 +1835,7 @@ if __name__ == "__main__":
         logger.info("Starting EasyApplier test...")
 
         # Test job URL
-        job_url = "https://www.linkedin.com/jobs/view/4316301154"
+        job_url = "https://www.linkedin.com/jobs/view/4321996458/"
         # Initialize Playwright browser
         try:
             browser, context, page = await create_playwright_browser()
