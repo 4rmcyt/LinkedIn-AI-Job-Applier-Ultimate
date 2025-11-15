@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any, List, Tuple
 
 from httpx import HTTPStatusError
-from inquirer.shortcuts import password
 from playwright.sync_api import Page
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase.pdfmetrics import stringWidth
@@ -1162,7 +1161,7 @@ class EasyApplier:
             question_data = Question(question_type="radio", question=question_text, answer=answer)
             self._save_questions(question_data)
             self.all_questions = self._load_questions()
-            await self._select_radio(radios, answer)
+            await self._select_radio(section, radios, answer)
             logger.debug("Selected new radio answer")
             return True
         return False
