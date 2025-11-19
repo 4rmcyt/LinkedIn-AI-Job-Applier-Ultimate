@@ -55,7 +55,9 @@ class LinkedInAuthenticator:
                 return False
 
             # Additional check - look for feed content
-            feed_element = await find_element_safely(self.page, ".feed-shared-update-v2")
+            feed_element = await find_element_safely(
+                self.page, ".feed-shared-update-v2", timeout=30000
+            )
             if feed_element:
                 logger.info("Feed content found, user is logged in")
                 return True

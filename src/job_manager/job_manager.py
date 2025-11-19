@@ -667,6 +667,11 @@ class JobApplier:
         """Extract job title from the job page using multiple selector strategies (async)"""
         xpath_selectors = [
             "//p[contains(@class, '_6ffc9cf5') or contains(@class, '_53f57f34')]",
+            "//p[contains(@class, '_190e3b93') or contains(@class, '_39090859')]",
+            "//p[contains(@class, '_79d083f8') or contains(@class, 'c701dbb2')]",
+            "//p[contains(@class, '_3c849e78') or contains(@class, '_5a2e2bd7')]",
+            "//p[contains(@class, '_8b56d53f') or contains(@class, 'ff36582f')]",
+            "//p[contains(@class, '_3935efd9')]",
         ]
 
         for xpath_selector in xpath_selectors:

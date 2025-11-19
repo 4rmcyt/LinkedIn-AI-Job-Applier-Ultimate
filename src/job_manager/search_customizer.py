@@ -54,7 +54,9 @@ class SearchCustomizer:
 
                 keywords_filled = False
                 for selector in keyword_selectors:
-                    if await safe_fill(self.page, selector, ", ".join(self.positions)):
+                    if await safe_fill(
+                        self.page, selector, ", ".join(self.positions), wait_for_timeout=2000
+                    ):
                         logger.info(f"Keywords set: {', '.join(self.positions)}")
                         keywords_filled = True
                         pause(1, 2)
@@ -75,7 +77,9 @@ class SearchCustomizer:
 
                 location_filled = False
                 for selector in location_selectors:
-                    if await safe_fill(self.page, selector, ", ".join(self.locations)):
+                    if await safe_fill(
+                        self.page, selector, ", ".join(self.locations), wait_for_timeout=2000
+                    ):
                         logger.info(f"Location set: {', '.join(self.locations)}")
                         pause()
 

@@ -148,10 +148,18 @@ async def safe_fill(
     selector: str,
     text: str,
     timeout: int = 10000,
+    wait_for_timeout: Optional[int] = None,
 ) -> bool:
     """Safely fill text input with human-like behavior (async)"""
     try:
         locator = page.locator(selector)
+
+        if wait_for_timeout is not None:
+            try:
+                await locator.wait_for(state="attached", timeout=wait_for_timeout)
+            except Exception:
+                return False
+
         element_count = await locator.count()
 
         if element_count == 0:
@@ -271,7 +279,9 @@ def pause(low: float = 0.5, high: float = 1) -> None:
     time.sleep(pause_time)
 
 
-async def find_element_safely(page: Page, selector: str, by: str = "css selector"):
+async def find_element_safely(
+    page: Page, selector: str, by: str = "css selector", timeout: Optional[int] = None
+):
     """Find element using optimal method for browser type (async)"""
     try:
         # Normalize selector for Playwright
@@ -279,6 +289,13 @@ async def find_element_safely(page: Page, selector: str, by: str = "css selector
             selector if by == "css selector" else f"xpath={selector}" if by == "xpath" else selector
         )
         element = page.locator(final_selector).first
+
+        if timeout is not None:
+            try:
+                await element.wait_for(state="attached", timeout=timeout)
+            except Exception:
+                return None
+
         if await element.count() > 0:
             return element
         else:
@@ -288,13 +305,22 @@ async def find_element_safely(page: Page, selector: str, by: str = "css selector
         return None
 
 
-async def find_elements_safely(page: Page, selector: str, by: str = "css selector") -> List[Any]:
+async def find_elements_safely(
+    page: Page, selector: str, by: str = "css selector", timeout: Optional[int] = None
+) -> List[Any]:
     """Find elements using optimal method for browser type (async)"""
     try:
         final_selector = (
             selector if by == "css selector" else f"xpath={selector}" if by == "xpath" else selector
         )
         elements = await page.locator(final_selector).all()
+
+        if timeout is not None:
+            try:
+                await elements.wait_for(state="attached", timeout=timeout)
+            except Exception:
+                return []
+
         if len(elements) > 0:
             return elements
         else:
