@@ -316,7 +316,7 @@ class SearchCustomizer:
         try:
             # Navigate to LinkedIn jobs search
             await self.page.goto("https://www.linkedin.com/jobs/search/")
-            pause(1, 2)
+            pause(2, 3)
 
             # Set basic search terms (keywords and location)
             await self._set_basic_search_terms()
