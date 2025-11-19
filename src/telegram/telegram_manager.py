@@ -4,7 +4,6 @@ from typing import Any, Dict, Union
 import dotenv
 from telethon import TelegramClient
 
-from config.app_config import TG_CHAT_ID, TG_REPORT_TOPIC_ID
 from config.logger_config import logger
 from telegram import Bot
 from telegram.error import TelegramError
@@ -54,8 +53,8 @@ class TelegramReportSender:
     def __init__(self):
         telegram_bot_token = dotenv.dotenv_values(".env")["tg_token"]
         self.bot = Bot(token=telegram_bot_token)
-        self.chat_id = TG_CHAT_ID
-        self.report_topic_id = TG_REPORT_TOPIC_ID
+        self.chat_id = dotenv.dotenv_values(".env")["tg_chat_id"]
+        self.report_topic_id = dotenv.dotenv_values(".env")["tg_report_topic_id"]
         self.message = ""
 
     async def send_telegram_report(
@@ -156,9 +155,10 @@ if __name__ == "__main__":
     tg_token = secrets["tg_token"]
     tg_api_id = secrets["tg_api_id"]
     tg_api_hash = secrets["tg_api_hash"]
+    tg_chat_id = secrets["tg_chat_id"]
 
     message = "1747994625258759"
     text = asyncio.run(
-        receive_messages(tg_api_id, tg_api_hash, TG_CHAT_ID, TG_CAPTCHA_TOPIC_ID, message=message)
+        receive_messages(tg_api_id, tg_api_hash, tg_chat_id, TG_CAPTCHA_TOPIC_ID, message=message)
     )
     print(text)

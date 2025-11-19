@@ -58,13 +58,13 @@ class TestAsyncTelegramSink:
         monkeypatch.setenv("tg_token", "test_bot_token_123")
 
         # Mock dotenv.dotenv_values
-        mock_dotenv = {"tg_token": "test_bot_token_123"}
+        mock_dotenv = {
+            "tg_token": "test_bot_token_123",
+            "tg_chat_id": "test_chat_id",
+            "tg_err_topic_id": 123,
+            "tg_report_topic_id": 456,
+        }
         monkeypatch.setattr("dotenv.dotenv_values", lambda x: mock_dotenv)
-
-        # Mock config constants
-        monkeypatch.setattr("src.telegram.telegram_error_handler.TG_CHAT_ID", "test_chat_id")
-        monkeypatch.setattr("src.telegram.telegram_error_handler.TG_ERR_TOPIC_ID", 123)
-        monkeypatch.setattr("src.telegram.telegram_error_handler.TG_REPORT_TOPIC_ID", 456)
 
         # Mock SEARCH_CONFIG_FILE loading
         def mock_load_yaml(path):
@@ -379,11 +379,13 @@ class TestAsyncTelegramSinkIntegration:
         """Test full workflow: new error -> send -> cache"""
         # Setup
         monkeypatch.setenv("tg_token", "test_bot_token")
-        mock_dotenv = {"tg_token": "test_bot_token"}
+        mock_dotenv = {
+            "tg_token": "test_bot_token",
+            "tg_chat_id": "chat_123",
+            "tg_err_topic_id": 100,
+            "tg_report_topic_id": 200,
+        }
         monkeypatch.setattr("dotenv.dotenv_values", lambda x: mock_dotenv)
-        monkeypatch.setattr("src.telegram.telegram_error_handler.TG_CHAT_ID", "chat_123")
-        monkeypatch.setattr("src.telegram.telegram_error_handler.TG_ERR_TOPIC_ID", 100)
-        monkeypatch.setattr("src.telegram.telegram_error_handler.TG_REPORT_TOPIC_ID", 200)
 
         def mock_load_yaml(path):
             return {"user_id": "user_123"}
@@ -415,11 +417,13 @@ class TestAsyncTelegramSinkIntegration:
         """Test full workflow: duplicate error -> suppress"""
         # Setup
         monkeypatch.setenv("tg_token", "test_bot_token")
-        mock_dotenv = {"tg_token": "test_bot_token"}
+        mock_dotenv = {
+            "tg_token": "test_bot_token",
+            "tg_chat_id": "chat_123",
+            "tg_err_topic_id": 100,
+            "tg_report_topic_id": 200,
+        }
         monkeypatch.setattr("dotenv.dotenv_values", lambda x: mock_dotenv)
-        monkeypatch.setattr("src.telegram.telegram_error_handler.TG_CHAT_ID", "chat_123")
-        monkeypatch.setattr("src.telegram.telegram_error_handler.TG_ERR_TOPIC_ID", 100)
-        monkeypatch.setattr("src.telegram.telegram_error_handler.TG_REPORT_TOPIC_ID", 200)
 
         def mock_load_yaml(path):
             return {"user_id": "user_123"}
@@ -453,10 +457,15 @@ class TestEdgeCases:
     async def test_empty_message(self, monkeypatch, tmp_path):
         """Test handling of empty message"""
         monkeypatch.setenv("tg_token", "test_token")
-        monkeypatch.setattr("dotenv.dotenv_values", lambda x: {"tg_token": "test_token"})
-        monkeypatch.setattr("src.telegram.telegram_error_handler.TG_CHAT_ID", "chat")
-        monkeypatch.setattr("src.telegram.telegram_error_handler.TG_ERR_TOPIC_ID", 1)
-        monkeypatch.setattr("src.telegram.telegram_error_handler.TG_REPORT_TOPIC_ID", 2)
+        monkeypatch.setattr(
+            "dotenv.dotenv_values",
+            lambda x: {
+                "tg_token": "test_token",
+                "tg_chat_id": "chat",
+                "tg_err_topic_id": 1,
+                "tg_report_topic_id": 2,
+            },
+        )
         monkeypatch.setattr(
             "src.telegram.telegram_error_handler.load_yaml_file", lambda x: {"user_id": "user"}
         )
@@ -477,10 +486,15 @@ class TestEdgeCases:
     async def test_very_long_message_truncation(self, monkeypatch):
         """Test that extremely long messages are truncated properly"""
         monkeypatch.setenv("tg_token", "test_token")
-        monkeypatch.setattr("dotenv.dotenv_values", lambda x: {"tg_token": "test_token"})
-        monkeypatch.setattr("src.telegram.telegram_error_handler.TG_CHAT_ID", "chat")
-        monkeypatch.setattr("src.telegram.telegram_error_handler.TG_ERR_TOPIC_ID", 1)
-        monkeypatch.setattr("src.telegram.telegram_error_handler.TG_REPORT_TOPIC_ID", 2)
+        monkeypatch.setattr(
+            "dotenv.dotenv_values",
+            lambda x: {
+                "tg_token": "test_token",
+                "tg_chat_id": "chat",
+                "tg_err_topic_id": 1,
+                "tg_report_topic_id": 2,
+            },
+        )
         monkeypatch.setattr(
             "src.telegram.telegram_error_handler.load_yaml_file", lambda x: {"user_id": "user"}
         )
@@ -503,10 +517,15 @@ class TestEdgeCases:
     def test_custom_cooldown_and_retries(self, monkeypatch):
         """Test custom cooldown and retry values"""
         monkeypatch.setenv("tg_token", "test_token")
-        monkeypatch.setattr("dotenv.dotenv_values", lambda x: {"tg_token": "test_token"})
-        monkeypatch.setattr("src.telegram.telegram_error_handler.TG_CHAT_ID", "chat")
-        monkeypatch.setattr("src.telegram.telegram_error_handler.TG_ERR_TOPIC_ID", 1)
-        monkeypatch.setattr("src.telegram.telegram_error_handler.TG_REPORT_TOPIC_ID", 2)
+        monkeypatch.setattr(
+            "dotenv.dotenv_values",
+            lambda x: {
+                "tg_token": "test_token",
+                "tg_chat_id": "chat",
+                "tg_err_topic_id": 1,
+                "tg_report_topic_id": 2,
+            },
+        )
         monkeypatch.setattr(
             "src.telegram.telegram_error_handler.load_yaml_file", lambda x: {"user_id": "user"}
         )

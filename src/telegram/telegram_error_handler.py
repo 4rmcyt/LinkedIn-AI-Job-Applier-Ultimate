@@ -10,7 +10,6 @@ from typing import Dict
 import dotenv
 import yaml
 
-from config.app_config import TG_CHAT_ID, TG_ERR_TOPIC_ID, TG_REPORT_TOPIC_ID
 from config.constants import LOG_DIR, SEARCH_CONFIG_FILE
 from telegram import Bot
 from telegram.error import TelegramError
@@ -60,9 +59,9 @@ class AsyncTelegramSink:
     ):
         telegram_bot_token = dotenv.dotenv_values(".env")["tg_token"]
         self.bot = Bot(token=telegram_bot_token)
-        self.chat_id = TG_CHAT_ID
-        self.err_topic_id = TG_ERR_TOPIC_ID
-        self.report_topic_id = TG_REPORT_TOPIC_ID
+        self.chat_id = dotenv.dotenv_values(".env")["tg_chat_id"]
+        self.err_topic_id = dotenv.dotenv_values(".env")["tg_err_topic_id"]
+        self.report_topic_id = dotenv.dotenv_values(".env")["tg_report_topic_id"]
         self.user_id = load_yaml_file(SEARCH_CONFIG_FILE).get("user_id", "-1")
         self.max_retries = max_retries
         self.cooldown = cooldown  # Seconds between identical error notifications
@@ -106,7 +105,10 @@ class AsyncTelegramSink:
                 last_sent = datetime.fromisoformat(cache[new_error])
                 return (datetime.now() - last_sent).total_seconds() < self.cooldown
 
-        except (FileNotFoundError, yaml.YAMLError) as e:
+        except FileNotFoundError:
+            internal_logger.info("Cache file not found")
+
+        except yaml.YAMLError as e:
             internal_logger.warning(f"Error reading cache: {e}")
 
         return False

@@ -60,11 +60,6 @@ Free tier mode wait time in seconds
 """
 FREE_TIER_RPM_LIMIT = 15
 
-"""Telegram chat address and corresponding topic IDs for sending"""
-TG_CHAT_ID = "<your_telegram_chat_id>"
-TG_ERR_TOPIC_ID = "<your_telegram_topic_id>"
-TG_REPORT_TOPIC_ID = "<your_telegram_topic_id>"
-
 """
 Logging level
 Possible values:

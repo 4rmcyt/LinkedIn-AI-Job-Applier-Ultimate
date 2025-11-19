@@ -202,17 +202,18 @@ class TestTelegramReportSender:
     def mock_env(self):
         """Mock environment variables"""
         with patch("src.telegram.telegram_manager.dotenv.dotenv_values") as mock_dotenv:
-            mock_dotenv.return_value = {"tg_token": "test_token"}
+            mock_dotenv.return_value = {
+                "tg_token": "test_token",
+                "tg_chat_id": "123456",
+                "tg_report_topic_id": "789",
+            }
             yield mock_dotenv
 
     @pytest.fixture
     def mock_config(self):
         """Mock configuration"""
-        with (
-            patch("src.telegram.telegram_manager.TG_CHAT_ID", "123456"),
-            patch("src.telegram.telegram_manager.TG_REPORT_TOPIC_ID", "789"),
-        ):
-            yield
+        # No longer need to patch module constants as they are loaded from env
+        yield
 
     def test_init(self, mock_env, mock_config):
         """Test TelegramReportSender initialization"""
@@ -485,16 +486,18 @@ class TestAsyncTelegramSink:
     def mock_env(self):
         """Mock environment variables"""
         with patch("src.telegram.telegram_error_handler.dotenv.dotenv_values") as mock_dotenv:
-            mock_dotenv.return_value = {"tg_token": "test_token"}
+            mock_dotenv.return_value = {
+                "tg_token": "test_token",
+                "tg_chat_id": "123456",
+                "tg_err_topic_id": "789",
+                "tg_report_topic_id": "456",
+            }
             yield mock_dotenv
 
     @pytest.fixture
     def mock_config(self):
         """Mock configuration"""
         with (
-            patch("src.telegram.telegram_error_handler.TG_CHAT_ID", "123456"),
-            patch("src.telegram.telegram_error_handler.TG_ERR_TOPIC_ID", "789"),
-            patch("src.telegram.telegram_error_handler.TG_REPORT_TOPIC_ID", "456"),
             patch(
                 "src.telegram.telegram_error_handler.SEARCH_CONFIG_FILE",
                 "config/search_config.yaml",

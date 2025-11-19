@@ -162,6 +162,17 @@ This project enhances the original codebase with several powerful new features:
 
     # Your Telegram Bot Token for sending error messages and reports
     tg_token="your_telegram_bot_token"
+
+    # Address of your chat in format "@name_of_your_chat"
+    tg_chat_id="@name_of_your_chat"
+
+    # ID of topic where bot will send error messages
+    # You can find out ID of the topic by copying the link to the topic in Telegram app and extracting the number before the last slash
+    # For example, if the link to the topic is https://t.me/channel_name/123/321, the ID of the topic is 123
+    tg_err_topic_id="[ID of error topic]"
+
+    # ID of topic where bot will send everyday report on the job applies done
+    tg_report_topic_id="[ID of report topic]"
     ```
 
 2.  **Job Search Parameters (`config/search_config.yaml`):**
@@ -195,7 +206,6 @@ This project enhances the original codebase with several powerful new features:
     *   `MINIMUM_WAIT_TIME_SEC`: Minimum time spent on one job application, this setting help to prevent ban for too frequent job applies
     *   `FREE_TIER`: If `True`, the bot will try to decrease RPM (requests per minute) to avoid rate limit errors when using free tier LLM services.
     *   `FREE_TIER_RPM_LIMIT`: desired RPM limit, application will try not to exceed this limit
-    *   `TG_CHAT_ID/TG_ERR_TOPIC_ID/TG_REPORT_TOPIC_ID`: Address of your chat in format "@name_of_your_chat" + IDs of topics where bot will send error messages and everyday report on the job applies done. You can find instruction how to create and set your Telegram chat below.
     *   `LLM_MODEL_TYPE`: Choose your LLM provider (e.g., "gemini").
     *   `EASY_APPLY_MODEL`: Specify the exact model to use for Easy Apply vacancies (e.g., "gemini-2.0-flash").
     *   `APPLY_AGENT_MODEL`: Specify the exact agent model to use for Non-Easy Apply vacancies (e.g., "gemini-2.5-flash").
