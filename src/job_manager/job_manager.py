@@ -61,7 +61,9 @@ class JobApplier:
         self.llm_agent_component = None
         self.resume_generator_manager = None
         self.pause_checker = None
-        self.jobs_no_info = []  # vacancies to which applications were not sent due to missing information
+        self.jobs_no_info = (
+            []
+        )  # vacancies to which applications were not sent due to missing information
         self.job_key_skills = []  # key skills according to employer's opinion
         self.interesting_jobs = []
         self.page_num = 0
@@ -666,12 +668,8 @@ class JobApplier:
     async def _extract_job_title(self) -> str:
         """Extract job title from the job page using multiple selector strategies (async)"""
         xpath_selectors = [
-            "//p[contains(@class, '_6ffc9cf5') or contains(@class, '_53f57f34')]",
-            "//p[contains(@class, '_190e3b93') or contains(@class, '_39090859')]",
-            "//p[contains(@class, '_79d083f8') or contains(@class, 'c701dbb2')]",
-            "//p[contains(@class, '_3c849e78') or contains(@class, '_5a2e2bd7')]",
-            "//p[contains(@class, '_8b56d53f') or contains(@class, 'ff36582f')]",
-            "//p[contains(@class, '_3935efd9')]",
+            # Job alert toggle component - contains "Title, Location" format
+            "//div[@data-sdui-component='com.linkedin.sdui.generated.jobseeker.dsl.impl.jobAlertToggle']//p[contains(@class, 'f006b8b2')]",
         ]
 
         for xpath_selector in xpath_selectors:
@@ -682,7 +680,17 @@ class JobApplier:
                     if text:
                         # Clean up the text - take first line and strip
                         text = text.strip().split("\n")[0].strip()
-                        if text and len(text) > 3:  # Ensure it's a meaningful title
+
+                        # Handle "Job Title, Location" format - extract only job title
+                        if ", " in text and len(text.split(", ")) >= 2:
+                            # Extract job title (first part before comma)
+                            job_title = text.split(",")[0].strip()
+                            if job_title and len(job_title) > 3:
+                                logger.debug(
+                                    f"Found job title '{job_title}' (extracted from '{text}') using xpath: {xpath_selector}"
+                                )
+                                return job_title
+                        elif text and len(text) > 3:  # Ensure it's a meaningful title
                             logger.debug(f"Found job title '{text}' using xpath: {xpath_selector}")
                             return text
                 except Exception:
