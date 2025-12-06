@@ -61,9 +61,7 @@ class JobApplier:
         self.llm_agent_component = None
         self.resume_generator_manager = None
         self.pause_checker = None
-        self.jobs_no_info = (
-            []
-        )  # vacancies to which applications were not sent due to missing information
+        self.jobs_no_info = []  # vacancies to which applications were not sent due to missing information
         self.job_key_skills = []  # key skills according to employer's opinion
         self.interesting_jobs = []
         self.page_num = 0
@@ -643,8 +641,6 @@ class JobApplier:
         xpath_selectors = [
             # New LinkedIn UI: find a elements with company link pattern
             "//a[contains(@href, '/company/')]",
-            "//a[contains(@class, '_53f57f34') and contains(@class, '_9d7df06f')]",
-            "//p[contains(@class, '_5dd8419e')]//a",
         ]
 
         for xpath_selector in xpath_selectors:
@@ -668,8 +664,8 @@ class JobApplier:
     async def _extract_job_title(self) -> str:
         """Extract job title from the job page using multiple selector strategies (async)"""
         xpath_selectors = [
-            # Job alert toggle component - contains "Title, Location" format
-            "//div[@data-sdui-component='com.linkedin.sdui.generated.jobseeker.dsl.impl.jobAlertToggle']//p[contains(@class, 'f006b8b2')]",
+            # New LinkedIn UI: find "Set alert for similar jobs" heading, then the job title in the following paragraph
+            "//h2[contains(text(), 'Set alert for similar jobs')]/following-sibling::div[1]/p",
         ]
 
         for xpath_selector in xpath_selectors:
