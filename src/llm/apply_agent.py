@@ -29,7 +29,7 @@ class ApplyAgent:
         if model_type == "gemini":
             llm = ChatGoogle(api_key=self.api_key, model=self.model)
         elif model_type == "openai":
-            llm = ChatOpenAI(api_key=self.api_key, model=self.model)
+            llm = ChatOpenAI(api_key=self.api_key, model=self.model, reasoning_effort="minimal")
         elif model_type == "claude":
             llm = ChatAnthropic(api_key=self.api_key, model=self.model)
         elif model_type == "ollama":

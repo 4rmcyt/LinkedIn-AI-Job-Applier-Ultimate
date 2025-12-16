@@ -81,17 +81,18 @@ Possible values:
     - "gemini"
     - "huggingface"
 """
-# LLM_MODEL_TYPE = "openai"
-LLM_MODEL_TYPE = "gemini"
+LLM_MODEL_TYPE = "openai"
+# LLM_MODEL_TYPE = "gemini"
 
 # LLM models
-# EASY_APPLY_MODEL = "gpt-4o-mini"
-EASY_APPLY_MODEL = "gemini-2.0-flash"
-APPLY_AGENT_MODEL = "gemini-flash-latest"
+EASY_APPLY_MODEL = "gpt-5-nano"
+# EASY_APPLY_MODEL = "gemini-2.0-flash"
+APPLY_AGENT_MODEL = "gpt-5-nano"
+# APPLY_AGENT_MODEL = "gemini-2.0-flash"
 
 """
 Easy Apply model temperature
 the higher it is, the more creative the model, but hallucinations may occur
 the lower it is, the more strictly the model follows the prompt and invents less
 """
-TEMPERATURE = 0.4
+TEMPERATURE = 1

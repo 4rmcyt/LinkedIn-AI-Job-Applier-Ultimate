@@ -101,6 +101,7 @@ class OpenAIModel(AIModel):
             presence_penalty=0,
             frequency_penalty=0,
             timeout=60,
+            reasoning_effort="minimal",
         )
 
     def invoke(self, prompt: ChatPromptTemplate) -> BaseMessage:
