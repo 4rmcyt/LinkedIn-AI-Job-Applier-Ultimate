@@ -3,7 +3,8 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from browser_use import Agent, Browser, ChatAnthropic, ChatGoogle, ChatOllama, ChatOpenAI
+from browser_use import Agent, Browser, ChatAnthropic, ChatGoogle, ChatOllama, ChatOpenAI, Tools
+from browser_use.tools.views import UploadFileAction
 
 from config.app_config import APPLY_AGENT_MODEL, HEADLESS_MODE, LLM_MODEL_TYPE
 from config.constants import LOG_DIR, PRICE_DICT, RESUME_DIR
@@ -21,7 +22,16 @@ class ApplyAgent:
         self.calls_log = os.path.join(Path(LOG_DIR), "llm_api_calls.yaml")
         self.agent = None
         self.resume_readable = None
-        self.browser = Browser(headless=HEADLESS_MODE)
+        self.browser_storage_state = str(Path(browser_storage_state).absolute())
+        storage_state = (
+            self.browser_storage_state if Path(self.browser_storage_state).exists() else None
+        )
+        if storage_state is None:
+            logger.warning(
+                f"Browser storage state file not found at {self.browser_storage_state}. "
+                "Continuing without persisted cookies/localStorage."
+            )
+        self.browser = Browser(headless=HEADLESS_MODE, storage_state=storage_state)
 
     def select_model_type(self, model_type: str) -> None:
         """Select the model to use."""
@@ -44,21 +54,52 @@ class ApplyAgent:
 
     async def apply(self, job_url: str) -> None:
         """Apply to the job using AI Agent"""
+        resume_pdf_path = str((Path(RESUME_DIR).absolute() / "resume.pdf"))
+
+        tools = Tools()
+
+        @tools.action(
+            description="Get an UploadFileAction for my resume.pdf (use with upload_file_to_element if needed)"
+        )
+        async def upload_resume(browser_session, index: int = 0):  # noqa: ARG001
+            return UploadFileAction(path=resume_pdf_path, index=index)
+
         task = f"""
-        Go to page with URL {job_url} and apply to the job using information from my resume.
-        ## Additional rules:
-            - if you can't apply, just finish the task, don't try to apply using different URLs
-            - some textboxes may have dropdowns, so after filling the textbox, check if there is a dropdown and if there is, select the correct option
-        ## My resume text: {self.resume_readable}
+        - Your goal is to apply to the job at: {job_url}
+        - Use the information from my resume (source of truth) and any additional information already present on the page.
+        - If you cannot apply, finish the task (do not try different URLs).
+
+        - Follow these instructions carefully:
+            - If anything pops up that blocks the form, close it and continue.
+            - Do not skip required fields. If an optional field is present, fill it if possible using my resume/context.
+            - Fill the form from top to bottom; do not skip a field to come back later.
+            - Some text boxes may have dropdown suggestions: after filling a textbox, check for a dropdown and select the correct option.
+
+        - Resume:
+            - You may upload my resume PDF when the application asks for it.
+            - The resume file is available as: {resume_pdf_path}
+            - Prefer using the built-in upload_file_to_element action; if the page flow needs it, you can use the upload_resume tool to produce an UploadFileAction.
+
+        - Before you start, create a step-by-step plan to complete the entire application. Delegate a step for each field/section you encounter.
+
+        *** IMPORTANT ***
+            - You are not done until you have either submitted the application OR confirmed you cannot apply.
+            - At the end, structure your final_result as:
+                1) a human-readable summary of all detections and actions performed
+                2) a list of all questions encountered on the page (including any screening questions)
+                3) a short final human-readable summary at the very end
+
+        ## My resume text (source of truth):
+        {self.resume_readable}
         """
-        available_file_paths = [
-            str(Path(RESUME_DIR).absolute() / "resume.pdf"),
-        ]
+
+        available_file_paths = [resume_pdf_path]
 
         self.agent = Agent(
             task=task,
             browser=self.browser,
             llm=self.llm,
+            tools=tools,
             use_vision=False,
             use_thinking=False,
             save_conversation_path=Path(LOG_DIR).absolute() / "apply_agent_conversation",
