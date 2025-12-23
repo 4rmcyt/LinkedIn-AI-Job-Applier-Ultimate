@@ -1,3 +1,4 @@
+import re
 from string import Template
 from typing import Any
 
@@ -40,6 +41,38 @@ class ResumeGenerator:
         template = Template(self.html_template)
         html_resume = self.gpt_resume_generator.generate_html_resume()
         deanonymized_html_resume = self.resume_anonymizer.deanonymize_text(html_resume)
+        deanonymized_html_resume = self._normalize_anchor_hrefs(deanonymized_html_resume)
         message = template.substitute(markdown=deanonymized_html_resume, style_path=style_path)
         with open(temp_html_path, "w", encoding="utf-8") as temp_file:
             temp_file.write(message)
+
+    @staticmethod
+    def _normalize_anchor_hrefs(html: str) -> str:
+        """
+        Normalize common "bare" links produced by the LLM (e.g. href="github.com/...") into
+        absolute URLs so Chromium/Playwright can embed clickable link annotations in the PDF.
+        """
+
+        def repl(match: re.Match) -> str:
+            quote = match.group("q")
+            href = match.group("href").strip()
+
+            # Leave these as-is
+            if re.match(r"^(https?://|mailto:|tel:|#|/|file:)", href, flags=re.IGNORECASE):
+                return f"href={quote}{href}{quote}"
+
+            # Promote common domains to https://
+            if re.match(r"^(www\.)", href, flags=re.IGNORECASE):
+                return f"href={quote}https://{href}{quote}"
+
+            if re.match(r"^(github\.com/|linkedin\.com/)", href, flags=re.IGNORECASE):
+                return f"href={quote}https://{href}{quote}"
+
+            return f"href={quote}{href}{quote}"
+
+        return re.sub(
+            r'href=(?P<q>["\'])(?P<href>[^"\']+)(?P=q)',
+            repl,
+            html,
+            flags=re.IGNORECASE,
+        )

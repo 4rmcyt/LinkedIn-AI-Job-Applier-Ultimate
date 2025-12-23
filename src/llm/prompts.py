@@ -403,6 +403,7 @@ Act as an HR expert and resume writer with a specialization in creating ATS-frie
 5. Job Alignment: Prioritize and emphasize education that directly matches the job requirements, using similar terminology and highlighting relevant technologies, methodologies, or skills mentioned in the job description.
 
 To implement this, follow these steps:
+- Be concise and to the point, don't write a lot of text.
 - If the exam details are not provided (i.e., None, No info), skip the coursework section when filling out the template.
 - If the exam details are available, fill out the coursework section accordingly.
 
@@ -428,6 +429,7 @@ Act as an HR expert and resume writer with a specialization in creating ATS-frie
 6. Quantified Results: Quantify achievements that align with the company's goals and the specific role requirements.
 
 To implement this:
+- Be concise and to the point, don't write a lot of text.
 - If any of the work experience details (e.g., responsibilities, achievements) are not provided (i.e., None, No info), omit those sections when filling out the template.
 
 
@@ -451,6 +453,8 @@ Act as an HR expert and resume writer with a specialization in creating ATS-frie
 4. Job Relevance: Prioritize and emphasize projects that align with the job requirements, using similar technologies or demonstrating relevant skills.
 
 To implement this:
+- Be concise and to the point, don't write a lot of text.
+- Put the projects that are related to auto job applying first.
 - If any of the project details (e.g., link, achievements) are not provided (i.e., None, No info), omit those sections when filling out the template.
 
 ##My information
@@ -472,8 +476,9 @@ Act as an HR expert and resume writer with a specialization in creating ATS-frie
 3. Job Alignment: Prioritize achievements that demonstrate skills, qualities, or experiences directly relevant to the job requirements.
 
 To implement this:
+- Be concise and to the point, don't write a lot of text.
 - If any of the achievement details (e.g., certifications, descriptions) are not provided (i.e., None, No info), omit those sections when filling out the template.
-
+- DON'T DIRECTLY SAY that this achievement is related to the job description, just describe the achievement and its relevance to your career or academic journey.
 
 ##My information
   {achievements}
@@ -494,6 +499,7 @@ Act as an HR expert and resume writer with a specialization in creating ATS-frie
 3. Job Relevance: Prioritize certifications that directly align with the job requirements, technologies, or industry standards mentioned in the job description.
 
 To implement this:
+- Be concise and to the point, don't write a lot of text.
 - Ensure that the certifications are clearly presented and effectively highlight your qualifications that match the job requirements.
 - If any of the certification details (e.g., descriptions) are not provided (i.e., None, No info), omit those sections when filling out the template.
 
@@ -513,10 +519,10 @@ Act as an HR expert and resume writer with a specialization in creating ATS-frie
 
 1. Skill Category: Clearly state the category or type of skill.
 2. Specific Skills: List the specific skills or technologies within each category, prioritizing those mentioned in the job description.
-3. Proficiency and Experience: Briefly describe your experience and proficiency level.
-4. Job Alignment: Emphasize skills that directly match the job requirements and use terminology from the job description when appropriate.
+3. Job Alignment: Emphasize skills that directly match the job requirements and use terminology from the job description when appropriate.
 
 To implement this:
+- Be concise and to the point, don't write a lot of text.
 - Ensure that the skills listed are relevant and accurately reflect your expertise in the field.
 - If any of the skill details (e.g., languages, interests, skills) are not provided (i.e., None, No info), omit those sections when filling out the template.
 

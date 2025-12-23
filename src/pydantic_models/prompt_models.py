@@ -66,6 +66,7 @@ class EducationDetail(BaseModel):
     start_date: Optional[str] = Field(default="No info", description="Start date")
     year_of_completion: Optional[str] = Field(default="No info", description="Completion year")
     exam: Optional[Dict[str, str]] = Field(default_factory=dict, description="Exam grades")
+    location: Optional[str] = Field(default="No info", description="Location")
 
 
 class ExperienceDetail(BaseModel):

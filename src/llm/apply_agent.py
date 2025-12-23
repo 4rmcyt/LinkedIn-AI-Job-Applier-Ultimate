@@ -45,7 +45,7 @@ class ApplyAgent:
     async def apply(self, job_url: str) -> None:
         """Apply to the job using AI Agent"""
         task = f"""
-        Get to page with URL {job_url} and apply to the job using information from my resume.
+        Go to page with URL {job_url} and apply to the job using information from my resume.
         ## Additional rules:
             - if you can't apply, just finish the task, don't try to apply using different URLs
             - some textboxes may have dropdowns, so after filling the textbox, check if there is a dropdown and if there is, select the correct option

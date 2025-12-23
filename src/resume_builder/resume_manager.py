@@ -92,7 +92,9 @@ class ResumeManager:
             self.resume_generator.create_resume(style_path, temp_html_path)
 
         pdf_base64 = await HTML_to_PDF(temp_html_path)
-        os.remove(temp_html_path)
+        os.remove(
+            temp_html_path
+        )  # Comment this line to keep the HTML file for debugging (is in /tmp directory)
         return pdf_base64
 
 
@@ -141,9 +143,9 @@ if __name__ == "__main__":
 
             # Create a test job for resume generation
             test_job = {
-                "job_title": "Senior Python Developer",
-                "company_name": "Tech Company Inc.",
-                "job_description": "We are looking for a senior Python developer with experience in Django, FastAPI, and cloud technologies.",
+                "job_title": "BrowserUse consultant engineer position",
+                "company_name": "Teemo AI",
+                "job_description": "We are looking for a BrowserUse consultant engineer with experience in BrowserUse, Chrome Extensions, and cloud technologies.",
             }
             gpt_answerer.set_job(test_job)
 
