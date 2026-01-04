@@ -36,7 +36,12 @@ from src.resume_builder.resume_generator import ResumeGenerator
 from src.resume_builder.resume_manager import ResumeManager
 from src.resume_builder.style_manager import StyleManager
 from src.utils.browser_utils import create_playwright_browser, save_browser_session
-from src.utils.utils import load_yaml_file, save_yaml_file, validate_and_prompt_resume_completion
+from src.utils.utils import (
+    get_first_pdf_file,
+    load_yaml_file,
+    save_yaml_file,
+    validate_and_prompt_resume_completion,
+)
 
 # Create necessary directories if they don't exist
 os.makedirs(RESUME_DIR, exist_ok=True)
@@ -44,7 +49,8 @@ os.makedirs(RESUME_DIR, exist_ok=True)
 # Resume file paths
 RESUME_STRUCTURED_FILE = Path(RESUME_DIR) / "structured_resume.yaml"
 RESUME_TEXT_FILE = Path(RESUME_DIR) / "resume_text.txt"
-READY_MADE_RESUME = Path(RESUME_DIR) / "resume.pdf"
+
+READY_MADE_RESUME = get_first_pdf_file(Path(RESUME_DIR))
 
 # Global pause state for keyboard control
 paused = False

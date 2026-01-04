@@ -89,6 +89,16 @@ def sanitize_text(text: str) -> str:
     return sanitized_text
 
 
+def get_first_pdf_file(resume_dir: Path) -> Path:
+    """Get the first PDF file found in the resume directory, or default to resume.pdf"""
+    pdf_files = list(resume_dir.glob("*.pdf"))
+    if len(pdf_files) > 1:
+        logger.warning(
+            f"Multiple PDF files found in {resume_dir}. Selecting the first one: {pdf_files[0].name}"
+        )
+    return pdf_files[0] if pdf_files else resume_dir / "resume.pdf"
+
+
 def validate_structured_resume_fields(structured_resume: Dict[str, Any]) -> List[str]:
     """
     Validate structured resume and return list of missing or placeholder fields.

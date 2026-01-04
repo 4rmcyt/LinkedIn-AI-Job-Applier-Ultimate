@@ -62,10 +62,18 @@ class EducationDetail(BaseModel):
     education_level: Optional[str] = Field(default="No info", description="Education level")
     institution: Optional[str] = Field(default="No info", description="Institution name")
     field_of_study: Optional[str] = Field(default="No info", description="Field of study")
-    final_evaluation_grade: Optional[str] = Field(default="No info", description="Final grade")
-    start_date: Optional[str] = Field(default="No info", description="Start date")
-    year_of_completion: Optional[str] = Field(default="No info", description="Completion year")
-    exam: Optional[Dict[str, str]] = Field(default_factory=dict, description="Exam grades")
+    final_evaluation_grade: Optional[str | int | float] = Field(
+        default="No info", description="Final grade, must be a number"
+    )
+    start_date: Optional[str | int | float] = Field(
+        default="No info", description="Start date, must be a number"
+    )
+    year_of_completion: Optional[str | int | float] = Field(
+        default="No info", description="Completion year, must be a number"
+    )
+    exam: Optional[Dict[str, str] | str] = Field(
+        default="No info", description="Exam grades, must be a dictionary or a string"
+    )
     location: Optional[str] = Field(default="No info", description="Location")
 
 

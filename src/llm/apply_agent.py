@@ -10,7 +10,7 @@ from config.app_config import APPLY_AGENT_MODEL, HEADLESS_MODE, LLM_MODEL_TYPE
 from config.constants import LOG_DIR, PRICE_DICT, RESUME_DIR
 from config.logger_config import logger
 from src.pydantic_models.log_models import LLMCall
-from src.utils.utils import append_yaml_file
+from src.utils.utils import append_yaml_file, get_first_pdf_file
 
 
 class ApplyAgent:
@@ -54,12 +54,12 @@ class ApplyAgent:
 
     async def apply(self, job_url: str) -> None:
         """Apply to the job using AI Agent"""
-        resume_pdf_path = str((Path(RESUME_DIR).absolute() / "resume.pdf"))
+        resume_pdf_path = str(get_first_pdf_file(Path(RESUME_DIR)))
 
         tools = Tools()
 
         @tools.action(
-            description="Get an UploadFileAction for my resume.pdf (use with upload_file_to_element if needed)"
+            description="Get an UploadFileAction for my resume PDF file (use with upload_file_to_element if needed)"
         )
         async def upload_resume(browser_session, index: int = 0):  # noqa: ARG001
             return UploadFileAction(path=resume_pdf_path, index=index)
@@ -171,7 +171,7 @@ if __name__ == "__main__":
 
     from config.constants import BROWSER_STORAGE_STATE
     from src.pydantic_models.prompt_models import ResumeStructure
-    from src.utils.utils import load_yaml_file
+    from src.utils.utils import get_first_pdf_file, load_yaml_file
 
     async def test_apply_agent():
         """Test ApplyAgent with a real LinkedIn job posting"""

@@ -249,7 +249,7 @@ This project enhances the original codebase with several powerful new features:
 5. **Resume generation:**
     You have two options:
     *   **Automatic Creation (recommended):** Don't put your ready-made resume in `data/resumes/` and app will create a new resume for every job it applies to. Using this mode, the bot can create resumes tailored to each specific vacancy. Generated resume will be stored in `data/resumes/generated_resumes/` folder. Some of resume sections are the same for each vacancy (e.g. header), so bot generates these sections once and then stores them in `data/resumes/templates/<section_name>.html`. Netx time bot will load these sections from corresponding file instead of generation. If you think that some of these sections were generated incorrectly - just delete corresponding files so LLM will re-generate them.
-    *   **Ready Made Resume (recommended):** Take your ready-made resume in PDF format, name it as `resume.pdf` and put it into `data/resumes/` The bot will use this resume for applying jobs.
+    *   **Ready Made Resume (recommended):** Take your ready-made resume in PDF format and put it into `data/resumes/` The bot will use this resume for applying jobs. If you have multiple PDF files in `data/resumes/` folder - bot will use the first one found.
 
     **I also recommend to test resume generation before starting applying jobs**.
 

@@ -21,6 +21,7 @@ from src.utils.utils import (
     pause,
     sanitize_text,
     save_yaml_file,
+    get_first_pdf_file,
 )
 
 
@@ -51,7 +52,7 @@ class EasyApplier:
         self.resume_dir = resume_dir
         self.generated_resume_dir = Path(resume_dir) / "generated_resumes"
         self.generated_cover_letter_dir = Path(cover_letter_dir) / "generated_cover_letters"
-        self.ready_made_resume_path = Path(resume_dir) / "resume.pdf"
+        self.ready_made_resume_path = get_first_pdf_file(Path(resume_dir))
         self.all_questions = self._load_questions()
         self.current_job = None
         self.test_mode = test_mode
@@ -599,6 +600,7 @@ class EasyApplier:
                         logger.info(
                             f"Resume uploaded from path: {self.ready_made_resume_path.resolve()}"
                         )
+                        pause(2, 3)
                     else:
                         await self._create_and_upload_resume(upload_element, job)
                 elif "cover" in container_text:
@@ -1834,7 +1836,7 @@ if __name__ == "__main__":
         logger.info("Starting EasyApplier test...")
 
         # Test job URL
-        job_url = "https://www.linkedin.com/jobs/view/4321996458/"
+        job_url = "https://www.linkedin.com/jobs/view/4321886768"
         # Initialize Playwright browser
         try:
             browser, context, page = await create_playwright_browser()
@@ -1874,7 +1876,7 @@ if __name__ == "__main__":
             resume_text = resume_anonymizer.anonymize_text(resume_text)
 
             gpt_answerer.set_resume(resume_structured, resume_text)
-            gpt_answerer.set_job(test_job)
+            gpt_answerer.set_job(test_job, is_test=True)
 
             # Initialize resume generator manager (mock for testing)
             style_manager = StyleManager()

@@ -60,6 +60,7 @@ class GeminiModel(AIModel):
             model=llm_model,
             google_api_key=self.google_api_key,
             temperature=TEMPERATURE,
+            thinking_level="minimal",
             safety_settings={
                 HarmCategory.HARM_CATEGORY_UNSPECIFIED: HarmBlockThreshold.BLOCK_NONE,
                 HarmCategory.HARM_CATEGORY_DEROGATORY: HarmBlockThreshold.BLOCK_NONE,
@@ -559,11 +560,14 @@ class GPTAnswerer:
         self.resume_structured = resume_structured
         self.resume_readable = resume_readable
 
-    def set_job(self, job: Dict[str, Any]) -> None:
+    def set_job(self, job: Dict[str, Any], is_test: bool = False) -> None:
         """Add job description."""
         self.job = job
         text = transform_vacancy_data(job)
-        self.job_readable = self.summarize_job_description(text)
+        if is_test:
+            self.job_readable = text
+        else:
+            self.job_readable = self.summarize_job_description(text)
         logger.info(f"Adding job description: {self.job_readable}")
 
     def set_search_parameters(self, parameters: dict) -> None:
