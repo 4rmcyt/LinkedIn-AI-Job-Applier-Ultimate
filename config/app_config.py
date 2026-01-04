@@ -85,9 +85,9 @@ LLM_MODEL_TYPE = "openai"
 # LLM_MODEL_TYPE = "gemini"
 
 # LLM models
-EASY_APPLY_MODEL = "gpt-5-nano"
+EASY_APPLY_MODEL = "gpt-5-mini"
 # EASY_APPLY_MODEL = "gemini-2.5-flash"
-APPLY_AGENT_MODEL = "gpt-5-nano"
+APPLY_AGENT_MODEL = "gpt-5-mini"
 # APPLY_AGENT_MODEL = "gemini-2.5-flash"
 
 """
