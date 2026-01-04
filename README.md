@@ -240,7 +240,7 @@ This project enhances the original codebase with several powerful new features:
     This file controls the automated networking tool.
     *   `main_search_words`: Keywords like "Open Networker" or "LION" used to find networking-oriented profiles.
     *   `additional_search_words`: Keywords to narrow down the search to your specific field (e.g., "ai", "ml", "data science").
-    The bot will search for every combination of these words and attempt to connect with users whose profiles indicate they are open networkers (while intelligently skipping those where the keyword only appears in "mutual connections").
+    The bot will search for every combination of these words and attempt to connect with users whose profiles indicate they are open networkers (while intelligently skipping those profiles where the keywords appear only in "mutual connections").
 
 5.  **Resume files for LLM (`data/resumes/resume_text.txt` and `data/resumes/structured_resume.yaml`):**
     Resume text must contain information about your first and last names and your gender (that is necessary for the correct work of anonymization functions).
@@ -286,16 +286,6 @@ or
 uv run python main.py
 ```
 
-### Automated Networking (Connection Searcher)
-
-To run the networking tool that finds and connects with Open Networkers:
-
-```bash
-python connection_searcher.py
-```
-
-This tool will use the settings in `config/connection_searcher_config.yaml` to search for potential connections on LinkedIn and send invitations automatically.
-
 If bot finds out that there are no information about some fields in your `structured_resume.yaml` file - it will output warning, list of fields with no information and propose two options:
 - press `y` to continue anyway
 - press `n` to finish bot execution, consider what information is missing and add it to `data/resumes/resume_text.txt`. Then delete `structured_resume.yaml` and restart bot OR fill missing fields in `structured_resume.yaml` manually if you don't want LLM to re-generate it automatically because of privacy issues.
@@ -316,6 +306,19 @@ The bot will log its progress in the console and create detailed log files in th
 - **skill_stat.yaml**: Aggregated statistics of the most frequently requested skills gathered from job descriptions, sorted by descending frequency.
 - **skipped.yaml**: Companies and jobs that were intentionally skipped (e.g., blacklist, missing info, not interesting), with reasons.
 - **success.yaml**: Companies and jobs where the bot successfully submitted an application, including basic job info.
+
+
+### Automated Networking (Connection Searcher)
+
+To run the networking tool that finds and connects with Open Networkers:
+
+```bash
+python connection_searcher.py
+```
+
+This tool will use the settings in `config/connection_searcher_config.yaml` to search for potential connections on LinkedIn and send invitations automatically.
+
+Bot uses main keywords like "Open Networker" or "LION" to find people who are open for networking. You can also set your own additional keywords in `config/connection_searcher_config.yaml` file to search for specific people (e.g. if you are ML Engineer - you can add "ml" or "data science" keywords to search for specific people). The bot will search for every combination of main and additional keywords and attempt to connect with users whose profiles indicate they are open networkers (while intelligently skipping those profiles where the keywords only appear in "mutual connections").
 
 ## 💵 Vacancy application cost
 
