@@ -75,6 +75,15 @@ class SearchConfig(BaseModel):
     location_blacklist: Optional[List[str]] = []
 
 
+class ConnectionSearcherConfig(BaseModel):
+    main_search_words: List[str] = [
+        "Open Networker",
+        "LION",
+        "NO IDK",
+    ]
+    additional_search_words: List[str] = []
+
+
 class Secrets(BaseModel):
     llm_api_key: str
     llm_proxy: str
