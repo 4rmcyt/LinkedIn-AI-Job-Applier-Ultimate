@@ -318,7 +318,7 @@ python connection_searcher.py
 
 This tool will use the settings in `config/connection_searcher_config.yaml` to search for potential connections on LinkedIn and send invitations automatically.
 
-Bot uses main keywords like "Open Networker" or "LION" to find people who are open for networking. You can also set your own additional keywords in `config/connection_searcher_config.yaml` file to search for specific people (e.g. if you are ML Engineer - you can add "ml" or "data science" keywords to search for specific people). The bot will search for every combination of main and additional keywords and attempt to connect with users whose profiles indicate they are open networkers (while intelligently skipping those profiles where the keywords only appear in "mutual connections").
+Bot uses main keywords like "Open Networker" or "LION" to find people who are open for networking. You can also set your own additional keywords in `config/connection_searcher_config.yaml` file to search for specific people (e.g. if you are ML Engineer - you can add "ml" or "data science" keywords to search for another ML Engineers). The bot will search for every combination of main and additional keywords and attempt to connect with users whose profiles indicate they are open networkers (while intelligently skipping those profiles where the keywords only appear in "mutual connections").
 
 ## 💵 Vacancy application cost
 
