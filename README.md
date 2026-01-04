@@ -48,6 +48,7 @@ This project enhances the original codebase with several powerful new features:
 *   **⏸️ Pause/Resume Control:** Pause the bot at any time by pressing `Ctrl+X` and continue when ready, giving you full control over execution without stopping the entire process.
 *   **📊 Skill Statistics:** Analyzes job descriptions to identify the most in-demand skills, helping you tailor your resume effectively.
 *   **🧠 Intelligent Error Handling:** If LinkedIn's Easy Apply feature encounters errors (e.g., incorrectly filled fields), the bot will attempt to fix them automatically.
+*   **🤝 Automated Networking:** Includes a powerful tool to search for and connect with "Open Networkers" (LIONs) automatically, expanding your professional network with people likely to accept your requests.
 *   **☑️ Smart Checkbox Handling:** Automatically detects and answers checkbox questions in LinkedIn Easy Apply forms with intelligent context-aware responses.
 *   **🔗 Contextual Question Processing:** Considers previous answers when responding to follow-up questions like "If yes/no, who/when/where?" for more accurate and relevant responses.
 *   **🤖 AI-Powered Resume Parsing:** Automatically parses your resume from a text file into a structured format using an LLM (Large Language Model).
@@ -235,7 +236,13 @@ This project enhances the original codebase with several powerful new features:
     - Provide your API key in `.env` as `llm_api_key`. Optionally set `llm_proxy`.
     - Model pricing used in reports is taken from an internal map for common models; others fall back to default per-token prices.
 
-4.  **Resume files for LLM (`data/resumes/resume_text.txt` and `data/resumes/structured_resume.yaml`):**
+4.  **Connection Searcher Settings (`config/connection_searcher_config.yaml`):**
+    This file controls the automated networking tool.
+    *   `main_search_words`: Keywords like "Open Networker" or "LION" used to find networking-oriented profiles.
+    *   `additional_search_words`: Keywords to narrow down the search to your specific field (e.g., "ai", "ml", "data science").
+    The bot will search for every combination of these words and attempt to connect with users whose profiles indicate they are open networkers (while intelligently skipping those where the keyword only appears in "mutual connections").
+
+5.  **Resume files for LLM (`data/resumes/resume_text.txt` and `data/resumes/structured_resume.yaml`):**
     Resume text must contain information about your first and last names and your gender (that is necessary for the correct work of anonymization functions).
     Bot needs to resume files for correct work:
     *   **raw resume text file** (`resume_text.txt`) which contains all available information about your resume in text format and is used to answer the questions and write cover letters (I find out that using full resume text for these tasks is more reliable + saves input token + you don't need to determine which resume section you have to use). **TIP**: Try to add to this file as much information about youself as possible - that will let bot to answer questions more precisely and better tailor your resume to a specific vacancy.
@@ -246,7 +253,7 @@ This project enhances the original codebase with several powerful new features:
     *   **Manual Structure:** fill out file `structured_resume.yaml` manually for precise control. Why use this option instead of first? Because if you select the first option, all data from your resume text will be sent to the LLM to create the structured_resume file — for some people who care about their privacy this would be unacceptable. I want to point out that Automatic Parsing and Non-Easy Apply vacancies applying are the only two functions of this bot that send not anonymized user's personal information to LLM. All other bot functions anonymize personal information before sending it to LLM.
     Examples of `resume_text.txt` and `structured_resume.yaml` files can be found in `examples/data/resumes` folder
 
-5. **Resume generation:**
+6. **Resume generation:**
     You have two options:
     *   **Automatic Creation (recommended):** Don't put your ready-made resume in `data/resumes/` and app will create a new resume for every job it applies to. Using this mode, the bot can create resumes tailored to each specific vacancy. Generated resume will be stored in `data/resumes/generated_resumes/` folder. Some of resume sections are the same for each vacancy (e.g. header), so bot generates these sections once and then stores them in `data/resumes/templates/<section_name>.html`. Netx time bot will load these sections from corresponding file instead of generation. If you think that some of these sections were generated incorrectly - just delete corresponding files so LLM will re-generate them.
     *   **Ready Made Resume (recommended):** Take your ready-made resume in PDF format and put it into `data/resumes/` The bot will use this resume for applying jobs. If you have multiple PDF files in `data/resumes/` folder - bot will use the first one found.
@@ -278,6 +285,16 @@ or
 ```bash
 uv run python main.py
 ```
+
+### Automated Networking (Connection Searcher)
+
+To run the networking tool that finds and connects with Open Networkers:
+
+```bash
+python connection_searcher.py
+```
+
+This tool will use the settings in `config/connection_searcher_config.yaml` to search for potential connections on LinkedIn and send invitations automatically.
 
 If bot finds out that there are no information about some fields in your `structured_resume.yaml` file - it will output warning, list of fields with no information and propose two options:
 - press `y` to continue anyway
