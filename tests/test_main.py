@@ -7,6 +7,8 @@ import pytest
 
 # Mock problematic imports before importing main
 sys.modules["browser_use"] = MagicMock()
+sys.modules["browser_use.tools"] = MagicMock()
+sys.modules["browser_use.tools.views"] = MagicMock()
 
 from main import ConfigError, ConfigValidator, create_and_run_bot, main
 

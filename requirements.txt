@@ -19,6 +19,6 @@ reportlab==4.2.2
 telethon==1.39.0
 pynput==1.8.1
 python-telegram-bot==21.9
-# pytest>=6.0
-# pytest-asyncio
-# pytest-cov
+pytest>=6.0
+pytest-asyncio
+pytest-cov
