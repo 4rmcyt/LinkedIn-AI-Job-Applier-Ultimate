@@ -216,7 +216,8 @@ async def create_and_run_bot(
         # Set GPT answerer
         llm_api_key = secrets["llm_api_key"]
         llm_proxy = secrets["llm_proxy"]
-        llm_answerer_component = GPTAnswerer(llm_api_key, llm_proxy)
+        llm_api_url = secrets.get("llm_api_url")
+        llm_answerer_component = GPTAnswerer(llm_api_key, llm_proxy, llm_api_url)
         llm_agent_component = ApplyAgent(llm_api_key, BROWSER_STORAGE_STATE)
 
         if not resume_structured:

@@ -139,7 +139,7 @@ class OllamaModel(AIModel):
     def __init__(self, llm_model: str, llm_api_url: str) -> None:
         from langchain_ollama import ChatOllama
 
-        if len(llm_api_url) > 0:
+        if llm_api_url:
             logger.debug(f"Using Ollama with API URL: {llm_api_url}")
             self.model = ChatOllama(model=llm_model, base_url=llm_api_url)
         else:
@@ -481,9 +481,9 @@ class GPTAnswerer:
     as well as writing cover letters.
     """
 
-    def __init__(self, llm_api_key: str, llm_proxy: str):
+    def __init__(self, llm_api_key: str, llm_proxy: str, llm_api_url: str = None):
         self.job = None
-        self.ai_adapter = AIAdapter(llm_api_key, llm_proxy)
+        self.ai_adapter = AIAdapter(llm_api_key, llm_proxy, llm_api_url)
         self.llm_cheap = LoggerChatModel(self.ai_adapter)
         self.resume_template_dir = Path(RESUME_DIR) / "templates"
         self.chains = {

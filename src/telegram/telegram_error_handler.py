@@ -83,6 +83,12 @@ class AsyncTelegramSink:
                 )
                 return True
             except TelegramError as e:
+                if "Chat not found" in str(e):
+                    internal_logger.error(
+                        f"Telegram Chat not found. Please check TG_CHAT_ID in .env: {e}"
+                    )
+                    return False
+
                 if attempt == self.max_retries - 1:
                     internal_logger.error(f"Failed after {self.max_retries} attempts: {e}")
                     return False
