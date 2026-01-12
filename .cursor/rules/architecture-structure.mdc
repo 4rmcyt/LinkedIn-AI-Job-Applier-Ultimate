@@ -1,0 +1,269 @@
+---
+alwaysApply: true
+---
+
+# LinkedIn Job Applier - Architecture & Structure Guidelines
+
+## Component Architecture
+
+### 1. **Main Orchestrator Pattern**
+- **[main.py](mdc:main.py)** serves as the single entry point
+- Initializes Playwright browser with proper options from **[browser_utils.py](mdc:src/utils/browser_utils.py)**
+- Coordinates all major components: authenticator, job applier, LLM integration, resume builder, AI agent
+- Handles global error handling and cleanup
+- Validates configuration using Pydantic models from **[config_models.py](mdc:src/pydantic_models/config_models.py)**
+
+### 2. **Facade Pattern for Bot Management**
+- **[bot_facade.py](mdc:src/job_manager/bot_facade.py)** implements the Facade pattern
+- Provides a unified interface to complex subsystems
+- Manages state validation through `BotState` class
+- Ensures proper component initialization order
+
+### 3. **Separation of Concerns**
+
+#### **Authentication Layer** (`src/job_manager/authenticator.py`)
+```python
+class LinkedInAuthenticator:
+    - handles login/logout
+    - session persistence
+    - login state validation
+    - captcha/challenge handling
+```
+
+#### **Job Management Layer** (`src/job_manager/`)
+- **job_manager.py**: Main job application orchestrator with LinkedIn job search and application management
+- **easy_applier.py**: Specialized LinkedIn Easy Apply automation with form detection and intelligent error handling
+- **search_customizer.py**: LinkedIn search parameter management and URL generation
+- **resume_anonymizer.py**: Resume data anonymization for privacy protection
+- **authenticator.py**: LinkedIn session management and authentication
+- **bot_facade.py**: Facade pattern implementation for bot component coordination
+
+#### **AI Integration Layer** (`src/llm/`)
+- **llm_manager.py**: Multi-model LLM integration (OpenAI, Gemini, Claude, Ollama, HuggingFace) for form responses and resume generation
+- **prompts.py**: Consolidated prompts for all AI operations including resume parsing, job evaluation, and form responses
+- **apply_agent.py**: Browser-use based AI agent for autonomous job application with Playwright integration (experimental feature for complex forms)
+- Template-based AI responses for different form types with structured output using Pydantic models
+
+#### **Resume Builder Layer** (`src/resume_builder/`)
+- **resume_manager.py**: Manager class for resume generation workflow with interactive style selection
+- **resume_generator.py**: HTML resume generation from templates with PDF conversion
+- **style_manager.py**: CSS style management and selection from predefined styles
+- **template_base.py**: Base template functionality and prompt templates
+- **resume_style/**: CSS style templates for different resume designs (cloyola, faangpath, josylad_blue, josylad_grey, krishnavalliappan, samodum_bold)
+
+## LinkedIn-Specific Architecture Patterns
+
+### **Page Object Model for LinkedIn Pages**
+```python
+# Implement page objects for major LinkedIn pages
+class LinkedInJobSearchPage:
+    def search_jobs(self, criteria): pass
+    def get_job_listings(self): pass
+    def apply_filters(self, filters): pass
+
+class LinkedInJobDetailsPage:
+    def get_job_description(self): pass
+    def click_apply_button(self): pass
+    def fill_application_form(self, data): pass
+```
+
+### **Strategy Pattern for Form Handling**
+```python
+class FormFillerStrategy:
+    def fill_form(self, driver, form_data): pass
+
+class LinkedInEasyApplyStrategy(FormFillerStrategy):
+    # Handle LinkedIn Easy Apply forms
+
+class LinkedInFullApplicationStrategy(FormFillerStrategy):
+    # Handle full LinkedIn application forms
+```
+
+## Configuration Management
+
+### **Pydantic Models** (`src/pydantic_models/`)
+- **[config_models.py](mdc:src/pydantic_models/config_models.py)**: Core configuration models
+  - `Secrets`: Credentials validation (LinkedIn, LLM, Telegram, S3)
+  - `SearchConfig`: LinkedIn search parameters with nested models
+  - `ExperienceLevel`, `JobTypes`, `DatePosted`: Structured search criteria
+- **[prompt_models.py](mdc:src/pydantic_models/prompt_models.py)**: AI prompt structure models
+  - `ResumeStructure`: Resume data structure validation
+- **[job_models.py](mdc:src/pydantic_models/job_models.py)**: Job and application data models
+  - `Job`: Comprehensive LinkedIn job posting model with validation
+  - `JobManagerCache`: Application statistics and timing information
+  - `JobInfo`: Company job information storage
+  - `Question`: Form question and answer structure
+- **[log_models.py](mdc:src/pydantic_models/log_models.py)**: Logging and monitoring models
+  - `LLMCall`: LLM API call logging with token usage and cost tracking
+
+### **Configuration Files Structure**
+```
+config/
+├── app_config.py         # Application behavior settings (modes, limits, LLM selection)
+├── constants.py          # File paths, pricing constants, and dummy data
+├── logger_config.py      # Logging configuration
+└── search_config.yaml    # LinkedIn search parameters
+
+.env                      # Environment variables and credentials (not committed)
+browser_session/          # Playwright browser session state
+└── linkedin_state.json   # Persisted LinkedIn authentication state
+
+data/
+├── resumes/             # Resume files and generated resumes
+├── output/              # Application logs, results, and statistics
+└── cover_letters/       # Generated cover letters
+```
+
+### **YAML Configuration Structure**
+```yaml
+# config/search_config.yaml
+remote: true
+hybrid: false
+onsite: false
+experience_level:
+  mid_senior_level: true
+job_types:
+  full_time: true
+positions: ["python developer", "software engineer"]
+locations: ["New York", "Remote"]
+apply_once_at_company: true
+company_blacklist: []
+```
+
+### **Application Configuration** (`config/app_config.py`)
+Central configuration file for runtime behavior:
+- **Application Limits**: `MAX_APPLIES_NUM` - Maximum job applications per run
+- **Browser Settings**: `HEADLESS_MODE` - Run browser in headless mode
+- **Operation Modes**:
+  - `MONKEY_MODE` - Apply to all jobs vs. LLM-filtered selection
+  - `TEST_MODE` - Generate resumes/cover letters without applying
+  - `COLLECT_INFO_MODE` - Gather job statistics without applying
+  - `EASY_APPLY_ONLY_MODE` - Restrict to Easy Apply jobs only
+- **LLM Configuration**: `LLM_MODEL_TYPE`, `LLM_MODEL`, `TEMPERATURE`, `JOB_IS_INTERESTING_THRESH`
+- **Telegram Settings**: `TG_CHAT_ID`, `TG_ERR_TOPIC_ID`, `TG_REPORT_TOPIC_ID`
+- **Timing**: `MINIMUM_WAIT_TIME_SEC` - Minimum time per application
+- **Logging**: `MINIMUM_LOG_LEVEL` - Logging verbosity level
+
+## Error Handling Architecture
+
+### **Hierarchical Exception Handling**
+```python
+class LinkedInAutomationError(Exception): pass
+class LinkedInLoginError(LinkedInAutomationError): pass
+class LinkedInCaptchaError(LinkedInAutomationError): pass
+class LinkedInRateLimitError(LinkedInAutomationError): pass
+```
+
+### **Retry Mechanisms with Exponential Backoff**
+- Implement decorators for retrying failed operations
+- Use different retry strategies for different error types
+- Integrate with **[telegram_error_handler.py](mdc:src/telegram/telegram_error_handler.py)** for notifications
+- **[telegram_manager.py](mdc:src/telegram/telegram_manager.py)**: Advanced Telegram integration with Telethon and PTB
+
+## Data Flow Architecture
+
+### **1. Initialization Phase**
+1. **[main.py](mdc:main.py)** → Load configs from `.env` and `app_config.py`, init Playwright browser
+2. **LinkedInAuthenticator** → Handle login, validate session from `browser_session/`
+3. **BotFacade** → Initialize all components, validate state
+4. **ApplyAgent** → Initialize browser-use AI agent (optional, experimental)
+
+### **2. Job Search Phase**
+1. **SearchCustomizer** → Configure LinkedIn search parameters from `search_config.yaml` and generate search URLs
+2. **JobManager** → Navigate LinkedIn via Playwright, extract job listings and manage application flow
+3. **GPTAnswerer** → Apply AI-based job relevance filtering using job evaluation prompts (if not `MONKEY_MODE`)
+
+### **3. Resume Generation Phase**
+1. **ResumeAnonymizer** → Anonymize personal data for privacy using dummy data from `constants.py`
+2. **LLM (via prompts)** → Generate structured resume data
+3. **ResumeGenerator** → Create HTML resume from templates
+4. **StyleManager** → Apply selected CSS styling from `resume_style/` directory
+5. **ResumeManager** → Coordinate resume generation workflow with interactive style selection
+
+### **4. Application Phase**
+1. **JobManager** → Navigate to job application and coordinate application process
+2. **EasyApplier** → Handle LinkedIn Easy Apply forms with intelligent error detection and correction
+3. **GPTAnswerer** → Generate AI responses for form fields using consolidated prompts
+4. **ResumeGenerator** → Generate and attach customized resumes and cover letters
+5. **ApplyAgent** → (Experimental) Autonomous form filling using browser-use library
+
+## File Organization Patterns
+
+### **Module Structure**
+```
+src/
+├── job_manager/          # LinkedIn automation core
+│   ├── authenticator.py  # Session management
+│   ├── job_manager.py    # Main job application orchestrator
+│   ├── easy_applier.py   # LinkedIn Easy Apply automation
+│   ├── search_customizer.py # Search parameter management
+│   ├── resume_anonymizer.py # Resume data anonymization
+│   └── bot_facade.py     # Main bot orchestration
+├── llm/                  # AI integration
+│   ├── llm_manager.py    # Multi-model LLM interface
+│   ├── prompts.py        # Consolidated prompts for all operations
+│   └── apply_agent.py    # Browser-use AI agent (experimental)
+├── resume_builder/       # Resume generation system
+│   ├── resume_manager.py # Resume generation manager with style selection
+│   ├── resume_generator.py # HTML resume generation
+│   ├── style_manager.py  # CSS style management
+│   ├── template_base.py  # Base template functionality
+│   └── resume_style/     # CSS style templates
+│       ├── style_cloyola.css
+│       ├── style_faangpath.css
+│       ├── style_josylad_blue.css
+│       ├── style_josylad_grey.css
+│       ├── style_krishnavalliappan.css
+│       └── style_samodum_bold.css
+├── pydantic_models/      # Data validation models
+│   ├── config_models.py  # Configuration models
+│   ├── prompt_models.py  # Prompt structure models
+│   ├── job_models.py     # Job and application data models
+│   └── log_models.py     # LLM call logging models
+├── utils/                # Shared utilities
+│   ├── utils.py          # Core utilities
+│   ├── browser_utils.py  # Playwright browser configuration and utilities
+│   └── json_to_readable.py # JSON formatting
+└── telegram/             # Notifications
+    ├── telegram_error_handler.py # Error handling
+    ├── telegram_manager.py # Advanced Telegram integration
+    ├── get_telegram_chat_and_topic_id.py # Helper for Telegram setup
+    └── error_cache.yaml  # Error caching for notifications
+```
+
+### **Constants Organization** ([config/constants.py](mdc:config/constants.py))
+- **Dummy Personal Data**: `DUMMY_PERSONAL_INFO_MALE`, `DUMMY_PERSONAL_INFO_FEMALE` for resume anonymization
+- **File Paths**: `SEARCH_CONFIG_FILE`, `RESUME_DIR`, `OUTPUT_DIR`, `LOG_DIR`, `BROWSER_STORAGE_STATE`
+- **Model Pricing**: `PRICE_DICT` - Token pricing for cost tracking (OpenAI, Gemini models)
+- Group related constants by functionality for maintainability
+
+## State Management
+
+### **Session State**
+- Maintain Playwright browser session state in **browser_session/linkedin_state.json**
+- Implement session validation before major operations
+- Handle session expiry gracefully with automatic relogin
+
+### **Application State**
+- Track applied jobs to avoid duplicates in **data/output/**
+- Maintain application history and success rates
+- Store statistics in **data/output/skill_stat.yaml**
+- Job application results: **success.yaml**, **failed.yaml**, **skipped.yaml**, **interesting_jobs.yaml**
+- Resume generation state and style preferences
+- LLM API call logs in **logs/llm_api_calls.yaml**
+- Telegram error cache in **src/telegram/error_cache.yaml**
+
+## Design Principles
+
+1. **Single Responsibility**: Each class handles one aspect of LinkedIn automation
+2. **Open/Closed**: Extensible for new LinkedIn features without modifying core code
+3. **Dependency Injection**: Components receive dependencies rather than creating them
+4. **Configuration Over Convention**: Behavior controlled through `app_config.py` and YAML configuration files
+5. **Fail-Safe Operations**: Always handle LinkedIn's anti-bot measures gracefully with Playwright
+6. **Privacy First**: Resume anonymization and data protection throughout the pipeline
+7. **Modular Resume Generation**: Separate concerns for content, styling, and template management
+8. **Multi-Model LLM Support**: Support for multiple LLM providers (OpenAI, Gemini, Claude, Ollama) with unified interface
+9. **Intelligent Error Handling**: Automatic error detection and correction in form filling
+10. **Structured Data Validation**: Comprehensive Pydantic models for all data structures
+11. **Flexible Operation Modes**: Multiple modes (TEST, COLLECT_INFO, MONKEY, EASY_APPLY_ONLY) for different use cases
+12. **Cost Monitoring**: Comprehensive LLM API call logging with token usage and cost tracking

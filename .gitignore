@@ -158,9 +158,6 @@ venv.bak/
 *.opendb
 *.VC.db
 
-# Cursor
-.cursor/
-
 # User-specific files
 *.suo
 *.user
