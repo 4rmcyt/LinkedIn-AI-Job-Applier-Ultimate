@@ -95,4 +95,4 @@ Easy Apply model temperature
 the higher it is, the more creative the model, but hallucinations may occur
 the lower it is, the more strictly the model follows the prompt and invents less
 """
-TEMPERATURE = 1
+TEMPERATURE = 0.4

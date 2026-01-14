@@ -17,11 +17,11 @@ from src.pydantic_models.job_models import Job, Question
 from src.utils.browser_utils import find_element_safely, find_elements_safely, get_clean_text
 from src.utils.utils import (
     ConfigError,
+    get_first_pdf_file,
     load_yaml_file,
     pause,
     sanitize_text,
     save_yaml_file,
-    get_first_pdf_file,
 )
 
 

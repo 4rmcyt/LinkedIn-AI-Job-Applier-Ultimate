@@ -1,12 +1,15 @@
 import os
 import random
 import re
+import sys
 import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import yaml
+
+from config.constants import APP_CONFIG_FILE
 
 # Import browser configuration
 from config.logger_config import logger
@@ -28,6 +31,17 @@ def load_yaml_file(yaml_path: Path) -> dict:
         raise yaml.YAMLError(f"Error in reading file {yaml_path}: {exc}")
     except FileNotFoundError:
         raise ConfigError(f"File not found: {yaml_path}")
+
+
+def load_app_config() -> dict:
+    """Загрузить конфигурацию приложения из YAML файла"""
+    try:
+        config = load_yaml_file(APP_CONFIG_FILE)
+        return config or {}
+    except Exception as e:
+        # Fallback logging to stderr since we can't use logger here
+        print(f"Ошибка при загрузке конфигурации приложения: {e}", file=sys.stderr)
+        return {}
 
 
 def save_yaml_file(yaml_path: Path, data: dict, sort_keys: bool = True) -> None:

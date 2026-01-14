@@ -3,16 +3,12 @@ import sys
 
 from loguru import logger
 
-from config.app_config import MINIMUM_LOG_LEVEL
 from config.constants import LOG_DIR
 from src.telegram.telegram_error_handler import AsyncTelegramSink
 
 logger.remove()
 
-if MINIMUM_LOG_LEVEL in ["DEBUG", "TRACE", "INFO", "WARNING", "ERROR", "CRITICAL"]:
-    minimum_log_level = MINIMUM_LOG_LEVEL
-else:
-    minimum_log_level = "DEBUG"
+minimum_log_level = "DEBUG"
 
 # Terminal output without tracebacks
 logger.add(sys.stdout, level=minimum_log_level, backtrace=False, diagnose=False)

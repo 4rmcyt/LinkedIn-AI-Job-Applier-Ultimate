@@ -1,12 +1,14 @@
 import asyncio
 import os
-import yaml
+
 import dotenv
-from playwright.async_api import Page, Locator
+import yaml
+from playwright.async_api import Locator, Page
+
 from config.logger_config import logger
 from src.job_manager.authenticator import LinkedInAuthenticator
-from src.utils.browser_utils import create_playwright_browser, save_browser_session, pause
 from src.pydantic_models.config_models import ConnectionSearcherConfig
+from src.utils.browser_utils import create_playwright_browser, pause, save_browser_session
 
 
 class ConnectionSearcher:

@@ -33,6 +33,7 @@ LOG_DIR = "logs"
 RESUME_DIR = "data/resumes"
 COVER_LETTER_DIR = "data/cover_letters"
 BROWSER_STORAGE_STATE = "browser_session/linkedin_state.json"
+APP_CONFIG_FILE = "config/app_config.yaml"
 
 # Dictionary for calculating model request cost
 PRICE_DICT = {

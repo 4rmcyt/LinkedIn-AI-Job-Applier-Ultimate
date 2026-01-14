@@ -91,14 +91,18 @@ class OpenAIModel(AIModel):
     def __init__(self, api_key: str, llm_model: str, llm_proxy: str = None) -> None:
         from langchain_openai import ChatOpenAI
 
+        if llm_proxy:
+            http_client = httpx.Client(proxy=llm_proxy)
+        else:
+            http_client = None
         self.llm_proxy = llm_proxy
         self.model_name = llm_model
         self.openai_api_key = api_key
         self.model = ChatOpenAI(
             model_name=self.model_name,
             openai_api_key=self.openai_api_key,
-            openai_proxy=self.llm_proxy,
-            temperature=TEMPERATURE,
+            http_client=http_client,
+            temperature=1 if "o1" in self.model_name or "gpt-5" in self.model_name else TEMPERATURE,
             presence_penalty=0,
             frequency_penalty=0,
             timeout=60,
