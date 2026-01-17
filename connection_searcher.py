@@ -2,6 +2,7 @@ import asyncio
 import os
 import yaml
 import dotenv
+import traceback
 from playwright.async_api import Page, Locator
 from config.logger_config import logger
 from src.job_manager.authenticator import LinkedInAuthenticator
@@ -73,7 +74,12 @@ class ConnectionSearcher:
             for main_word in self.config.main_search_words:
                 for add_word in self.config.additional_search_words:
                     logger.info(f"Starting search for: {main_word} + {add_word}")
+                    pause(4, 8)
                     await self._search_and_connect(page, main_word, add_word)
+                    pause(4, 8)
+        except Exception as e:
+            tb_str = traceback.format_exc()
+            logger.error(f"Unknown error: {str(e)}\n{tb_str}")
         finally:
             await browser.close()
 
@@ -90,12 +96,8 @@ class ConnectionSearcher:
 
             # Wait for results or empty state with multiple possible selectors
             result_selectors = [
-                ".reusable-search__result-container",
-                ".entity-result",
-                "div[data-view-name='search-result']",
                 "div[data-view-name='people-search-result']",
-                "li.reusable-search__result-container",
-                "[role='listitem']",
+                # "[role='listitem']",
             ]
             combined_selector = ", ".join(result_selectors)
 
@@ -115,7 +117,9 @@ class ConnectionSearcher:
 
             # Scroll down to load all results
             await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            pause(2, 3)
+            pause(1, 2)
+            await page.evaluate("window.scrollTo(0, 0)")
+            pause(1, 2)
 
             people = await page.locator(combined_selector).all()
             if not people:
@@ -138,6 +142,7 @@ class ConnectionSearcher:
             if not await next_button.is_visible() or page_num >= 100:
                 logger.info("Reached the end of results or 100th page.")
                 break
+            pause(5, 10)
 
     async def _should_connect(self, person: Locator) -> bool:
         # Extract elements and analyze description.
@@ -149,6 +154,7 @@ class ConnectionSearcher:
                 for text in full_text.split("\n")
                 if "is a mutual connection" not in text.strip()
                 and "are mutual connections" not in text.strip()
+                and "other mutual connection" not in text.strip()
             ]
         )
 
@@ -159,7 +165,7 @@ class ConnectionSearcher:
         person_name = full_text.split("•")[0].strip() if "•" in full_text else ""
 
         if found_keywords or "LION" in full_text:
-            if "LION" in found_keywords:
+            if "LION" in full_text:
                 self.found_keywords = ["LION"]
             else:
                 self.found_keywords = found_keywords
@@ -215,6 +221,7 @@ class ConnectionSearcher:
                 await send_now.first.click()
                 logger.info("Sent invitation using 'Send now'.")
                 pause(1, 2)
+        pause(5, 10)
 
 
 if __name__ == "__main__":

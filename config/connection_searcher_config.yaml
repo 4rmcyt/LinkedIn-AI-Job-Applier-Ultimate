@@ -4,8 +4,8 @@ main_search_words:
   - "NO IDK"
 
 additional_search_words:
-  - "ai"
   - "ml"
   - "data science"
   - "data engineering"
   - "data analyst"
+  - "ai"
