@@ -61,7 +61,9 @@ class JobApplier:
         self.llm_agent_component = None
         self.resume_generator_manager = None
         self.pause_checker = None
-        self.jobs_no_info = []  # vacancies to which applications were not sent due to missing information
+        self.jobs_no_info = (
+            []
+        )  # vacancies to which applications were not sent due to missing information
         self.job_key_skills = []  # key skills according to employer's opinion
         self.interesting_jobs = []
         self.page_num = 0
@@ -272,6 +274,7 @@ class JobApplier:
         # Navigate to job page
         try:
             await self.page.goto(vacancy["url"])
+            logger.info(f"Navigated to job URL: {vacancy['url']}")
             pause(3, 4)
         except Exception as e:
             logger.error(f"Failed to navigate to job URL: {vacancy['url']}, error: {e}")
@@ -665,6 +668,7 @@ class JobApplier:
         """Extract job title from the job page using multiple selector strategies (async)"""
         xpath_selectors = [
             # New LinkedIn UI: find "Set alert for similar jobs" heading, then the job title in the following paragraph
+            "//h2[contains(text(), 'This job alert is on')]/parent::div/following-sibling::div[1]/p",
             "//h2[contains(text(), 'Set alert for similar jobs')]/following-sibling::div[1]/p",
         ]
 
@@ -1292,6 +1296,45 @@ if __name__ == "__main__":
                 print("\n🔗 Sample URLs:")
                 for i, url in enumerate(extracted_urls[:3]):
                     print(f"  {i + 1}. {url}")
+
+                first_url = extracted_urls[0]
+                first_url = "https://linkedin.com" + "/".join(first_url.split("/")[:4])
+
+                print(f"\n🔗 Navigating to first job URL: {first_url}")
+                await page.goto(first_url)
+                print("✅ Page loaded")
+                pause(3, 4)
+
+                # Create JobApplier instance with dummy dependencies to test extraction
+                print("🔍 Extracting detailed job description...")
+                # We can pass None for dependencies that aren't used in _get_detailed_job_description
+                applier = JobApplier(page, "", None, None)
+
+                job = await applier._get_detailed_job_description()
+
+                print("\n📊 JOB DETAILS EXTRACTED:")
+                print(f"Job Title: {job.job_title}")
+                print(f"Company Name: {job.company_name}")
+                desc_len = len(job.job_description) if job.job_description else 0
+                print(f"Job Description: {desc_len} chars")
+                comp_desc_len = len(job.company_description) if job.company_description else 0
+                print(f"Company Description: {comp_desc_len} chars")
+
+                # Validation
+                missing_fields = []
+                if not job.job_title:
+                    missing_fields.append("job_title")
+                if not job.company_name:
+                    missing_fields.append("company_name")
+                if not job.job_description:
+                    missing_fields.append("job_description")
+                if not job.company_description:
+                    missing_fields.append("company_description")
+
+                if missing_fields:
+                    print(f"❌ VALIDATION FAILED. Missing fields: {', '.join(missing_fields)}")
+                else:
+                    print("✅ VALIDATION PASSED: All required fields extracted successfully.")
 
             # Keep browser open for a moment to see results
             print("\n⏳ Keeping browser open for 10 seconds to observe results...")

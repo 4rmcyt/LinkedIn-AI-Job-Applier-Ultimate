@@ -522,7 +522,7 @@ class TestGPTAnswerer:
         """Test GPTAnswerer initialization"""
         answerer = GPTAnswerer(mock_api_key, mock_llm_proxy)
 
-        mock_ai_adapter.assert_called_once_with(mock_api_key, mock_llm_proxy)
+        mock_ai_adapter.assert_called_once_with(mock_api_key, mock_llm_proxy, None)
         assert answerer.job is None
 
     def test_gpt_answerer_find_best_match_exact(self):

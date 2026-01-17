@@ -91,14 +91,18 @@ class OpenAIModel(AIModel):
     def __init__(self, api_key: str, llm_model: str, llm_proxy: str = None) -> None:
         from langchain_openai import ChatOpenAI
 
+        if llm_proxy:
+            http_client = httpx.Client(proxy=llm_proxy)
+        else:
+            http_client = None
         self.llm_proxy = llm_proxy
         self.model_name = llm_model
         self.openai_api_key = api_key
         self.model = ChatOpenAI(
             model_name=self.model_name,
             openai_api_key=self.openai_api_key,
-            openai_proxy=self.llm_proxy,
-            temperature=TEMPERATURE,
+            http_client=http_client,
+            temperature=1 if "o1" in self.model_name or "gpt-5" in self.model_name else TEMPERATURE,
             presence_penalty=0,
             frequency_penalty=0,
             timeout=60,
@@ -139,7 +143,7 @@ class OllamaModel(AIModel):
     def __init__(self, llm_model: str, llm_api_url: str) -> None:
         from langchain_ollama import ChatOllama
 
-        if len(llm_api_url) > 0:
+        if llm_api_url:
             logger.debug(f"Using Ollama with API URL: {llm_api_url}")
             self.model = ChatOllama(model=llm_model, base_url=llm_api_url)
         else:
@@ -481,9 +485,9 @@ class GPTAnswerer:
     as well as writing cover letters.
     """
 
-    def __init__(self, llm_api_key: str, llm_proxy: str):
+    def __init__(self, llm_api_key: str, llm_proxy: str, llm_api_url: str = None):
         self.job = None
-        self.ai_adapter = AIAdapter(llm_api_key, llm_proxy)
+        self.ai_adapter = AIAdapter(llm_api_key, llm_proxy, llm_api_url)
         self.llm_cheap = LoggerChatModel(self.ai_adapter)
         self.resume_template_dir = Path(RESUME_DIR) / "templates"
         self.chains = {

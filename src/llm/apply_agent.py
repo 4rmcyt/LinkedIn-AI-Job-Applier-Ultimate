@@ -171,7 +171,7 @@ if __name__ == "__main__":
 
     from config.constants import BROWSER_STORAGE_STATE
     from src.pydantic_models.prompt_models import ResumeStructure
-    from src.utils.utils import get_first_pdf_file, load_yaml_file
+    from src.utils.utils import load_yaml_file
 
     async def test_apply_agent():
         """Test ApplyAgent with a real LinkedIn job posting"""

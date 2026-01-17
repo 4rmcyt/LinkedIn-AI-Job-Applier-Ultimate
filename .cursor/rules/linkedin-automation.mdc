@@ -1,0 +1,243 @@
+---
+globs: src/job_manager/*.py
+alwaysApply: false
+---
+# LinkedIn Playwright Automation Guidelines
+
+## Playwright Best Practices for LinkedIn
+
+### **Browser Configuration**
+Always use Playwright browser utilities from **[browser_utils.py](mdc:src/utils/browser_utils.py)**:
+```python
+from src.utils.browser_utils import create_playwright_browser, save_browser_session
+from config.constants import BROWSER_STORAGE_STATE
+from config.app_config import HEADLESS_MODE
+
+# Create browser with LinkedIn-optimized settings
+page, context, browser, playwright_instance = await create_playwright_browser(
+    storage_state=BROWSER_STORAGE_STATE
+)
+```
+
+### **Anti-Detection Measures**
+1. **Human-like Timing**: Use **[utils.pause()](mdc:src/utils/utils.py)** for random delays
+2. **Session Persistence**: Save/load browser state from **browser_session/linkedin_state.json**
+3. **Realistic User-Agent**: Set in Playwright browser options
+4. **Stealth Mode**: Disable automation indicators with `--disable-blink-features=AutomationControlled`
+5. **Natural Mouse Movement**: Use delays in click operations
+
+### **Element Location Strategies**
+Priority order for finding LinkedIn elements:
+1. **CSS Selectors** (most reliable for LinkedIn's dynamic classes)
+2. **Aria Labels** (accessible selectors for buttons)
+3. **XPath** (for complex element relationships)
+4. **ID/Name** (rarely stable on LinkedIn)
+
+```python
+# LinkedIn-specific element patterns (Playwright async API)
+# Login
+await page.fill("#username", email)
+await page.fill("#password", password)
+await page.click("button[type='submit']")
+
+# Job search
+JOB_APPLY_BUTTON = "button[aria-label*='Easy Apply']"
+EASY_APPLY_BUTTON = ".jobs-apply-button"
+```
+
+## LinkedIn Page Navigation Patterns
+
+### **Job Search Automation**
+```python
+from src.job_manager.search_customizer import SearchCustomizer
+from config.app_config import EASY_APPLY_ONLY_MODE
+
+async def search_linkedin_jobs(page, search_config):
+    """Search for jobs on LinkedIn with specified criteria"""
+    search_customizer = SearchCustomizer(search_config)
+
+    # Get search URLs from config
+    search_urls = search_customizer.get_search_urls()
+
+    for url in search_urls:
+        await page.goto(url)
+        # Process job listings
+```
+
+### **Job Application Flow**
+1. **Easy Apply Detection**: Check for Easy Apply vs External Apply
+2. **Form Field Analysis**: Identify required vs optional fields
+3. **Multi-Step Forms**: Handle LinkedIn's wizard-style application forms
+4. **File Uploads**: Handle resume/cover letter uploads
+
+### **LinkedIn-Specific Waiting Strategies**
+```python
+# Wait for LinkedIn's dynamic content loading (Playwright)
+async def wait_for_linkedin_page_load(page, timeout=10000):
+    """Wait for LinkedIn page to fully load"""
+    await page.wait_for_load_state('networkidle', timeout=timeout)
+    await page.wait_for_load_state('domcontentloaded', timeout=timeout)
+
+# Wait for specific elements
+async def wait_for_job_listings(page):
+    """Wait for job listings to appear"""
+    await page.wait_for_selector('.jobs-search-results-list', timeout=10000)
+```
+
+## Form Handling Patterns
+
+### **LinkedIn Easy Apply Forms**
+- **Step Detection**: LinkedIn shows "Step X of Y"
+- **Required Field Detection**: Red asterisk (*) indicators
+- **Dropdown Handling**: LinkedIn uses custom dropdowns, not standard `<select>`
+- **Text Areas**: Handle character limits and validation
+
+### **Form Field Mapping**
+Create consistent mapping between LinkedIn fields and resume data:
+```python
+LINKEDIN_FIELD_MAPPINGS = {
+    "firstName": "personal_information.first_name",
+    "lastName": "personal_information.last_name",
+    "email": "personal_information.email",
+    "phone": "personal_information.phone",
+    "experience": "experience_details.total_years",
+}
+```
+
+### **Dynamic Form Detection**
+```python
+async def detect_linkedin_form_type(page):
+    """Detect type of LinkedIn application form"""
+    easy_apply = await page.query_selector(".jobs-easy-apply-modal")
+    if easy_apply:
+        return "easy_apply"
+
+    full_app = await page.query_selector(".application-form")
+    if full_app:
+        return "full_application"
+
+    return "external_redirect"
+```
+
+## AI Integration with LinkedIn Forms
+
+### **Using LLM Responses** ([llm_manager.py](mdc:src/llm/llm_manager.py))
+```python
+from src.llm.llm_manager import GPTAnswerer
+from config.app_config import LLM_MODEL_TYPE, LLM_MODEL, JOB_IS_INTERESTING_THRESH
+
+gpt_answerer = GPTAnswerer(api_key=api_key, model_type=LLM_MODEL_TYPE, model=LLM_MODEL)
+gpt_answerer.set_resume(structured_resume, resume_text)
+
+# Evaluate job relevance (if not MONKEY_MODE)
+if not MONKEY_MODE:
+    score = gpt_answerer.evaluate_job_interest(job_description, company)
+    if score < JOB_IS_INTERESTING_THRESH:
+        return "skip_job"
+
+# Get response for different question types
+text_response = gpt_answerer.answer_question_textual_wide_range(question)
+numeric_response = gpt_answerer.answer_question_numeric(question)
+cover_letter = gpt_answerer.generate_cover_letter(job_description, company)
+```
+
+### **Question Type Detection**
+LinkedIn application forms have predictable question patterns:
+- **Years of Experience**: "How many years of experience do you have with X?"
+- **Availability**: "When can you start?" / "What's your notice period?"
+- **Salary**: "What are your salary expectations?"
+- **Yes/No**: "Are you authorized to work in [country]?"
+
+## Error Handling for LinkedIn Automation
+
+### **Common LinkedIn Errors**
+```python
+class LinkedInError(Exception): pass
+
+class LinkedInLoginError(LinkedInError):
+    """Failed to login to LinkedIn"""
+
+class LinkedInCaptchaError(LinkedInError):
+    """LinkedIn presented a CAPTCHA challenge"""
+
+class LinkedInRateLimitError(LinkedInError):
+    """LinkedIn detected too many requests"""
+
+class LinkedInJobNotFoundError(LinkedInError):
+    """Job listing no longer available"""
+```
+
+### **Graceful Failure Handling**
+- **Take Screenshots**: Capture page state on errors
+- **Save Page Source**: Store HTML for debugging
+- **Log Context**: Include job URL, current step, form data
+- **Continue or Abort**: Decide whether to skip job or stop entirely
+
+## Session Management
+
+### **Login State Validation**
+```python
+from src.job_manager.authenticator import LinkedInAuthenticator
+from config.constants import BROWSER_STORAGE_STATE
+
+async def ensure_logged_in(page, authenticator):
+    """Check if currently logged into LinkedIn and login if needed"""
+    if not await authenticator.is_logged_in(page):
+        await authenticator.login(page, email, password)
+        # Save session for next run
+        await save_browser_session(context, BROWSER_STORAGE_STATE)
+```
+
+### **Session Recovery**
+- **Browser State Persistence**: Save/restore Playwright browser state from **browser_session/linkedin_state.json**
+- **Auto-Relogin**: Attempt automatic relogin on session expiry via **LinkedInAuthenticator**
+- **Session Validation**: Check login state before major operations
+- **Backup Session**: Keep backup of browser state (`.json.bak` file)
+
+## Rate Limiting & Throttling
+
+### **LinkedIn Request Patterns**
+- **Application Limits**: Set `MAX_APPLIES_NUM` in **app_config.py** (recommended: 50 per day)
+- **Minimum Wait Time**: Use `MINIMUM_WAIT_TIME_SEC` in **app_config.py** (recommended: 10+ seconds)
+- **Daily Limits**: Respect LinkedIn's daily application limits (typically 50-100)
+- **Job Evaluation**: Filter jobs with `JOB_IS_INTERESTING_THRESH` to apply only to relevant positions
+
+### **Detection Avoidance**
+```python
+from src.utils.utils import pause
+from config.app_config import MINIMUM_WAIT_TIME_SEC
+import time
+
+# Add human-like delays between actions
+pause(0.5, 1.5)  # Random pause
+
+# Ensure minimum time per application
+start_time = time.time()
+# ... perform application ...
+elapsed = time.time() - start_time
+if elapsed < MINIMUM_WAIT_TIME_SEC:
+    time.sleep(MINIMUM_WAIT_TIME_SEC - elapsed)
+```
+
+## Testing LinkedIn Automation
+
+### **Test Data Management**
+- **Test Account**: Use dedicated LinkedIn test account
+- **Test Modes**: Use `TEST_MODE=True` or `COLLECT_INFO_MODE=True` in **app_config.py**
+- **Mock Responses**: Test AI response generation with mock data
+- **Form Detection**: Test form field detection on various job types
+
+### **Test Modes**
+```python
+# In app_config.py
+TEST_MODE = True  # Generate resumes/cover letters without applying
+COLLECT_INFO_MODE = True  # Gather job info without applying
+MONKEY_MODE = True  # Apply to all jobs without LLM filtering
+```
+
+### **Debugging LinkedIn Issues**
+- **Playwright DevTools**: Use `headless=False` to see browser actions
+- **Screenshots**: Capture page state on errors via Playwright
+- **Network Monitoring**: Track requests with Playwright network monitoring
+- **Console Logs**: Capture browser console logs for debugging
+- **Session Inspection**: Check saved browser state in **browser_session/**
