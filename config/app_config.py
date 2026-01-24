@@ -13,7 +13,7 @@ If this mode is activated - apply to all vacancies indiscriminately,
 otherwise ask LLM to select only those vacancies that suit you
 by interests or by tech stack
 """
-MONKEY_MODE = False
+MONKEY_MODE = True
 
 """
 In this mode app doesn't apply to the jobs, only creates resumes, cover letters and gathers skill statistics

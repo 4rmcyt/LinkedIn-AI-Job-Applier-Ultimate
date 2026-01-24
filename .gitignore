@@ -30,6 +30,7 @@ MANIFEST
 # Project temporary files
 browser_session/*
 browser_session_my/*
+browser_session_work/*
 data/cover_letters/*
 data/output/*
 data/resumes/*

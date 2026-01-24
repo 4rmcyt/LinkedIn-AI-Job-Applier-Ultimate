@@ -343,7 +343,7 @@ class EasyApplier:
         await next_button.click(timeout=1000)
         pause(2, 3)
         attempt = 0
-        while attempt < 2:
+        while attempt < 3:
             error_texts = await self._find_all_form_errors()
             if len(error_texts) > 0:
                 logger.info(f"Found {len(error_texts)} errors")
@@ -1588,18 +1588,27 @@ class EasyApplier:
             logger.warning(f"Failed to select dropdown option '{text}': {e}")
 
     async def _find_all_form_errors(self) -> List[str]:
-        error_elements = self.page.locator(
-            "xpath=//*[contains(@class, 'artdeco-inline-feedback--error')]"
-        )
-        errors_text = []
-        count = await error_elements.count()
-        for i in range(count):
+        error_selectors = [
+            ".artdeco-inline-feedback--error .artdeco-inline-feedback__message",
+            ".artdeco-inline-feedback--error",
+            "[role='alert'][data-test-form-element-error-messages]",
+        ]
+        errors_text: List[str] = []
+        seen: set[str] = set()
+        for selector in error_selectors:
             try:
-                txt = (await error_elements.nth(i).text_content(timeout=1000) or "").strip()
-                if txt:
-                    errors_text.append(txt)
+                elements = await self.page.locator(selector).all()
             except Exception as e:
-                logger.warning(f"Failed to get error text: {e}")
+                logger.debug(f"Failed to locate error elements with '{selector}': {e}")
+                continue
+            for element in elements:
+                try:
+                    txt = (await element.text_content(timeout=1000) or "").strip()
+                    if txt and txt not in seen:
+                        seen.add(txt)
+                        errors_text.append(txt)
+                except Exception as e:
+                    logger.warning(f"Failed to get error text: {e}")
         return errors_text
 
     async def _find_textbox_question_errors(self) -> List[Tuple[Any, str, str]]:
@@ -1614,25 +1623,24 @@ class EasyApplier:
         logger.debug("Searching for textbox validation errors in the Easy Apply modal")
         results: List[Tuple[Any, str, str]] = []
 
-        # Try to scope the search within the Easy Apply modal
-        container: Any
-        try:
-            selector = "xpath=//*[contains(@class, 'jobs-easy-apply-modal')]"
-            easy_apply_modal = self.page.locator(selector).first
-            container = easy_apply_modal.locator(
-                "xpath=.//*[contains(@class, 'jobs-easy-apply-modal__content')]"
-            ).first
-        except Exception:
-            # Fallback to whole page if modal not found for any reason
-            logger.debug("Easy Apply modal not found, falling back to full page search")
-            container = self.page
+        form_container_selectors = [
+            "xpath=.//*[contains(@class, 'fb-dash-form-element')]",
+            "div[data-test-form-element]",
+            "[data-test-single-line-text-form-component]",
+            "[data-test-multiline-text-form-component]",
+            "xpath=.//*[contains(@class, 'jobs-easy-apply-form-section__group')]",
+        ]
 
-        # Locate form element containers
-        form_containers = await container.locator(".fb-dash-form-element").all()
-        if not form_containers:
-            form_containers = await container.locator(
-                "xpath=.//*[contains(@class, 'jobs-easy-apply-form-section__grouping')]"
-            ).all()
+        for selector in form_container_selectors:
+            try:
+                form_containers = await self.page.locator(selector).all()
+                if form_containers:
+                    logger.debug(
+                        f"Found {len(form_containers)} form containers globally using selector: {selector}"
+                    )
+                    break
+            except Exception:
+                continue
 
         logger.debug(f"Found {len(form_containers)} form containers to inspect for errors")
 
@@ -1642,17 +1650,15 @@ class EasyApplier:
             error_text: str = ""
             try:
                 # Prefer the explicit message span inside the error container
-                candidates = await section.locator(
-                    ".artdeco-inline-feedback--error .artdeco-inline-feedback__message"
-                ).all()
-                if not candidates:
-                    # Fallback to the error container itself
-                    candidates = await section.locator(".artdeco-inline-feedback--error").all()
-                if not candidates:
-                    # Some structures mark the container as role=alert
-                    candidates = await section.locator(
-                        "[role='alert'][data-test-form-element-error-messages]"
-                    ).all()
+                error_selectors = [
+                    ".artdeco-inline-feedback--error .artdeco-inline-feedback__message",
+                    ".artdeco-inline-feedback--error",
+                    "[role='alert'][data-test-form-element-error-messages]",
+                ]
+                for selector in error_selectors:
+                    candidates = await section.locator(selector).all()
+                    if candidates:
+                        break
 
                 for cand in candidates:
                     try:
@@ -1836,7 +1842,7 @@ if __name__ == "__main__":
         logger.info("Starting EasyApplier test...")
 
         # Test job URL
-        job_url = "https://www.linkedin.com/jobs/view/4321886768"
+        job_url = "https://www.linkedin.com/jobs/view/4365575724"
         # Initialize Playwright browser
         try:
             browser, context, page = await create_playwright_browser()
