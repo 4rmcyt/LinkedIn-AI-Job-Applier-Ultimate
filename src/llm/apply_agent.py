@@ -14,11 +14,17 @@ from src.utils.utils import append_yaml_file, get_first_pdf_file
 
 
 class ApplyAgent:
-    def __init__(self, api_key: str, browser_storage_state: str) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        browser_storage_state: str,
+        llm_api_url: str = None,
+    ) -> None:
         self.api_key = api_key
         self.model = APPLY_AGENT_MODEL
         self.model_type = LLM_MODEL_TYPE
-        self.llm = self.select_model_type(self.model_type)
+        self.llm_api_url = llm_api_url
+        self.llm = self.select_model_type(self.model_type, self.llm_api_url)
         self.calls_log = os.path.join(Path(LOG_DIR), "llm_api_calls.yaml")
         self.agent = None
         self.resume_readable = None
@@ -33,7 +39,7 @@ class ApplyAgent:
             )
         self.browser = Browser(headless=HEADLESS_MODE, storage_state=storage_state)
 
-    def select_model_type(self, model_type: str) -> None:
+    def select_model_type(self, model_type: str, llm_api_url: str) -> None:
         """Select the model to use."""
         self.model_type = model_type
         if model_type == "gemini":
@@ -43,7 +49,7 @@ class ApplyAgent:
         elif model_type == "claude":
             llm = ChatAnthropic(api_key=self.api_key, model=self.model)
         elif model_type == "ollama":
-            llm = ChatOllama(api_key=self.api_key, model=self.model)
+            llm = ChatOllama(model=self.model, base_url=llm_api_url)
         else:
             raise ValueError(f"Unsupported model type: {model_type}")
         return llm
