@@ -13,6 +13,8 @@ This is an active fork of the original [Jobs_Applier_AI_Agent_AIHawk](https://gi
 This bot uses LinkedIn UI to apply jobs. But LinkedIn frequently changes its UI, so bot may lose some of its functionality **at any time**.
 I have no time to check this bot every day, so if you face any malfunction or have some questions about bot - feel free to open issue or contact me in Telegram chat 🚀
 
+Please ⭐ the repository if you find it useful. This is the only thing that motivates me to continue developing the project.
+
 ### LinkedIn AI Job Applier Chat 👇
 
 [![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white
