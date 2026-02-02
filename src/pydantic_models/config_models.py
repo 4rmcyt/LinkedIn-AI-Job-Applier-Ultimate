@@ -85,8 +85,8 @@ class ConnectionSearcherConfig(BaseModel):
 
 
 class Secrets(BaseModel):
-    llm_api_key: str
-    llm_proxy: str
+    llm_api_key: Optional[str] = None
+    llm_proxy: Optional[str] = None
     llm_api_url: Optional[str] = None
     linkedin_email: str
     linkedin_password: str

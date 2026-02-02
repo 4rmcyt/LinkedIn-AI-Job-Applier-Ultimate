@@ -16,8 +16,8 @@ from src.utils.utils import append_yaml_file, get_first_pdf_file
 class ApplyAgent:
     def __init__(
         self,
-        api_key: str,
-        browser_storage_state: str,
+        api_key: str = None,
+        browser_storage_state: str = None,
         llm_api_url: str = None,
     ) -> None:
         self.api_key = api_key
@@ -43,13 +43,25 @@ class ApplyAgent:
         """Select the model to use."""
         self.model_type = model_type
         if model_type == "gemini":
+            if not self.api_key:
+                raise ValueError("API key is required for Gemini model")
             llm = ChatGoogle(api_key=self.api_key, model=self.model)
         elif model_type == "openai":
+            if not self.api_key:
+                raise ValueError("API key is required for OpenAI model")
             llm = ChatOpenAI(api_key=self.api_key, model=self.model, reasoning_effort="minimal")
         elif model_type == "claude":
+            if not self.api_key:
+                raise ValueError("API key is required for Claude model")
             llm = ChatAnthropic(api_key=self.api_key, model=self.model)
         elif model_type == "ollama":
-            llm = ChatOllama(model=self.model, base_url=llm_api_url)
+            # ChatOllama from browser_use doesn't support base_url parameter
+            # For custom Ollama URLs, set OLLAMA_BASE_URL environment variable
+            if llm_api_url:
+                import os
+
+                os.environ["OLLAMA_BASE_URL"] = llm_api_url
+            llm = ChatOllama(model=self.model)
         else:
             raise ValueError(f"Unsupported model type: {model_type}")
         return llm

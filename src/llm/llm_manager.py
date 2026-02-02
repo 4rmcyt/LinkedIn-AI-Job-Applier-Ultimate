@@ -189,7 +189,7 @@ class OllamaModel(AIModel):
 class AIAdapter:
     """Class for accessing LLM models from different companies via API"""
 
-    def __init__(self, api_key: str, llm_proxy: str, llm_api_url: str = None):
+    def __init__(self, api_key: str = None, llm_proxy: str = None, llm_api_url: str = None):
         self.model_type = LLM_MODEL_TYPE
         self.easy_apply_model = EASY_APPLY_MODEL
         self.free_tier = FREE_TIER
@@ -201,10 +201,16 @@ class AIAdapter:
         logger.info(f"Using {self.model_type} from {self.easy_apply_model}")
 
         if self.model_type == "gemini":
+            if not api_key:
+                raise ValueError("API key is required for Gemini model")
             return GeminiModel(api_key, self.easy_apply_model, llm_proxy)
         elif self.model_type == "openai":
+            if not api_key:
+                raise ValueError("API key is required for OpenAI model")
             return OpenAIModel(api_key, self.easy_apply_model, llm_proxy)
         elif self.model_type == "claude":
+            if not api_key:
+                raise ValueError("API key is required for Claude model")
             return ClaudeModel(api_key, self.easy_apply_model)
         elif self.model_type == "ollama":
             return OllamaModel(self.easy_apply_model, llm_api_url)
@@ -485,7 +491,7 @@ class GPTAnswerer:
     as well as writing cover letters.
     """
 
-    def __init__(self, llm_api_key: str, llm_proxy: str, llm_api_url: str = None):
+    def __init__(self, llm_api_key: str = None, llm_proxy: str = None, llm_api_url: str = None):
         self.job = None
         self.ai_adapter = AIAdapter(llm_api_key, llm_proxy, llm_api_url)
         self.llm_cheap = LoggerChatModel(self.ai_adapter)
