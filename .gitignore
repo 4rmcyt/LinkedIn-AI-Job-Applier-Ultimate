@@ -33,6 +33,7 @@ browser_session_my/*
 browser_session_work/*
 config/app_config.py
 config/search_config.yaml
+config/connection_searcher_config.yaml
 data/cover_letters/*
 data/output/*
 data/resumes/*
