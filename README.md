@@ -181,6 +181,8 @@ This project enhances the original codebase with several powerful new features:
     tg_report_topic_id="[ID of report topic]"
     ```
 
+    Telegram options are optional. You can remove them from .env file and application will still be able to work but won't be able to set reports and error messages via Telegram.
+
 2.  **Job Search Parameters (`config/search_config.yaml`):**
     Copy this file from `examples/config/search_config.yaml` and customize your job search by editing this file.
     You can define job titles, locations, experience levels and more.
