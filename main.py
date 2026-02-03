@@ -303,6 +303,11 @@ def main() -> None:
             resume_text = config_validator.validate_resume_text(RESUME_TEXT_FILE)
             resume_structured = config_validator.validate_resume_structured(RESUME_STRUCTURED_FILE)
 
+            if not resume_text and not resume_structured:
+                raise FileNotFoundError(
+                    f"Can't find neither resume text file {RESUME_TEXT_FILE} nor resume structured file {RESUME_STRUCTURED_FILE}"
+                )
+
             logger.info("Starting LinkedIn Job Applier...")
             logger.info(f"Search config loaded with {len(search_config)} parameters")
 
