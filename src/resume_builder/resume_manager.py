@@ -6,6 +6,7 @@ from pathlib import Path
 
 import inquirer
 
+from config.app_config import RESUME_STYLE
 from config.logger_config import logger
 from src.utils.browser_utils import HTML_to_PDF
 
@@ -46,8 +47,6 @@ class ResumeManager:
 
     def choose_style(self):
         """Choose resume style (interactive or default based on environment)"""
-        from config.app_config import RESUME_STYLE
-
         if RESUME_STYLE is not None:
             self.selected_style = RESUME_STYLE
             logger.info(f"Using resume style from config: '{RESUME_STYLE}'")

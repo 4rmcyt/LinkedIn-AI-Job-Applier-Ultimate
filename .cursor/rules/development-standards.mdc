@@ -93,6 +93,7 @@ from config.constants import (
 )
 ```
 
+
 ## AI/LLM Integration Standards
 
 ### **Prompt Management**
@@ -173,6 +174,7 @@ async def click_element_naturally(page, selector):
 ## File Organization
 
 ### **Import Standards**
+Import all necessary modules and variables in the beginning of the file.
 ```python
 # Standard library imports first
 import asyncio
