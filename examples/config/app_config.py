@@ -96,3 +96,17 @@ the higher it is, the more creative the model, but hallucinations may occur
 the lower it is, the more strictly the model follows the prompt and invents less
 """
 TEMPERATURE = 0.4
+
+"""
+Resume style to use for generated resumes.
+If set - skips the interactive style selection prompt.
+If None - prompts user to select a style interactively.
+Possible values:
+    - "FAANGPath"
+    - "Cloyola Grey"
+    - "Modern Blue"
+    - "Modern Grey"
+    - "Default"
+    - "Clean Blue"
+"""
+RESUME_STYLE = None

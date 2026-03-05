@@ -46,6 +46,13 @@ class ResumeManager:
 
     def choose_style(self):
         """Choose resume style (interactive or default based on environment)"""
+        from config.app_config import RESUME_STYLE
+
+        if RESUME_STYLE is not None:
+            self.selected_style = RESUME_STYLE
+            logger.info(f"Using resume style from config: '{RESUME_STYLE}'")
+            return
+
         # Check if running in non-interactive mode (Docker, no TTY)
         if not self.is_interactive_mode():
             logger.info("Running in non-interactive mode (Docker/headless)")
