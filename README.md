@@ -359,6 +359,8 @@ This is agentic flow and it consumes **A LOT** of tokens. You can multiply previ
 
 So we do not recommend you to use this mode until you have enough money for that and understand what you are doing.
 
+**Note:** If the AI agent encounters a registration form on a 3rd-party application site, it will use your `linkedin_email` as the login and `<linkedin_email_part_before_@>_123456` as the password (e.g. if your email is `john.doe@gmail.com`, the password will be `john.doe_123456`).
+
 ## ✅ Running Tests
 
 The project includes a suite of tests to ensure its functionality. To run them, first install the development dependencies:

@@ -19,8 +19,10 @@ class ApplyAgent:
         api_key: str = None,
         browser_storage_state: str = None,
         llm_api_url: str = None,
+        linkedin_email: str = None,
     ) -> None:
         self.api_key = api_key
+        self.linkedin_email = linkedin_email
         self.model = APPLY_AGENT_MODEL
         self.model_type = LLM_MODEL_TYPE
         self.llm_api_url = llm_api_url
@@ -97,6 +99,10 @@ class ApplyAgent:
             - You may upload my resume PDF when the application asks for it.
             - The resume file is available as: {resume_pdf_path}
             - Prefer using the built-in upload_file_to_element action; if the page flow needs it, you can use the upload_resume tool to produce an UploadFileAction.
+
+        - If you are asked to register an account, use my email: {self.linkedin_email} and password: {self.linkedin_email.split("@")[0] + "123456"}
+
+        - If an email verification or confirmation step appears, use my email: {self.linkedin_email}
 
         - Before you start, create a step-by-step plan to complete the entire application. Delegate a step for each field/section you encounter.
 
