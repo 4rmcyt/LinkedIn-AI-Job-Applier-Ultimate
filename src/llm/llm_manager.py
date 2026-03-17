@@ -29,7 +29,7 @@ from config.app_config import (
     TEMPERATURE,
 )
 import litellm
-from config.constants import LOG_DIR, RESUME_DIR
+from config.constants import LOG_DIR, RESUME_DIR, CUSTOM_COST_PER_TOKEN
 from config.logger_config import logger
 from src.pydantic_models.log_models import LLMCall
 from src.pydantic_models.prompt_models import ResumeStructure
@@ -334,6 +334,7 @@ class LLMLogger:
                 model=EASY_APPLY_MODEL,
                 prompt_tokens=input_tokens,
                 completion_tokens=output_tokens,
+                custom_cost_per_token=CUSTOM_COST_PER_TOKEN,
             )
             total_cost = prompt_cost + completion_cost
             logger.info(f"Total cost calculated: {total_cost}")

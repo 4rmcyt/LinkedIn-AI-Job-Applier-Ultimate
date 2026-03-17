@@ -8,7 +8,7 @@ from browser_use.tools.views import UploadFileAction
 
 from config.app_config import APPLY_AGENT_MODEL, HEADLESS_MODE, LLM_MODEL_TYPE
 import litellm
-from config.constants import LOG_DIR, RESUME_DIR
+from config.constants import LOG_DIR, RESUME_DIR, CUSTOM_COST_PER_TOKEN
 from config.logger_config import logger
 from src.pydantic_models.log_models import LLMCall
 from src.utils.utils import append_yaml_file, get_first_pdf_file
@@ -134,6 +134,7 @@ class ApplyAgent:
             model=self.model,
             prompt_tokens=input_tokens,
             completion_tokens=output_tokens,
+            custom_cost_per_token=CUSTOM_COST_PER_TOKEN,
         )
         total_cost = prompt_cost + completion_cost
         logger.info(f"Total cost calculated: {total_cost}")

@@ -34,3 +34,9 @@ RESUME_DIR = "data/resumes"
 COVER_LETTER_DIR = "data/cover_letters"
 BROWSER_STORAGE_STATE = "browser_session/linkedin_state.json"
 APP_CONFIG_FILE = "config/app_config.yaml"
+
+# Default cost per token in case when model is not supported by litellm
+CUSTOM_COST_PER_TOKEN = {
+    "input_cost_per_token": 0.25 / 1_000_000,
+    "output_cost_per_token": 1.50 / 1_000_000,
+}
