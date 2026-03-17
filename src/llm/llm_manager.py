@@ -331,7 +331,7 @@ class LLMLogger:
         try:
             # Calculate total request cost
             prompt_cost, completion_cost = litellm.cost_per_token(
-                model=EASY_APPLY_MODEL,
+                model=EASY_APPLY_MODEL.replace("google/", ""),
                 prompt_tokens=input_tokens,
                 completion_tokens=output_tokens,
                 custom_cost_per_token=CUSTOM_COST_PER_TOKEN,

@@ -131,7 +131,7 @@ class ApplyAgent:
             f"Token usage - Input: {input_tokens}, Output: {output_tokens}, Total: {total_tokens}"
         )
         prompt_cost, completion_cost = litellm.cost_per_token(
-            model=self.model,
+            model=self.model.replace("google/", ""),
             prompt_tokens=input_tokens,
             completion_tokens=output_tokens,
             custom_cost_per_token=CUSTOM_COST_PER_TOKEN,

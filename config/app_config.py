@@ -85,10 +85,10 @@ LLM_MODEL_TYPE = "openrouter"
 # LLM_MODEL_TYPE = "gemini"
 
 # LLM models
-EASY_APPLY_MODEL = "google/gemini-3.1-flash-lite"
-# EASY_APPLY_MODEL = "gemini-3.1-flash-lite"
-APPLY_AGENT_MODEL = "google/gemini-3.1-flash-lite"
-# APPLY_AGENT_MODEL = "gemini-3.1-flash-lite"
+EASY_APPLY_MODEL = "google/gemini-3.1-flash-lite-preview"
+# EASY_APPLY_MODEL = "gemini-3.1-flash-lite-preview"
+APPLY_AGENT_MODEL = "google/gemini-3.1-flash-lite-preview"
+# APPLY_AGENT_MODEL = "gemini-3.1-flash-lite-preview"
 
 """
 Easy Apply model temperature
