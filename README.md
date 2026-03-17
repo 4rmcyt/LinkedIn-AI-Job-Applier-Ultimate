@@ -60,11 +60,11 @@ This project enhances the original codebase with several powerful new features:
 *   **📄 New Resume Style:** Includes the modern "FAANGPath" resume style for generating professional-looking resumes.
 *   **📲 Telegram Integration:** Delivers comprehensive reports and error notifications directly to your Telegram chat after each run.
 *   **💡 Resume Recommendations:** Provides AI-generated suggestions to improve your resume based on job market trends.
-*   **🌐 Proxy Support:** Supports using proxies for both Gemini and OpenAI models.
+*   **🌐 Proxy Support:** Supports using proxies for both Gemini, OpenAI and OpenRouter models.
 *   **🏗️ Robust Configuration:** Uses Pydantic models for validating configuration, resume, and other data structures, reducing runtime errors.
 *   **🚀 Improved LLM Logic:**
     *   Utilizes improved system instructions and prompts for higher-quality LLM responses.
-    *   Employs Gemini as the default LLM, which is often more cost-effective (sometimes even free!) than OpenAI.
+    *   Employs Gemini or OpenRouter as the default LLM, which is often more cost-effective (sometimes even free!) than OpenAI.
     *   Enhances question-answering logic to avoid LLM "hallucinations" by skipping questions where it lacks sufficient information.
 *   **🔐 Secure Secrets Management:** Stores sensitive keys and credentials in a `.env` file for better security.
 *   **🕒 Automated Scheduling:** A built-in timer allows the bot to run automatically every 24 hours.
@@ -222,11 +222,15 @@ This project enhances the original codebase with several powerful new features:
 
     **Gemini (Google)**
     - Set: `LLM_MODEL_TYPE = "gemini"`
-    - Examples: `gemini-flash-latest`, `gemini-2.5-flash`, `gemini-2.5-flash-lite`, `gemini-2.0-flash`
+    - Examples: `gemini-3.1-flash-lite`, `gemini-3.1-flash`
 
     **OpenAI**
     - Set: `LLM_MODEL_TYPE = "openai"`
     - Examples: `gpt-4o`, `gpt-4o-mini`
+
+    **OpenRouter**
+    - Set: `LLM_MODEL_TYPE = "openrouter"`
+    - Examples: `google/gemini-3.1-flash-lite`, `google/gemini-3.1-flash`, `openai/gpt-4o-mini`
 
     **Claude (Anthropic)**
     - Set: `LLM_MODEL_TYPE = "claude"`
@@ -237,7 +241,7 @@ This project enhances the original codebase with several powerful new features:
     - Examples: `llama3`, `qwen2.5` (any model available in your Ollama)
 
     Notes:
-    - Recommended models: gemini + gemini-flash-latest or openai + gpt-4.1-mini - both are fast, clever and cheap (gemini models can be even free!)
+    - Recommended models: gemini + gemini-3.1-flash-lite or openai + gpt-5-mini - both are fast, clever and cheap (gemini models can be even free!)
     - Provide your API key in `.env` as `llm_api_key`. Optionally set `llm_proxy`.
     - Model pricing used in reports is taken from an internal map for common models; others fall back to default per-token prices.
 

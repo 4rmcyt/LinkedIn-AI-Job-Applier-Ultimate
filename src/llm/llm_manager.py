@@ -28,7 +28,8 @@ from config.app_config import (
     LLM_MODEL_TYPE,
     TEMPERATURE,
 )
-from config.constants import LOG_DIR, PRICE_DICT, RESUME_DIR
+import litellm
+from config.constants import LOG_DIR, RESUME_DIR
 from config.logger_config import logger
 from src.pydantic_models.log_models import LLMCall
 from src.pydantic_models.prompt_models import ResumeStructure
@@ -155,6 +156,36 @@ class OllamaModel(AIModel):
         return response
 
 
+class OpenRouterModel(AIModel):
+    """Get access to models via OpenRouter API"""
+
+    def __init__(self, api_key: str, llm_model: str, llm_proxy: str = None) -> None:
+        from langchain_openai import ChatOpenAI
+
+        http_client = httpx.Client(proxy=llm_proxy) if llm_proxy else None
+        self.llm_proxy = llm_proxy
+        self.model_name = llm_model
+        self.model = ChatOpenAI(
+            model_name=self.model_name,
+            openai_api_key=api_key,
+            openai_api_base="https://openrouter.ai/api/v1",
+            http_client=http_client,
+            temperature=TEMPERATURE,
+            timeout=60,
+        )
+
+    def invoke(self, prompt: ChatPromptTemplate) -> BaseMessage:
+        logger.info("Got access to model via OpenRouter API")
+        prompt_messages = [SystemMessage(content=prompts.custom_instructions)] + prompt.messages
+        try:
+            response = self.model.invoke(prompt_messages)
+            return response
+        except Exception:
+            tb_str = traceback.format_exc()
+            logger.error(f"LLM access error via OpenRouter: \n Traceback: {tb_str}")
+            pause(3, 4)
+
+
 # class xAIModel(AIModel):
 #     """Get access to xAI model"""
 
@@ -208,6 +239,8 @@ class AIAdapter:
             return ClaudeModel(api_key, self.easy_apply_model)
         elif self.model_type == "ollama":
             return OllamaModel(self.easy_apply_model, llm_api_url)
+        elif self.model_type == "openrouter":
+            return OpenRouterModel(api_key, self.easy_apply_model, llm_proxy)
         # elif self.model_type == "xai":
         #     return xAIModel(api_key, self.easy_apply_model)
         # elif self.model_type == "huggingface":
@@ -297,14 +330,12 @@ class LLMLogger:
 
         try:
             # Calculate total request cost
-            prices = PRICE_DICT.get(
-                EASY_APPLY_MODEL, {"price_per_input_token": 1.5e-7, "price_per_output_token": 6e-7}
+            prompt_cost, completion_cost = litellm.cost_per_token(
+                model=EASY_APPLY_MODEL,
+                prompt_tokens=input_tokens,
+                completion_tokens=output_tokens,
             )
-            price_per_input_token = prices["price_per_input_token"]
-            price_per_output_token = prices["price_per_output_token"]
-            total_cost = (input_tokens * price_per_input_token) + (
-                output_tokens * price_per_output_token
-            )
+            total_cost = prompt_cost + completion_cost
             logger.info(f"Total cost calculated: {total_cost}")
         except Exception:
             tb_str = traceback.format_exc()

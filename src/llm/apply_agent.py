@@ -7,7 +7,8 @@ from browser_use import Agent, Browser, ChatAnthropic, ChatGoogle, ChatOllama, C
 from browser_use.tools.views import UploadFileAction
 
 from config.app_config import APPLY_AGENT_MODEL, HEADLESS_MODE, LLM_MODEL_TYPE
-from config.constants import LOG_DIR, PRICE_DICT, RESUME_DIR
+import litellm
+from config.constants import LOG_DIR, RESUME_DIR
 from config.logger_config import logger
 from src.pydantic_models.log_models import LLMCall
 from src.utils.utils import append_yaml_file, get_first_pdf_file
@@ -50,6 +51,12 @@ class ApplyAgent:
             llm = ChatAnthropic(api_key=self.api_key, model=self.model)
         elif model_type == "ollama":
             llm = ChatOllama(model=self.model, base_url=llm_api_url)
+        elif model_type == "openrouter":
+            llm = ChatOpenAI(
+                api_key=self.api_key,
+                model=self.model,
+                base_url="https://openrouter.ai/api/v1",
+            )
         else:
             raise ValueError(f"Unsupported model type: {model_type}")
         return llm
@@ -117,20 +124,18 @@ class ApplyAgent:
 
     def _log_token_usage(self, task: str) -> None:
         """Log AI Agent token usage and calculate the total cost"""
-        prices = PRICE_DICT.get(
-            self.model, {"price_per_input_token": 1e-7, "price_per_output_token": 4e-7}
-        )
         token_usage = self.agent.token_cost_service.get_usage_tokens_for_model(self.model)
         input_tokens, output_tokens = token_usage.prompt_tokens, token_usage.completion_tokens
         total_tokens = input_tokens + output_tokens
         logger.info(
             f"Token usage - Input: {input_tokens}, Output: {output_tokens}, Total: {total_tokens}"
         )
-        price_per_input_token = prices["price_per_input_token"]
-        price_per_output_token = prices["price_per_output_token"]
-        total_cost = (input_tokens * price_per_input_token) + (
-            output_tokens * price_per_output_token
+        prompt_cost, completion_cost = litellm.cost_per_token(
+            model=self.model,
+            prompt_tokens=input_tokens,
+            completion_tokens=output_tokens,
         )
+        total_cost = prompt_cost + completion_cost
         logger.info(f"Total cost calculated: {total_cost}")
 
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

@@ -81,14 +81,14 @@ Possible values:
     - "gemini"
     - "huggingface"
 """
-LLM_MODEL_TYPE = "openai"
+LLM_MODEL_TYPE = "openrouter"
 # LLM_MODEL_TYPE = "gemini"
 
 # LLM models
-EASY_APPLY_MODEL = "gpt-5-mini"
-# EASY_APPLY_MODEL = "gemini-2.5-flash"
-APPLY_AGENT_MODEL = "gpt-5-mini"
-# APPLY_AGENT_MODEL = "gemini-2.5-flash"
+EASY_APPLY_MODEL = "google/gemini-3.1-flash-lite"
+# EASY_APPLY_MODEL = "gemini-3.1-flash-lite"
+APPLY_AGENT_MODEL = "google/gemini-3.1-flash-lite"
+# APPLY_AGENT_MODEL = "gemini-3.1-flash-lite"
 
 """
 Easy Apply model temperature
