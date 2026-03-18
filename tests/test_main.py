@@ -941,7 +941,7 @@ class TestMain:
         mock_validator = MagicMock()
         mock_validator.validate_secrets.return_value = {}
         mock_validator.validate_search_config.return_value = {}
-        mock_validator.validate_resume_text.return_value = ""
+        mock_validator.validate_resume_text.return_value = "resume text"
         mock_validator.validate_resume_structured.return_value = {}
 
         with (
@@ -1023,7 +1023,7 @@ class TestMain:
         mock_validator = MagicMock()
         mock_validator.validate_secrets.return_value = {}
         mock_validator.validate_search_config.return_value = {}
-        mock_validator.validate_resume_text.return_value = ""
+        mock_validator.validate_resume_text.return_value = "resume text"
         mock_validator.validate_resume_structured.return_value = {}
 
         with (
