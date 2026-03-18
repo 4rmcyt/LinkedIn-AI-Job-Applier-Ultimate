@@ -214,11 +214,13 @@ async def create_and_run_bot(
             return False
 
         # Set GPT answerer
-        llm_api_key = secrets["llm_api_key"]
-        llm_proxy = secrets["llm_proxy"]
+        llm_api_key = secrets.get("llm_api_key")
+        llm_proxy = secrets.get("llm_proxy")
         llm_api_url = secrets.get("llm_api_url")
         llm_answerer_component = GPTAnswerer(llm_api_key, llm_proxy, llm_api_url)
-        llm_agent_component = ApplyAgent(llm_api_key, BROWSER_STORAGE_STATE, llm_api_url)
+        llm_agent_component = ApplyAgent(
+            llm_api_key, BROWSER_STORAGE_STATE, llm_api_url, linkedin_email
+        )
 
         if not resume_structured:
             resume_structured = llm_answerer_component.parse_resume(resume_text)
@@ -302,6 +304,11 @@ def main() -> None:
             search_config = config_validator.validate_search_config(SEARCH_CONFIG_FILE)
             resume_text = config_validator.validate_resume_text(RESUME_TEXT_FILE)
             resume_structured = config_validator.validate_resume_structured(RESUME_STRUCTURED_FILE)
+
+            if not resume_text and not resume_structured:
+                raise FileNotFoundError(
+                    f"Can't find neither resume text file {RESUME_TEXT_FILE} nor resume structured file {RESUME_STRUCTURED_FILE}"
+                )
 
             logger.info("Starting LinkedIn Job Applier...")
             logger.info(f"Search config loaded with {len(search_config)} parameters")

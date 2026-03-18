@@ -12,7 +12,7 @@ import yaml
 
 from config.constants import LOG_DIR, SEARCH_CONFIG_FILE
 from telegram import Bot
-from telegram.error import TelegramError
+from telegram.error import InvalidToken, TelegramError
 
 # Configure standard logging for internal errors
 logging.basicConfig(level=logging.WARNING)
@@ -57,11 +57,14 @@ class AsyncTelegramSink:
         max_retries: int = 6,
         cooldown: int = 60,
     ):
-        telegram_bot_token = dotenv.dotenv_values(".env")["tg_token"]
-        self.bot = Bot(token=telegram_bot_token)
-        self.chat_id = dotenv.dotenv_values(".env")["tg_chat_id"]
-        self.err_topic_id = dotenv.dotenv_values(".env")["tg_err_topic_id"]
-        self.report_topic_id = dotenv.dotenv_values(".env")["tg_report_topic_id"]
+        telegram_bot_token = dotenv.dotenv_values(".env").get("tg_token")
+        try:
+            self.bot = Bot(token=telegram_bot_token)
+        except InvalidToken:
+            self.bot = None
+        self.chat_id = dotenv.dotenv_values(".env").get("tg_chat_id")
+        self.err_topic_id = dotenv.dotenv_values(".env").get("tg_err_topic_id")
+        self.report_topic_id = dotenv.dotenv_values(".env").get("tg_report_topic_id")
         self.user_id = load_yaml_file(SEARCH_CONFIG_FILE).get("user_id", "-1")
         self.max_retries = max_retries
         self.cooldown = cooldown  # Seconds between identical error notifications
@@ -159,6 +162,11 @@ class AsyncTelegramSink:
 
     def __call__(self, message: str) -> None:
         """Loguru sink entry point"""
+        if not self.bot:
+            internal_logger.info(
+                "Telegram bot token wasn't set, so the Telegram error messaging is disabled."
+            )
+            return
         try:
             # Check if there's already a running event loop
             try:

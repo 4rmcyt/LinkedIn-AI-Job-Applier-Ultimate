@@ -181,10 +181,12 @@ This project enhances the original codebase with several powerful new features:
     tg_report_topic_id="[ID of report topic]"
     ```
 
+    Telegram options are optional. You can remove them from .env file and application will still be able to work but won't be able to set reports and error messages via Telegram.
+
 2.  **Job Search Parameters (`config/search_config.yaml`):**
-    Customize your job search by editing this file. You can define job titles, locations, experience levels, and more.
-    Example of search_config.yaml file can be found in `examples/config/search_config.yaml`
-    Settings mirror LinkedIn’s. Example of search_config file can be found in `examples/config/search_config.yaml`
+    Copy this file from `examples/config/search_config.yaml` and customize your job search by editing this file.
+    You can define job titles, locations, experience levels and more.
+    Example of search_config file can be found in `examples/config/search_config.yaml`
 
     ```yaml
     # Example: search for Mid-Senior level remote software engineer roles
@@ -200,8 +202,7 @@ This project enhances the original codebase with several powerful new features:
     ```
 
 3.  **Application Settings (`config/app_config.py`):**
-    Fine-tune the bot's behavior in this file. 
-    Example of app_config.py file can be found in `examples/config/app_config.py`
+    Copy this file from `examples/config/app_config.py` and fine-tune the bot's behavior in this file. 
     Key settings include:
     *   `MAX_APPLIES_NUM`: The maximum number of jobs to apply for in a single run.
     *   `HEADLESS_MODE`: If this mode is activated - the browser will be launched in headless mode. Convenient if you plan to
@@ -218,6 +219,7 @@ This project enhances the original codebase with several powerful new features:
     *   `LLM_MODEL_TYPE`: Choose your LLM provider (e.g., "gemini").
     *   `EASY_APPLY_MODEL`: Specify the exact model to use for Easy Apply vacancies (e.g., "gemini-2.0-flash").
     *   `APPLY_AGENT_MODEL`: Specify the exact agent model to use for Non-Easy Apply vacancies (e.g., "gemini-2.5-flash").
+    *   `RESUME_STYLE`: Resume style to use for generated resumes. If set, skips the interactive style selection prompt. If `None`, prompts interactively (or falls back to default in Docker/headless mode). Possible values: `"FAANGPath"`, `"Cloyola Grey"`, `"Modern Blue"`, `"Modern Grey"`, `"Default"`, `"Clean Blue"`.
 
     **Supported LLM models**
 
@@ -249,8 +251,7 @@ This project enhances the original codebase with several powerful new features:
     - Model pricing used in reports is taken from an internal map for common models; others fall back to default per-token prices.
 
 4.  **Connection Searcher Settings (`config/connection_searcher_config.yaml`):**
-    This file controls the automated networking tool. 
-    Example of connection_searcher_config.yaml file can be found in `examples/config/connection_searcher_config.yaml`
+    Copy this file from `examples/config/connection_searcher_config.yaml` and fine tune the automated networking tool behaviour in this file.
     *   `main_search_words`: Keywords like "Open Networker" or "LION" used to find networking-oriented profiles.
     *   `additional_search_words`: Keywords to narrow down the search to your specific field (e.g., "ai", "ml", "data science").
     The bot will search for every combination of these words and attempt to connect with users whose profiles indicate they are open networkers (while intelligently skipping those profiles where the keywords appear only in "mutual connections").
@@ -361,6 +362,8 @@ What operations the LLM performs to apply to a vacancy:
 This is agentic flow and it consumes **A LOT** of tokens. You can multiply previous cost values like 10x-100x times!
 
 So we do not recommend you to use this mode until you have enough money for that and understand what you are doing.
+
+**Note:** If the AI agent encounters a registration form on a 3rd-party application site, it will use your `linkedin_email` as the login and `<linkedin_email_part_before_@>_123456` as the password (e.g. if your email is `john.doe@gmail.com`, the password will be `john.doe_123456`).
 
 ## ✅ Running Tests
 
