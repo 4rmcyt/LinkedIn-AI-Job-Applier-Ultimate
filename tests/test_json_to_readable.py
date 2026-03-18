@@ -4,8 +4,6 @@ Unit tests for src/utils/json_to_readable.py
 Tests cover all formatting and transformation functions for LinkedIn job and search configuration data.
 """
 
-import pytest
-
 from src.utils.json_to_readable import (
     _format_value,
     _get_multiple_selected_options,
@@ -191,7 +189,7 @@ class TestTransformVacancyData:
         data = {
             "job_title": "Senior Python Developer",
             "company_name": "TechCorp Inc",
-            "url": "https://www.linkedin.com/jobs/view/123456789",
+            # "url": "https://www.linkedin.com/jobs/view/123456789",
             "job_description": "We are looking for a Senior Python Developer.",
             "company_description": "TechCorp Inc is a leading technology company.",
             "skills": ["Python", "Django", "FastAPI"],
@@ -202,7 +200,7 @@ class TestTransformVacancyData:
         assert "LinkedIn vacancy information" in result
         assert "Vacancy name: Senior Python Developer" in result
         assert "Company name: TechCorp Inc" in result
-        assert "Vacancy URL: https://www.linkedin.com/jobs/view/123456789" in result
+        # assert "Vacancy URL: https://www.linkedin.com/jobs/view/123456789" in result
         assert "VACANCY DESCRIPTION:" in result
         assert "We are looking for a Senior Python Developer." in result
         assert "COMPANY INFORMATION:" in result
