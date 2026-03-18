@@ -183,6 +183,7 @@ This project enhances the original codebase with several powerful new features:
 
 2.  **Job Search Parameters (`config/search_config.yaml`):**
     Customize your job search by editing this file. You can define job titles, locations, experience levels, and more.
+    Example of search_config.yaml file can be found in `examples/config/search_config.yaml`
     Settings mirror LinkedIn’s. Example of search_config file can be found in `examples/config/search_config.yaml`
 
     ```yaml
@@ -199,7 +200,9 @@ This project enhances the original codebase with several powerful new features:
     ```
 
 3.  **Application Settings (`config/app_config.py`):**
-    Fine-tune the bot's behavior in this file. Key settings include:
+    Fine-tune the bot's behavior in this file. 
+    Example of app_config.py file can be found in `examples/config/app_config.py`
+    Key settings include:
     *   `MAX_APPLIES_NUM`: The maximum number of jobs to apply for in a single run.
     *   `HEADLESS_MODE`: If this mode is activated - the browser will be launched in headless mode. Convenient if you plan to
     use your computer while bot is working + everything works faster.
@@ -246,7 +249,8 @@ This project enhances the original codebase with several powerful new features:
     - Model pricing used in reports is taken from an internal map for common models; others fall back to default per-token prices.
 
 4.  **Connection Searcher Settings (`config/connection_searcher_config.yaml`):**
-    This file controls the automated networking tool.
+    This file controls the automated networking tool. 
+    Example of connection_searcher_config.yaml file can be found in `examples/config/connection_searcher_config.yaml`
     *   `main_search_words`: Keywords like "Open Networker" or "LION" used to find networking-oriented profiles.
     *   `additional_search_words`: Keywords to narrow down the search to your specific field (e.g., "ai", "ml", "data science").
     The bot will search for every combination of these words and attempt to connect with users whose profiles indicate they are open networkers (while intelligently skipping those profiles where the keywords appear only in "mutual connections").

@@ -31,6 +31,9 @@ MANIFEST
 browser_session/*
 browser_session_my/*
 browser_session_work/*
+config/app_config.py
+config/connection_searcher_config.yaml
+config/search_config.yaml
 data/cover_letters/*
 data/output/*
 data/resumes/*

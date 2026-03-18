@@ -334,14 +334,15 @@ class LLMLogger:
                 model=EASY_APPLY_MODEL.replace("google/", ""),
                 prompt_tokens=input_tokens,
                 completion_tokens=output_tokens,
-                custom_cost_per_token=CUSTOM_COST_PER_TOKEN,
             )
             total_cost = prompt_cost + completion_cost
             logger.info(f"Total cost calculated: {total_cost}")
-        except Exception:
-            tb_str = traceback.format_exc()
-            logger.error(f"Error calculating total cost: {tb_str}")
-            raise
+        except Exception as e:
+            total_cost = (
+                input_tokens * CUSTOM_COST_PER_TOKEN["input_cost_per_token"]
+                + output_tokens * CUSTOM_COST_PER_TOKEN["output_cost_per_token"]
+            )
+            logger.warning(f"Error calculating total cost: {e}")
 
         try:
             log_entry = LLMCall(
@@ -1069,3 +1070,17 @@ class GPTAnswerer:
         """Save template resume"""
         with open(self.resume_template_dir / f"{template_name}.html", "w", encoding="utf-8") as f:
             f.write(resume_template)
+
+
+if __name__ == "__main__":
+    load_dotenv()
+    api_key = os.getenv("llm_api_key", "")
+    llm_proxy = os.getenv("llm_proxy", "")
+    llm_api_url = os.getenv("llm_api_url", None)
+
+    adapter = AIAdapter(api_key, llm_proxy, llm_api_url)
+    prompt = ChatPromptTemplate.from_messages(
+        [("human", "Say 'model works correctly' and nothing else.")]
+    ).format_prompt()
+    response = adapter.invoke(prompt)
+    print(f"Model response: {response.content}")
