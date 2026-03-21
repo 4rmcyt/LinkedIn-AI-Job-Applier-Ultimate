@@ -33,6 +33,7 @@ LOG_DIR = "logs"
 RESUME_DIR = "data/resumes"
 COVER_LETTER_DIR = "data/cover_letters"
 BROWSER_STORAGE_STATE = "browser_session/linkedin_state.json"
+INDEED_BROWSER_STORAGE_STATE = "browser_session/indeed_state.json"
 APP_CONFIG_FILE = "config/app_config.yaml"
 
 # Default cost per token in case when model is not supported by litellm

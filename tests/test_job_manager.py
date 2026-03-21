@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
-from src.job_manager.job_manager import JobApplier
+from src.job_manager.linkedin.job_manager import JobApplier
 from src.pydantic_models.job_models import Job, JobManagerCache
 
 # yaml is intentionally not imported to avoid real file I/O in tests

@@ -1,4 +1,4 @@
-"""This module is used to run the LinkedIn bot"""
+"""This module is used to run the LinkedIn/Indeed bot"""
 
 import asyncio
 import os
@@ -18,16 +18,23 @@ except (ImportError, Exception) as e:
     PYNPUT_AVAILABLE = False
     pynput_kb = None
 
-from config.app_config import RESTART_EVERY_DAY
-from config.constants import BROWSER_STORAGE_STATE, RESUME_DIR, SEARCH_CONFIG_FILE
+from config.app_config import JOB_SITE, RESTART_EVERY_DAY
+from config.constants import BROWSER_STORAGE_STATE, INDEED_BROWSER_STORAGE_STATE, RESUME_DIR, SEARCH_CONFIG_FILE
 from config.logger_config import logger
-from src.job_manager.authenticator import LinkedInAuthenticator
 
-# Commented out hh.ru specific imports - will be used later
+if JOB_SITE == "indeed":
+    from src.job_manager.indeed.authenticator import IndeedAuthenticator as Authenticator
+    from src.job_manager.indeed.job_manager import IndeedJobApplier as JobApplier
+    from src.job_manager.indeed.search_customizer import IndeedSearchCustomizer as SearchCustomizer
+    ACTIVE_BROWSER_STORAGE_STATE = INDEED_BROWSER_STORAGE_STATE
+else:
+    from src.job_manager.linkedin.authenticator import LinkedInAuthenticator as Authenticator
+    from src.job_manager.linkedin.job_manager import JobApplier
+    from src.job_manager.linkedin.search_customizer import SearchCustomizer
+    ACTIVE_BROWSER_STORAGE_STATE = BROWSER_STORAGE_STATE
+
 from src.job_manager.bot_facade import BotFacade
-from src.job_manager.job_manager import JobApplier
 from src.job_manager.resume_anonymizer import ResumeAnonymizer
-from src.job_manager.search_customizer import SearchCustomizer
 from src.llm.apply_agent import ApplyAgent
 from src.llm.llm_manager import GPTAnswerer
 from src.pydantic_models.config_models import SearchConfig, Secrets
@@ -77,19 +84,20 @@ class ConfigValidator:
 
     @staticmethod
     def validate_secrets() -> dict:
-        """Check for LinkedIn secret keys"""
+        """Check for required secret keys based on active JOB_SITE"""
         secrets = {**dotenv.dotenv_values(".env")}
         try:
-            # Check for required LinkedIn credentials
-            required_keys = ["linkedin_email", "linkedin_password"]
-            missing_keys = [key for key in required_keys if key not in secrets or not secrets[key]]
+            if JOB_SITE == "indeed":
+                required_keys = ["indeed_email", "indeed_password"]
+            else:
+                required_keys = ["linkedin_email", "linkedin_password"]
 
+            missing_keys = [key for key in required_keys if not secrets.get(key)]
             if missing_keys:
-                raise ValueError(f"Missing required keys: {', '.join(missing_keys)}")
+                raise ValueError(f"Missing required keys for {JOB_SITE}: {', '.join(missing_keys)}")
 
-            # Still validate with Pydantic if we have the full secrets structure
             secrets_config = Secrets(**secrets)
-            logger.debug("LinkedIn secrets validated successfully.")
+            logger.debug(f"{JOB_SITE} secrets validated successfully.")
             return secrets_config.model_dump()
         except Exception as e:
             raise ConfigError(f"Secrets validation error: {str(e)}")
@@ -184,8 +192,8 @@ async def create_and_run_bot(
     resume_text: str,
     resume_structured: dict,
 ):
-    """Start LinkedIn bot (async)"""
-    logger.info("Initializing LinkedIn bot...")
+    """Start job-site bot (async)"""
+    logger.info(f"Initializing {JOB_SITE} bot...")
 
     # Initialize browser Playwright based on configuration
     try:
@@ -197,20 +205,25 @@ async def create_and_run_bot(
         raise RuntimeError(f"Failed to initialize browser: {e}")
 
     try:
-        # Initialize LinkedIn authenticator
-        authenticator = LinkedInAuthenticator(page)
-        linkedin_email = secrets["linkedin_email"]
-        linkedin_password = secrets["linkedin_password"]
-        authenticator.set_parameters(linkedin_email, linkedin_password)
+        # Resolve credentials based on active site
+        if JOB_SITE == "indeed":
+            site_email = secrets.get("indeed_email") or ""
+            site_password = secrets.get("indeed_password") or ""
+        else:
+            site_email = secrets["linkedin_email"]
+            site_password = secrets["linkedin_password"]
 
-        # Attempt LinkedIn login
+        # Initialize authenticator
+        authenticator = Authenticator(page)
+        authenticator.set_parameters(site_email, site_password)
+
+        # Attempt login
         login_success = await authenticator.start()
         if login_success:
             await save_browser_session(context)
-            logger.info("Successfully logged into LinkedIn!")
-            logger.info("LinkedIn bot ready to work")
+            logger.info(f"Successfully logged into {JOB_SITE}!")
         else:
-            logger.error("Failed to log into LinkedIn")
+            logger.error(f"Failed to log into {JOB_SITE}")
             return False
 
         # Set GPT answerer
@@ -219,8 +232,10 @@ async def create_and_run_bot(
         llm_api_url = secrets.get("llm_api_url")
         llm_answerer_component = GPTAnswerer(llm_api_key, llm_proxy, llm_api_url)
         llm_agent_component = ApplyAgent(
-            llm_api_key, BROWSER_STORAGE_STATE, llm_api_url, linkedin_email
+            llm_api_key, ACTIVE_BROWSER_STORAGE_STATE, llm_api_url, site_email
         )
+
+        linkedin_email = site_email  # kept for JobApplier constructor compatibility
 
         if not resume_structured:
             resume_structured = llm_answerer_component.parse_resume(resume_text)
@@ -252,8 +267,8 @@ async def create_and_run_bot(
         bot.set_parameters(search_config)
         bot.set_pause_checker(check_pause)
 
-        # Check if the last search was less than a day ago
-        if RESTART_EVERY_DAY and not apply_component.check_the_last_search_time():
+        # Check if the last search was less than a day ago (LinkedIn only)
+        if RESTART_EVERY_DAY and JOB_SITE == "linkedin" and not apply_component.check_the_last_search_time():
             logger.warning(
                 "Last search was less than a day ago, finishing work. If you want to restart the search, delete the file data/output/last_run.yaml file"
             )
@@ -310,12 +325,11 @@ def main() -> None:
                     f"Can't find neither resume text file {RESUME_TEXT_FILE} nor resume structured file {RESUME_STRUCTURED_FILE}"
                 )
 
-            logger.info("Starting LinkedIn Job Applier...")
+            logger.info(f"Starting {JOB_SITE.capitalize()} Job Applier...")
             logger.info(f"Search config loaded with {len(search_config)} parameters")
 
-            # Run LinkedIn bot (async)
             asyncio.run(create_and_run_bot(search_config, secrets, resume_text, resume_structured))
-            logger.info("LinkedIn bot completed successfully")
+            logger.info(f"{JOB_SITE.capitalize()} bot completed successfully")
 
         except ConfigError as ce:
             logger.error(f"Configuration error: {str(ce)}")

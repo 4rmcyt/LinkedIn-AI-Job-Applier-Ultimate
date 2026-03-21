@@ -6,7 +6,7 @@ import traceback
 import yaml
 from playwright.async_api import Locator, Page
 from config.logger_config import logger
-from src.job_manager.authenticator import LinkedInAuthenticator
+from src.job_manager.linkedin.authenticator import LinkedInAuthenticator
 from src.pydantic_models.config_models import ConnectionSearcherConfig
 from src.utils.browser_utils import create_playwright_browser, pause, save_browser_session
 
@@ -97,8 +97,7 @@ class ConnectionSearcher:
 
             # Wait for results or empty state with multiple possible selectors
             result_selectors = [
-                "div[data-view-name='people-search-result']",
-                # "[role='listitem']",
+                "div[role='listitem']",
             ]
             combined_selector = ", ".join(result_selectors)
 

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.job_manager.authenticator import LinkedInAuthenticator
+from src.job_manager.linkedin.authenticator import LinkedInAuthenticator
 
 
 class TestLinkedInAuthenticatorInit:
