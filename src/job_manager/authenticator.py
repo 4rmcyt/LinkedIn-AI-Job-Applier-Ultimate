@@ -54,13 +54,18 @@ class LinkedInAuthenticator:
                 logger.warning("Redirected to login page, user not authorized")
                 return False
 
-            # Additional check - look for feed content
-            feed_element = await find_element_safely(
-                self.page, ".feed-shared-update-v2", timeout=30000
-            )
-            if feed_element:
-                logger.info("Feed content found, user is logged in")
-                return True
+            # Additional check - look for the main nav bar (reliable across LinkedIn redesigns)
+            nav_selectors = [
+                "nav[aria-label='Main']",
+                "button[aria-label*='Home']",
+                ".feed-shared-update-v2",
+                "[data-view-name='feed-full-content']",
+            ]
+            for selector in nav_selectors:
+                element = await find_element_safely(self.page, selector, timeout=5000)
+                if element:
+                    logger.info(f"Logged-in indicator found ({selector}), user is logged in")
+                    return True
 
             logger.warning("Could not determine authorization status, assuming not logged in")
             return False
