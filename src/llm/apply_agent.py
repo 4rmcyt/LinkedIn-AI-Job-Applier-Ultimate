@@ -7,8 +7,7 @@ from browser_use import Agent, Browser, ChatAnthropic, ChatGoogle, ChatOllama, C
 from browser_use.tools.views import UploadFileAction
 
 from config.app_config import APPLY_AGENT_MODEL, HEADLESS_MODE, LLM_MODEL_TYPE
-import litellm
-from config.constants import LOG_DIR, RESUME_DIR, CUSTOM_COST_PER_TOKEN
+from config.constants import LOG_DIR, RESUME_DIR, CUSTOM_COST_PER_TOKEN, cost_per_token
 from config.logger_config import logger
 from src.pydantic_models.log_models import LLMCall
 from src.utils.utils import append_yaml_file, get_first_pdf_file
@@ -146,7 +145,7 @@ class ApplyAgent:
         logger.info(
             f"Token usage - Input: {input_tokens}, Output: {output_tokens}, Total: {total_tokens}"
         )
-        prompt_cost, completion_cost = litellm.cost_per_token(
+        prompt_cost, completion_cost = cost_per_token(
             model=self.model.replace("google/", ""),
             prompt_tokens=input_tokens,
             completion_tokens=output_tokens,

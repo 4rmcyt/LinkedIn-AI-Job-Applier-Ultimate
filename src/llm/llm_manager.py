@@ -28,8 +28,7 @@ from config.app_config import (
     LLM_MODEL_TYPE,
     TEMPERATURE,
 )
-import litellm
-from config.constants import LOG_DIR, RESUME_DIR, CUSTOM_COST_PER_TOKEN
+from config.constants import LOG_DIR, RESUME_DIR, cost_per_token
 from config.logger_config import logger
 from src.pydantic_models.log_models import LLMCall
 from src.pydantic_models.prompt_models import ResumeStructure
@@ -334,21 +333,13 @@ class LLMLogger:
             logger.error(f"Key error in response_metadata: {str(e)}")
             raise
 
-        try:
-            # Calculate total request cost
-            prompt_cost, completion_cost = litellm.cost_per_token(
-                model=EASY_APPLY_MODEL.replace("google/", ""),
-                prompt_tokens=input_tokens,
-                completion_tokens=output_tokens,
-            )
-            total_cost = prompt_cost + completion_cost
-            logger.info(f"Total cost calculated: {total_cost}")
-        except Exception as e:
-            total_cost = (
-                input_tokens * CUSTOM_COST_PER_TOKEN["input_cost_per_token"]
-                + output_tokens * CUSTOM_COST_PER_TOKEN["output_cost_per_token"]
-            )
-            logger.warning(f"Error calculating total cost: {e}")
+        prompt_cost, completion_cost = cost_per_token(
+            model=EASY_APPLY_MODEL.replace("google/", ""),
+            prompt_tokens=input_tokens,
+            completion_tokens=output_tokens,
+        )
+        total_cost = prompt_cost + completion_cost
+        logger.info(f"Total cost calculated: {total_cost}")
 
         try:
             log_entry = LLMCall(
