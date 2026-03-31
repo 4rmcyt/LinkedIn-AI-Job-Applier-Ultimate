@@ -143,36 +143,6 @@ logs/
 └── llm_api_calls.yaml    # LLM token usage and cost tracking
 ```
 
-## Code Standards
-
-### Logging
-```python
-from config.logger_config import logger
-
-logger.info("...")
-logger.debug("...")
-logger.warning("...")
-logger.error("...", exc_info=True)
-```
-
-### Imports Order
-1. Standard library
-2. Third-party
-3. Local (grouped by module)
-
-### Error Handling
-- Catch specific exceptions, never bare `except:`
-- Log context (job URL, form field, etc.)
-- Continue processing other jobs on single-job failures
-- Use `src/telegram/telegram_error_handler.py` for critical errors
-
-### Pydantic Validation
-All config and data loaded through models in `src/pydantic_models/`:
-- `Secrets`, `SearchConfig` — configuration
-- `Job`, `JobManagerCache`, `Question` — job application data
-- `ResumeStructure` — resume parsing
-- `LLMCall` — LLM cost tracking
-
 ## Browser Automation (Playwright)
 
 ```python
@@ -202,19 +172,6 @@ gpt_answerer.set_resume(structured_resume, resume_text)
 - All prompts in [src/llm/prompts.py](src/llm/prompts.py) — never inline prompts elsewhere
 - Validate all LLM responses before use
 - Track costs via `LLMCall` model → `logs/llm_api_calls.yaml`
-
-## Testing
-
-```bash
-uv run pytest tests/test_authenticator.py
-uv run pytest tests/test_resume_anonymizer.py
-uv run pytest tests/test_utils.py
-uv run pytest  # run all tests
-```
-
-- Test files in `tests/` with `test_*.py` naming
-- Mock LinkedIn, LLM APIs, Telegram, Playwright for unit tests
-- Use `TEST_MODE=True` in app_config for integration testing without real applications
 
 ## Resume Generation
 
@@ -247,10 +204,3 @@ Helper functions in [src/utils/browser_utils.py](src/utils/browser_utils.py):
 - `skill_stat.yaml` — aggregated skill frequency statistics
 - `last_run.yaml` — scheduling cache (delete to force immediate run)
 - `resume_recommendations.txt` — AI resume improvement suggestions
-
-## Privacy & Security
-
-- Never log passwords, API keys, or personal information
-- Resume anonymization replaces personal data before LLM calls (except resume parsing and Non-Easy Apply)
-- All secrets in `.env` (never committed); use `.env_example` as template
-- Only validate at system boundaries (user input, external APIs)

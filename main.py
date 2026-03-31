@@ -14,7 +14,7 @@ try:
     from pynput import keyboard as pynput_kb
 
     PYNPUT_AVAILABLE = True
-except (ImportError, Exception) as e:
+except (ImportError, Exception):
     PYNPUT_AVAILABLE = False
     pynput_kb = None
 
