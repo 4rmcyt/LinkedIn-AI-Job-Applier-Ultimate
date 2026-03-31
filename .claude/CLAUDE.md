@@ -51,63 +51,6 @@ else:  # "linkedin"
     ...
 ```
 
-### Key Files
-
-- [src/job_manager/bot_facade.py](src/job_manager/bot_facade.py) — Facade pattern; unified interface for both platforms
-- [src/job_manager/linkedin/authenticator.py](src/job_manager/linkedin/authenticator.py) — LinkedIn session management
-- [src/job_manager/linkedin/job_manager.py](src/job_manager/linkedin/job_manager.py) — LinkedIn job search orchestrator
-- [src/job_manager/linkedin/easy_applier.py](src/job_manager/linkedin/easy_applier.py) — LinkedIn Easy Apply automation
-- [src/job_manager/linkedin/search_customizer.py](src/job_manager/linkedin/search_customizer.py) — LinkedIn UI-based filter navigation
-- [src/job_manager/indeed/authenticator.py](src/job_manager/indeed/authenticator.py) — Indeed session management
-- [src/job_manager/indeed/job_manager.py](src/job_manager/indeed/job_manager.py) — Indeed job search orchestrator
-- [src/job_manager/indeed/easy_applier.py](src/job_manager/indeed/easy_applier.py) — Indeed Easy Apply modal automation
-- [src/job_manager/indeed/search_customizer.py](src/job_manager/indeed/search_customizer.py) — Indeed URL-based search parameter builder
-- [src/llm/llm_manager.py](src/llm/llm_manager.py) — Multi-model LLM interface (`GPTAnswerer` class)
-- [src/llm/prompts.py](src/llm/prompts.py) — All prompts centralized here
-- [src/llm/apply_agent.py](src/llm/apply_agent.py) — browser-use AI agent for Non-Easy Apply (experimental, LinkedIn only)
-- [src/utils/browser_utils.py](src/utils/browser_utils.py) — Playwright browser creation and session management
-- [config/app_config.py](config/app_config.py) — Runtime behavior flags and LLM settings
-- [config/constants.py](config/constants.py) — File paths, pricing, dummy data constants
-- [config/logger_config.py](config/logger_config.py) — Centralized logger
-
-## Configuration
-
-### Secrets (`.env`)
-```env
-# LinkedIn credentials (when JOB_SITE="linkedin")
-linkedin_email="..."
-linkedin_password="..."
-
-# Indeed credentials (when JOB_SITE="indeed")
-# indeed_email="..."
-# indeed_password="..."
-
-llm_api_key="..."
-llm_proxy="..."         # optional
-tg_token="..."          # optional
-tg_chat_id="..."        # optional
-```
-
-### Runtime Flags (`config/app_config.py`)
-- `JOB_SITE` — target platform: `"linkedin"` (default) or `"indeed"`
-- `MAX_APPLIES_NUM` — max applications per run
-- `HEADLESS_MODE` — headless browser (required for Docker)
-- `MONKEY_MODE` — skip LLM job filtering, apply to all
-- `TEST_MODE` — generate resumes/cover letters without submitting
-- `COLLECT_INFO_MODE` — gather stats only, no applications
-- `EASY_APPLY_ONLY_MODE` — skip non-Easy Apply jobs (LinkedIn only; Indeed always uses Easy Apply flow)
-- `RESTART_EVERY_DAY` — auto-restart every 24h (LinkedIn only)
-- `LLM_MODEL_TYPE` — provider: `"gemini"`, `"openai"`, `"openrouter"`, `"claude"`, `"ollama"`
-- `EASY_APPLY_MODEL` — model name for Easy Apply
-- `APPLY_AGENT_MODEL` — model name for Non-Easy Apply agent (LinkedIn only)
-- `JOB_IS_INTERESTING_THRESH` — LLM interest score threshold (1-100)
-- `MINIMUM_WAIT_TIME_SEC` — minimum seconds per application (rate limiting)
-- `FREE_TIER` / `FREE_TIER_RPM_LIMIT` — RPM throttling for free-tier LLMs
-- `DEBUG_MODE` — saves screenshots + page HTML to `data/debug/` on every selector failure; also enables Playwright tracing (saved to `data/debug/trace.zip` on exit, viewable at `trace.playwright.dev`)
-
-### Search Config (`config/search_config.yaml`)
-Copy from `examples/config/search_config.yaml`. Defines positions, locations, remote/hybrid/onsite, experience levels, company blacklists.
-
 ## File Structure
 
 ```
@@ -141,23 +84,10 @@ browser_session/
 
 logs/
 └── llm_api_calls.yaml    # LLM token usage and cost tracking
+└── app.log               # Logs all application messages
+└── error_log.log         # Logs all error messages
+└── internal_logger.log   # Logs all errors that appear before loguru is imported
 ```
-
-## Browser Automation (Playwright)
-
-```python
-from src.utils.browser_utils import create_playwright_browser, save_browser_session
-from config.constants import BROWSER_STORAGE_STATE
-
-page, context, browser, playwright_instance = await create_playwright_browser(
-    storage_state=BROWSER_STORAGE_STATE
-)
-```
-
-- Use `src/utils/utils.py` `pause()` for human-like random delays
-- Prefer CSS selectors, then aria-labels, then XPath
-- Always close browser/context/playwright in `finally` blocks
-- Session state persisted in `browser_session/browser_state.json` (shared by all sites)
 
 ## LLM Integration
 
@@ -183,24 +113,6 @@ Output: `test_generated_resume.pdf` in root directory.
 
 Resume styles: `FAANGPath`, `Cloyola Grey`, `Modern Blue`, `Modern Grey`, `Default`, `Clean Blue`
 
-## Debugging Playwright Issues
+## Project rules
 
-Set `DEBUG_MODE = True` in [config/app_config.py](config/app_config.py) to enable capture-on-failure:
-
-- **Screenshots + HTML dumps** — saved to `data/debug/<timestamp>_<label>.png/.html` whenever `safe_click` or `safe_fill` can't find or interact with an element. Share these files with Claude to diagnose selector issues.
-- **Playwright trace** — saved to `data/debug/trace.zip` on exit. Open at `https://trace.playwright.dev` to inspect every action, DOM snapshot, and network request.
-
-Both are no-ops when `DEBUG_MODE = False` (default), so there is no performance impact in normal runs.
-
-Helper functions in [src/utils/browser_utils.py](src/utils/browser_utils.py):
-- `debug_capture(page, label)` — call manually anywhere you want an on-demand snapshot
-- `stop_tracing(context)` — called automatically in `main.py`'s `finally` block
-
-## Output Files (`data/output/`)
-
-- `answers.yaml` — cached question answers (reused across runs)
-- `success.yaml` / `failed.yaml` / `skipped.yaml` — application results
-- `interesting_jobs.yaml` — LLM-flagged interesting jobs with scores
-- `skill_stat.yaml` — aggregated skill frequency statistics
-- `last_run.yaml` — scheduling cache (delete to force immediate run)
-- `resume_recommendations.txt` — AI resume improvement suggestions
+See `.claude/rules/` directory for detailed rules.
