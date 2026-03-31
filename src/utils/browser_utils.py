@@ -8,9 +8,31 @@ from typing import Any, Dict, List, Optional
 
 from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
-from config.app_config import HEADLESS_MODE
-from config.constants import BROWSER_STORAGE_STATE
+from config.app_config import DEBUG_MODE, HEADLESS_MODE
+from config.constants import BROWSER_STORAGE_STATE, DEBUG_DIR
 from config.logger_config import logger
+
+
+async def debug_capture(page: Page, label: str) -> None:
+    """Save a screenshot and page HTML to data/debug/ for post-mortem analysis.
+
+    Only runs when DEBUG_MODE=True. Files are timestamped so each failure gets
+    its own pair. Share the .png and .html with Claude to diagnose selector issues.
+    """
+    if not DEBUG_MODE:
+        return
+    try:
+        os.makedirs(DEBUG_DIR, exist_ok=True)
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        safe_label = re.sub(r"[^\w\-]", "_", label)[:60]
+        base = os.path.join(DEBUG_DIR, f"{timestamp}_{safe_label}")
+        await page.screenshot(path=f"{base}.png", full_page=True)
+        html = await page.content()
+        with open(f"{base}.html", "w", encoding="utf-8") as f:
+            f.write(html)
+        logger.debug(f"Debug capture saved: {base}.png / .html")
+    except Exception as e:
+        logger.debug(f"debug_capture failed: {e}")
 
 
 def ensure_playwright_profile() -> str:
@@ -77,12 +99,36 @@ async def create_playwright_browser() -> tuple[Browser, BrowserContext, Page]:
 
         page = await context.new_page()
 
+        if DEBUG_MODE:
+            await context.tracing.start(screenshots=True, snapshots=True, sources=True)
+            logger.info(
+                f"Playwright tracing enabled — trace will be saved to {DEBUG_DIR}/trace.zip"
+            )
+
         logger.info("Playwright browser created successfully")
         return browser, context, page
 
     except Exception as e:
         logger.error(f"Failed to create Playwright browser: {e}")
         raise
+
+
+async def stop_tracing(context: BrowserContext) -> None:
+    """Stop Playwright tracing and save the trace zip (only when DEBUG_MODE=True).
+
+    Call this in the finally block where you close the browser. The resulting
+    trace.zip can be opened at https://trace.playwright.dev to inspect every
+    action, DOM snapshot, and network request.
+    """
+    if not DEBUG_MODE:
+        return
+    try:
+        os.makedirs(DEBUG_DIR, exist_ok=True)
+        trace_path = os.path.join(DEBUG_DIR, "trace.zip")
+        await context.tracing.stop(path=trace_path)
+        logger.info(f"Playwright trace saved to {trace_path}")
+    except Exception as e:
+        logger.debug(f"stop_tracing failed: {e}")
 
 
 async def save_browser_session(context: BrowserContext) -> None:
@@ -111,6 +157,7 @@ async def safe_click(
 
         if element_count == 0:
             logger.warning(f"Element not found: {selector}")
+            await debug_capture(page, "click_not_found")
             return False
 
         # Select the first matched element (even if multiple)
@@ -140,6 +187,7 @@ async def safe_click(
 
     except Exception as e:
         logger.warning(f"Failed to click element '{selector}': {e}")
+        await debug_capture(page, "click_failed")
         return False
 
 
@@ -164,6 +212,7 @@ async def safe_fill(
 
         if element_count == 0:
             logger.warning(f"No elements found for selector: {selector}")
+            await debug_capture(page, "fill_not_found")
             return False
 
         # Select the first matched element (even if multiple)
@@ -198,6 +247,7 @@ async def safe_fill(
 
     except Exception as e:
         logger.warning(f"Failed to fill element '{selector}': {e}")
+        await debug_capture(page, "fill_failed")
         return False
 
 

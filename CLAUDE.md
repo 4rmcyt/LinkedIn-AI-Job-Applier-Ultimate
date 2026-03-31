@@ -103,6 +103,7 @@ tg_chat_id="..."        # optional
 - `JOB_IS_INTERESTING_THRESH` — LLM interest score threshold (1-100)
 - `MINIMUM_WAIT_TIME_SEC` — minimum seconds per application (rate limiting)
 - `FREE_TIER` / `FREE_TIER_RPM_LIMIT` — RPM throttling for free-tier LLMs
+- `DEBUG_MODE` — saves screenshots + page HTML to `data/debug/` on every selector failure; also enables Playwright tracing (saved to `data/debug/trace.zip` on exit, viewable at `trace.playwright.dev`)
 
 ### Search Config (`config/search_config.yaml`)
 Copy from `examples/config/search_config.yaml`. Defines positions, locations, remote/hybrid/onsite, experience levels, company blacklists.
@@ -136,8 +137,7 @@ data/
 └── cover_letters/
 
 browser_session/
-├── linkedin_state.json   # Persisted LinkedIn Playwright auth state
-└── indeed_state.json     # Persisted Indeed Playwright auth state
+└── browser_state.json    # Persisted Playwright auth state (shared by all sites)
 
 logs/
 └── llm_api_calls.yaml    # LLM token usage and cost tracking
@@ -187,7 +187,7 @@ page, context, browser, playwright_instance = await create_playwright_browser(
 - Use `src/utils/utils.py` `pause()` for human-like random delays
 - Prefer CSS selectors, then aria-labels, then XPath
 - Always close browser/context/playwright in `finally` blocks
-- Session state persisted in `browser_session/linkedin_state.json` (LinkedIn) or `browser_session/indeed_state.json` (Indeed)
+- Session state persisted in `browser_session/browser_state.json` (shared by all sites)
 
 ## LLM Integration
 
@@ -225,6 +225,19 @@ uv run python src/resume_builder/resume_manager.py
 Output: `test_generated_resume.pdf` in root directory.
 
 Resume styles: `FAANGPath`, `Cloyola Grey`, `Modern Blue`, `Modern Grey`, `Default`, `Clean Blue`
+
+## Debugging Playwright Issues
+
+Set `DEBUG_MODE = True` in [config/app_config.py](config/app_config.py) to enable capture-on-failure:
+
+- **Screenshots + HTML dumps** — saved to `data/debug/<timestamp>_<label>.png/.html` whenever `safe_click` or `safe_fill` can't find or interact with an element. Share these files with Claude to diagnose selector issues.
+- **Playwright trace** — saved to `data/debug/trace.zip` on exit. Open at `https://trace.playwright.dev` to inspect every action, DOM snapshot, and network request.
+
+Both are no-ops when `DEBUG_MODE = False` (default), so there is no performance impact in normal runs.
+
+Helper functions in [src/utils/browser_utils.py](src/utils/browser_utils.py):
+- `debug_capture(page, label)` — call manually anywhere you want an on-demand snapshot
+- `stop_tracing(context)` — called automatically in `main.py`'s `finally` block
 
 ## Output Files (`data/output/`)
 

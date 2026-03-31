@@ -29,10 +29,11 @@ SEARCH_CONFIG_FILE = "config/search_config.yaml"
 LAST_RUN_FILE = "data/output/last_run.yaml"
 ANSWERS_FILE = "data/output/answers.yaml"
 OUTPUT_DIR = "data/output"
+DEBUG_DIR = "data/debug"
 LOG_DIR = "logs"
 RESUME_DIR = "data/resumes"
 COVER_LETTER_DIR = "data/cover_letters"
-BROWSER_STORAGE_STATE = "browser_session/linkedin_state.json"
+BROWSER_STORAGE_STATE = "browser_session/browser_state.json"
 APP_CONFIG_FILE = "config/app_config.yaml"
 
 # Default cost per token fallback when model is not in PRICE_DICT

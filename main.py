@@ -19,19 +19,17 @@ except (ImportError, Exception) as e:
     pynput_kb = None
 
 from config.app_config import JOB_SITE, RESTART_EVERY_DAY
-from config.constants import BROWSER_STORAGE_STATE, INDEED_BROWSER_STORAGE_STATE, RESUME_DIR, SEARCH_CONFIG_FILE
+from config.constants import BROWSER_STORAGE_STATE, RESUME_DIR, SEARCH_CONFIG_FILE
 from config.logger_config import logger
 
 if JOB_SITE == "indeed":
     from src.job_manager.indeed.authenticator import IndeedAuthenticator as Authenticator
     from src.job_manager.indeed.job_manager import IndeedJobApplier as JobApplier
     from src.job_manager.indeed.search_customizer import IndeedSearchCustomizer as SearchCustomizer
-    ACTIVE_BROWSER_STORAGE_STATE = INDEED_BROWSER_STORAGE_STATE
 else:
     from src.job_manager.linkedin.authenticator import LinkedInAuthenticator as Authenticator
     from src.job_manager.linkedin.job_manager import JobApplier
     from src.job_manager.linkedin.search_customizer import SearchCustomizer
-    ACTIVE_BROWSER_STORAGE_STATE = BROWSER_STORAGE_STATE
 
 from src.job_manager.bot_facade import BotFacade
 from src.job_manager.resume_anonymizer import ResumeAnonymizer
@@ -42,7 +40,7 @@ from src.pydantic_models.prompt_models import ResumeStructure
 from src.resume_builder.resume_generator import ResumeGenerator
 from src.resume_builder.resume_manager import ResumeManager
 from src.resume_builder.style_manager import StyleManager
-from src.utils.browser_utils import create_playwright_browser, save_browser_session
+from src.utils.browser_utils import create_playwright_browser, save_browser_session, stop_tracing
 from src.utils.utils import (
     get_first_pdf_file,
     load_yaml_file,
@@ -232,7 +230,7 @@ async def create_and_run_bot(
         llm_api_url = secrets.get("llm_api_url")
         llm_answerer_component = GPTAnswerer(llm_api_key, llm_proxy, llm_api_url)
         llm_agent_component = ApplyAgent(
-            llm_api_key, ACTIVE_BROWSER_STORAGE_STATE, llm_api_url, site_email
+            llm_api_key, BROWSER_STORAGE_STATE, llm_api_url, site_email
         )
 
         linkedin_email = site_email  # kept for JobApplier constructor compatibility
@@ -268,7 +266,11 @@ async def create_and_run_bot(
         bot.set_pause_checker(check_pause)
 
         # Check if the last search was less than a day ago (LinkedIn only)
-        if RESTART_EVERY_DAY and JOB_SITE == "linkedin" and not apply_component.check_the_last_search_time():
+        if (
+            RESTART_EVERY_DAY
+            and JOB_SITE == "linkedin"
+            and not apply_component.check_the_last_search_time()
+        ):
             logger.warning(
                 "Last search was less than a day ago, finishing work. If you want to restart the search, delete the file data/output/last_run.yaml file"
             )
@@ -293,6 +295,7 @@ async def create_and_run_bot(
         logger.info("Cleaning up browser resources...")
         try:
             await save_browser_session(context)
+            await stop_tracing(context)
             # Close Playwright browser
             await browser.close()
             logger.info("Playwright browser closed")
