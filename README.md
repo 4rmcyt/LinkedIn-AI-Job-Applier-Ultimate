@@ -4,13 +4,13 @@
 
 # LinkedIn AI Job Applier Ultimate
 
-🤖🔍 This project is an AI-powered bot that automates the process of applying for jobs on LinkedIn. It intelligently parses your resume, customizes applications, answers questions using an LLM, gathers statistics of the most important for employers skills and sends you detailed reports, significantly streamlining your job search.
+🤖🔍 This project is an AI-powered bot that automates the process of applying for jobs on **LinkedIn** and **Indeed**. It intelligently parses your resume, customizes applications, answers questions using an LLM, gathers statistics of the most important for employers skills and sends you detailed reports, significantly streamlining your job search.
 
 This is an active fork of the original [Jobs_Applier_AI_Agent_AIHawk](https://github.com/feder-cr/Jobs_Applier_AI_Agent_AIHawk) project, which is currently inactive. This version introduces numerous new features, bug fixes, and performance improvements.
 
 ## Disclaimer
 
-This bot uses LinkedIn UI to apply jobs. But LinkedIn frequently changes its UI, so bot may lose some of its functionality **at any time**.
+This bot uses the LinkedIn and Indeed UIs to apply for jobs. Both sites frequently change their UI, so the bot may lose some of its functionality **at any time**.
 I have no time to check this bot every day, so if you face any malfunction or have some questions about bot - feel free to open issue or contact me in Telegram chat 🚀
 
 Please ⭐ the repository if you find it useful. This is the only thing that motivates me to continue developing the project.
@@ -44,7 +44,8 @@ Please ⭐ the repository if you find it useful. This is the only thing that mot
 
 This project enhances the original codebase with several powerful new features:
 
-*   **🌐 Universal Job Application:** Applies to **ALL** job vacancies (not just Easy Apply) thanks to the [browser-use](https://github.com/browser-use/browser-use) library.
+*   **🌐 Multi-Platform Support:** Applies to jobs on **LinkedIn** and **Indeed**. Switch between platforms with a single `JOB_SITE` setting in `config/app_config.py`.
+*   **🌐 Universal Job Application:** Applies to **ALL** job vacancies on LinkedIn (not just Easy Apply) thanks to the [browser-use](https://github.com/browser-use/browser-use) library.
 *   **🔒 Data Anonymization:** Protects your privacy by replacing personal data with mock information before sending it to the LLM provider, ensuring your sensitive information remains secure.
     *   *Note: Auto resume parsing and applying of Non-Easy Apply vacancies don't use anonymization. Additionally, country, city, and birth date are not anonymized to maintain the quality of LLM responses.*
 *   **🎯 Improved Intelligent Resume Generation:** Uses AI to tailor every generated resume to the current vacancy for maximum match, adapting skills, experience, projects and achivements to the job description.
@@ -156,9 +157,13 @@ This project enhances the original codebase with several powerful new features:
     ```
     Now, fill in the required values in your `.env` file:
     ```env
-    # Your LinkedIn credentials
+    # Your LinkedIn credentials (used when JOB_SITE="linkedin" in app_config.py)
     linkedin_email="your_linkedin_email@example.com"
     linkedin_password="your_linkedin_password"
+
+    # Your Indeed credentials (used when JOB_SITE="indeed" in app_config.py)
+    # indeed_email="your_indeed_email@example.com"
+    # indeed_password="your_indeed_password"
 
     # Your LLM API Key (e.g., Gemini)
     llm_api_key="your_llm_api_key"
@@ -202,23 +207,24 @@ This project enhances the original codebase with several powerful new features:
     ```
 
 3.  **Application Settings (`config/app_config.py`):**
-    Copy this file from `examples/config/app_config.py` and fine-tune the bot's behavior in this file. 
+    Copy this file from `examples/config/app_config.py` and fine-tune the bot's behavior in this file.
     Key settings include:
+    *   `JOB_SITE`: The job platform to use. Set to `"linkedin"` (default) or `"indeed"`. Make sure to provide the matching credentials in your `.env` file.
     *   `MAX_APPLIES_NUM`: The maximum number of jobs to apply for in a single run.
     *   `HEADLESS_MODE`: If this mode is activated - the browser will be launched in headless mode. Convenient if you plan to
     use your computer while bot is working + everything works faster.
     *   `MONKEY_MODE`: If `True`, applies to all jobs found. If `False`, the LLM selects only the most suitable jobs.
     *   `TEST_MODE`: If `True`, the bot generates resumes and cover letters but does not actually submit applications.
     *   `COLLECT_INFO_MODE`: If `True`, the bot doesn't apply to the jobs or create resumes and cover letters, only gathers information for interesting jobs and their skill statistics and saves them to the files data/output/interesting_jobs.yaml and data/output/skill_stat.yaml.
-    *   `EASY_APPLY_ONLY_MODE`: If `True`, bot applies only the jobs with Easy Apply. Else bot will apply to the jobs with Easy Apply and try to apply to the jobs with 3rd party applications. **WARNING**: applying to the jobs with 3rd-party applications is not guaranteed to be successful, but is guaranteed to consume at least 10-100x more tokens!
-    *   `RESTART_EVERY_DAY`: If `True`, bot will automatically restart the search every 24 hours when LinkedIn resets the search limits. So you don't have to restart it manually - just run & forget.
+    *   `EASY_APPLY_ONLY_MODE`: *(LinkedIn only)* If `True`, bot applies only the jobs with Easy Apply. Else bot will apply to the jobs with Easy Apply and try to apply to the jobs with 3rd party applications. **WARNING**: applying to the jobs with 3rd-party applications is not guaranteed to be successful, but is guaranteed to consume at least 10-100x more tokens!
+    *   `RESTART_EVERY_DAY`: *(LinkedIn only)* If `True`, bot will automatically restart the search every 24 hours when LinkedIn resets the search limits. So you don't have to restart it manually - just run & forget.
     *   `JOB_IS_INTERESTING_THRESH`: LLM evaluated the 'interest' level of the job from 1 to 100. If job 'interest' level not below this threshold - the job is considered interesting for bot. Otherwise not. Because of LinkedIn limits number of daily applications to 50, recommended value of this setting is 70+, so the bot will apply only to vacancies that match your resume
     *   `MINIMUM_WAIT_TIME_SEC`: Minimum time spent on one job application, this setting help to prevent ban for too frequent job applies
     *   `FREE_TIER`: If `True`, the bot will try to decrease RPM (requests per minute) to avoid rate limit errors when using free tier LLM services.
     *   `FREE_TIER_RPM_LIMIT`: desired RPM limit, application will try not to exceed this limit
     *   `LLM_MODEL_TYPE`: Choose your LLM provider (e.g., "gemini").
     *   `EASY_APPLY_MODEL`: Specify the exact model to use for Easy Apply vacancies (e.g., "gemini-2.0-flash").
-    *   `APPLY_AGENT_MODEL`: Specify the exact agent model to use for Non-Easy Apply vacancies (e.g., "gemini-2.5-flash").
+    *   `APPLY_AGENT_MODEL`: *(LinkedIn only)* Specify the exact agent model to use for Non-Easy Apply vacancies (e.g., "gemini-2.5-flash").
     *   `RESUME_STYLE`: Resume style to use for generated resumes. If set, skips the interactive style selection prompt. If `None`, prompts interactively (or falls back to default in Docker/headless mode). Possible values: `"FAANGPath"`, `"Cloyola Grey"`, `"Modern Blue"`, `"Modern Grey"`, `"Default"`, `"Clean Blue"`.
 
     **Supported LLM models**
