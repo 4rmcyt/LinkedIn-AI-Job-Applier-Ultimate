@@ -242,7 +242,10 @@ async def safe_fill(
 
         await target.fill(text)
 
-        logger.debug(f"Successfully filled '{selector}' with text {text}")
+        if "password" in selector:
+            logger.debug(f"Successfully filled '{selector}'")
+        else:
+            logger.debug(f"Successfully filled '{selector}' with text {text}")
         return True
 
     except Exception as e:

@@ -131,7 +131,9 @@ class IndeedAuthenticator:
                             return False
 
                 if "/challenge" in current_url or "captcha" in current_url:
-                    logger.warning("Indeed security challenge detected - waiting for resolution")
+                    logger.warning(
+                        "Indeed security challenge detected - waiting 60s for resolution"
+                    )
                     pause(60, 60)
 
                 pause(1, 2)

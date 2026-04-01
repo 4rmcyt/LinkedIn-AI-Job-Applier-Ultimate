@@ -1,3 +1,4 @@
+import asyncio
 import os
 import random
 import re
@@ -79,6 +80,14 @@ def pause(low: int = 0.5, high: int = 1) -> None:
     """
     pause = round(random.uniform(low, high), 1)
     time.sleep(pause)
+
+
+async def async_pause(low: float = 0.5, high: float = 1) -> None:
+    """
+    Hold a random pause without blocking the asyncio event loop.
+    """
+    pause_time = round(random.uniform(low, high), 1)
+    await asyncio.sleep(pause_time)
 
 
 def sleep(sleep_interval: Tuple[int, int]) -> None:

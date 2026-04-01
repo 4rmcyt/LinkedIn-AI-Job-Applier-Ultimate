@@ -5,7 +5,7 @@ from playwright.sync_api import Page
 
 from config.logger_config import logger
 from src.utils.browser_utils import find_element_safely, safe_click, safe_fill
-from src.utils.utils import pause
+from src.utils.utils import async_pause
 
 
 class LinkedInAuthenticator:
@@ -75,7 +75,7 @@ class LinkedInAuthenticator:
 
         try:
             await self.page.goto("https://www.linkedin.com/login")
-            pause(1, 2)
+            await async_pause(1, 2)
             return await self.enter_credentials()
 
         except Exception as e:
@@ -103,7 +103,7 @@ class LinkedInAuthenticator:
                 return False
             logger.info("Password entered")
 
-            pause(1, 2)
+            await async_pause(1, 2)
 
             # Click login button with multiple selectors
             login_selectors = [
@@ -121,7 +121,7 @@ class LinkedInAuthenticator:
                 return False
 
             # Wait for login to complete
-            pause(3, 5)
+            await async_pause(3, 5)
 
             # Check login success
             if await self.check_login_success():
@@ -138,6 +138,7 @@ class LinkedInAuthenticator:
     async def check_login_success(self) -> bool:
         """Check login success with improved detection (async)"""
         try:
+            await self.page.goto("https://www.linkedin.com/company/challenge-day-app/")
             # Wait up to 30 seconds for login process to complete
             for attempt in range(30):
                 current_url = self.page.url
@@ -197,10 +198,12 @@ class LinkedInAuthenticator:
 
                 # Check for redirect or checkpoint pages
                 if "/checkpoint/challenge" in current_url or "/challenge" in current_url:
-                    logger.warning("LinkedIn security checkpoint detected - waiting for resolution")
-                    pause(60, 60)
+                    logger.warning(
+                        "LinkedIn security checkpoint detected - waiting 60s for resolution"
+                    )
+                    await async_pause(60, 60)
 
-                pause(1, 2)
+                await async_pause(1, 2)
 
             # Final attempt - check if we can detect logged-in state
             logger.info("Login timeout reached")
