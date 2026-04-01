@@ -202,7 +202,9 @@ class LinkedInAuthenticator:
 
                 # Check for redirect or checkpoint pages
                 if "/checkpoint/challenge" in current_url or "/challenge" in current_url:
-                    logger.warning("LinkedIn security checkpoint detected - waiting for resolution")
+                    logger.warning(
+                        "LinkedIn security checkpoint detected - waiting 60s for resolution before next try"
+                    )
                     pause(60, 60)
 
                 pause(1, 2)
