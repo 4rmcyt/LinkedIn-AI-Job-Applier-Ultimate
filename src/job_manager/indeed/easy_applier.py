@@ -18,7 +18,7 @@ from src.utils.utils import load_yaml_file, pause, sanitize_text, save_yaml_file
 
 INDEED_APPLY_BUTTON_SELECTOR = "button#indeedApplyButton, button[data-jk], .ia-IndeedApplyButton"
 INDEED_APPLY_MODAL_SELECTOR = "div.ia-BasePage, div[data-testid='ia-container']"
-INDEED_NEXT_BUTTON_SELECTOR = "button[data-testid='ia-continueButton'], button.ia-continueButton"
+INDEED_NEXT_BUTTON_SELECTOR = "button[data-testid='continue-button'], button[data-testid^='hp-continue-button'], button[data-testid='ia-continueButton'], .ia-BasePage-component button:has-text('Continue')"
 INDEED_SUBMIT_BUTTON_SELECTOR = "button[data-testid='ia-submitButton'], button.ia-submitButton"
 
 
@@ -279,6 +279,7 @@ class IndeedEasyApplier:
         """Close/discard the current Indeed application modal"""
         try:
             close_selectors = [
+                "button[data-testid='ExitLinkWithModalComponent-exitButton']",
                 "button[aria-label='Close']",
                 "button.ia-CloseButton",
                 "button[data-testid='ia-closeButton']",

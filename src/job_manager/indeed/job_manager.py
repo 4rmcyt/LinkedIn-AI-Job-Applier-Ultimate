@@ -35,6 +35,7 @@ INDEED_JOB_TITLE_SELECTOR = "h2.jobTitle a, [data-testid='jobTitle'] a"
 INDEED_COMPANY_SELECTOR = "[data-testid='company-name'], .companyName"
 INDEED_LOCATION_SELECTOR = "[data-testid='text-location'], .companyLocation"
 INDEED_EASY_APPLY_BADGE = "span.iaLabel, [data-testid='ia-badge']"
+INDEED_APPLY_BUTTON = "#indeedApplyButton, [data-testid='indeedApplyButton-test'], .jobsearch-IndeedApplyButton-buttonWrapper"
 INDEED_NEXT_PAGE_SELECTOR = (
     "a[data-testid='pagination-page-next'], nav[role='navigation'] a[aria-label='Next Page']"
 )
@@ -183,6 +184,10 @@ class IndeedJobApplier:
                 logger.info(f"Skipping blacklisted job: {job.job_title} at {job.company_name}")
                 return "skipped"
 
+            if job.apply_method != "easy_apply":
+                logger.info(f"Skipping external apply job: {job.job_title} at {job.company_name}")
+                return "skipped"
+
             result, cover_letter = await self.easy_apply(job)
             await self._handle_apply_result(result, job, cover_letter)
             return result
@@ -244,10 +249,20 @@ class IndeedJobApplier:
             location_el = await find_element_safely(card, INDEED_LOCATION_SELECTOR, timeout=3000)
             location = (await location_el.text_content() or "") if location_el else ""
 
+            # Check for easy apply badge on card first
             easy_apply_badge = await find_element_safely(
-                card, INDEED_EASY_APPLY_BADGE, timeout=2000
+                card, INDEED_EASY_APPLY_BADGE, timeout=1000
             )
-            apply_method = "easy_apply" if easy_apply_badge else "external"
+            if easy_apply_badge:
+                apply_method = "easy_apply"
+            else:
+                # Click the card to open detail panel and check for apply button
+                await title_el.click()
+                pause(0.5, 1)
+                apply_button = await find_element_safely(
+                    self.page, INDEED_APPLY_BUTTON, timeout=3000
+                )
+                apply_method = "easy_apply" if apply_button else "external"
 
             job = Job(
                 job_title=sanitize_text(title),
