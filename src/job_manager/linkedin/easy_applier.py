@@ -14,7 +14,12 @@ from config.logger_config import logger
 from src.job_manager.resume_anonymizer import ResumeAnonymizer
 from src.llm.llm_manager import GPTAnswerer
 from src.pydantic_models.job_models import Job, Question
-from src.utils.browser_utils import find_element_safely, find_elements_safely, get_clean_text
+from src.utils.browser_utils import (
+    debug_capture,
+    find_element_safely,
+    find_elements_safely,
+    get_clean_text,
+)
 from src.utils.utils import (
     ConfigError,
     get_first_pdf_file,
@@ -101,6 +106,7 @@ class EasyApplier:
             return await self.job_apply(job)
         except Exception as e:
             logger.error(f"Failed to apply to job: {job.job_title} at {job.url}, error: {str(e)}")
+            await debug_capture(self.page, "apply_to_job_error")
             raise e
 
     async def job_apply(self, job: Job) -> Tuple[str, str]:
@@ -147,6 +153,7 @@ class EasyApplier:
         except Exception:
             tb_str = traceback.format_exc()
             logger.error(f"Failed to apply to job: {job.job_title} at {job.url}, error: {tb_str}")
+            await debug_capture(self.page, "job_apply_error")
             try:
                 await self._save_job_application_process()
             except Exception as e:
@@ -209,6 +216,7 @@ class EasyApplier:
 
         except Exception as e:
             logger.warning(f"Error checking Easy Apply limit: {e}")
+            await debug_capture(self.page, "easy_apply_limit_check_error")
             return False
 
     async def _find_easy_apply_button(self, job: Job) -> Any:
@@ -335,6 +343,7 @@ class EasyApplier:
 
         except Exception as e:
             logger.warning(f"Failed to unfollow company: {e}")
+            await debug_capture(self.page, "unfollow_company_error")
 
     async def _check_and_fix_errors(self, next_button: Any) -> bool:
         """Check for errors in the form and try to fix them (async)"""
@@ -354,6 +363,7 @@ class EasyApplier:
                     await next_button.click(timeout=1000)
                 except Exception as e:
                     logger.warning(f"Failed to click next button: {e}")
+                    await debug_capture(self.page, "next_button_click_error")
                 pause(2, 3)
             else:
                 return True
@@ -382,6 +392,7 @@ class EasyApplier:
                 pause(2, 3)
         except Exception as e:
             logger.warning(f"Failed to discard application: {e}")
+            await debug_capture(self.page, "discard_application_error")
 
     async def _save_job_application_process(self) -> None:
         """Save job application process (async)"""
@@ -401,6 +412,7 @@ class EasyApplier:
                 pause(2, 3)
         except Exception as e:
             logger.error(f"Failed to save application process: {e}")
+            await debug_capture(self.page, "save_application_error")
 
     async def _fill_up(self, job: Job) -> None:
         """Fill up form sections (async)"""
@@ -494,6 +506,7 @@ class EasyApplier:
         except Exception:
             tb_str = traceback.format_exc()
             logger.error(f"Failed to find form elements: {tb_str}")
+            await debug_capture(self.page, "fill_up_form_error")
             # Don't re-raise the exception, just log it and continue
             logger.warning("Continuing without filling form elements due to error")
 
@@ -609,6 +622,7 @@ class EasyApplier:
 
             except Exception as e:
                 logger.warning(f"Failed to process upload element: {e}")
+                await debug_capture(self.page, "upload_element_error")
                 continue
 
         logger.debug("Finished handling upload fields")
@@ -729,6 +743,7 @@ class EasyApplier:
         except Exception:
             tb_str = traceback.format_exc()
             logger.error(f"Resume upload failed: {tb_str}")
+            await debug_capture(self.page, "resume_upload_error")
             raise Exception(f"Upload failed: \nTraceback:\n{tb_str}")
 
     async def _create_and_upload_cover_letter(self, element: Any, job: Job) -> None:
@@ -828,6 +843,7 @@ class EasyApplier:
         except Exception:
             tb_str = traceback.format_exc()
             logger.error(f"Cover letter upload failed: {tb_str}")
+            await debug_capture(self.page, "cover_letter_upload_error")
             raise Exception(f"Upload failed: \nTraceback:\n{tb_str}")
 
     async def _process_form_section(self, section: Any) -> None:
@@ -1084,6 +1100,7 @@ class EasyApplier:
                 await checkbox.click(timeout=1000)
             except Exception as e2:
                 logger.error(f"All checkbox click attempts failed: {e2}")
+                await debug_capture(self.page, "checkbox_click_error")
 
     async def _find_and_handle_radio_question(self, section: Any) -> bool:
         """Handle radio button questions (async)"""
@@ -1423,6 +1440,7 @@ class EasyApplier:
             raise
         except Exception as e:
             logger.warning(f"Failed to handle dropdown or combobox question: {e}", exc_info=True)
+            await debug_capture(self.page, "dropdown_question_error")
             return False
 
     async def _is_numeric_field(self, field: Any) -> bool:

@@ -29,6 +29,7 @@ from src.job_manager.linkedin.easy_applier import EasyApplier
 from src.pydantic_models.job_models import Job, JobInfo, JobManagerCache
 from src.telegram.telegram_manager import TelegramReportSender
 from src.utils.browser_utils import (
+    debug_capture,
     find_element_safely,
     find_elements_safely,
     get_clean_text,
@@ -188,6 +189,7 @@ class JobApplier:
 
         except Exception as e:
             logger.error(f"Error parsing job vacancies from page {self.page_num}: {e}")
+            await debug_capture(self.page, "vacancies_parse_error")
             # Return empty list on error to continue processing
             return []
 
@@ -243,6 +245,7 @@ class JobApplier:
                 except Exception:
                     tb_str = traceback.format_exc()
                     logger.error(f"Unknown error on the page: {url}\n{tb_str}")
+                    await debug_capture(self.page, "apply_loop_error")
                     # counter of repeated errors, if too many errors in a row -
                     # exit the program and send a notification
                     if self.error_num == MAX_APPLIES_NUM:
@@ -278,6 +281,7 @@ class JobApplier:
             pause(3, 4)
         except Exception as e:
             logger.error(f"Failed to navigate to job URL: {vacancy['url']}, error: {e}")
+            await debug_capture(self._new_page, "navigate_job_error")
             await self._new_page.close()
             pause()
             self.page = self._original_page
@@ -406,6 +410,7 @@ class JobApplier:
             logger.error(
                 f"Unknown error on the page {job.url} during applying to the vacancy {job.job_title} of the company {job.company_name}\n{tb_str}"
             )
+            await debug_capture(self.page, "easy_apply_error")
             return "Error", str(e)
         return "Success", ""
 
@@ -587,6 +592,7 @@ class JobApplier:
 
         except Exception as e:
             logger.warning(f"Error during job container scrolling: {e}")
+            await debug_capture(self.page, "scroll_jobs_error")
 
     async def _extract_job_url(self, job_element) -> str:
         """Extract job URL from job element using multiple selector strategies (async)"""
@@ -636,6 +642,7 @@ class JobApplier:
 
         except Exception as e:
             logger.warning(f"Could not get detailed job description: {e}")
+            await debug_capture(self.page, "job_description_error")
 
         return job
 

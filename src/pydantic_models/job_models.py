@@ -87,15 +87,17 @@ class Job(BaseModel):
     @field_validator("url", mode="before")
     @classmethod
     def validate_url(cls, v):
-        """Ensure URL is a valid LinkedIn job URL"""
+        """Ensure URL is a valid job posting URL (LinkedIn or Indeed)"""
         if not v:
             return v
         if isinstance(v, str):
             if not v.startswith(("http://", "https://")):
                 v = f"https://{v}"
             parsed = urlparse(v)
-            if "linkedin.com" not in parsed.netloc or "/jobs/view/" not in parsed.path:
-                raise ValueError("URL must be a valid LinkedIn job posting URL")
+            is_linkedin = "linkedin.com" in parsed.netloc and "/jobs/view/" in parsed.path
+            is_indeed = "indeed.com" in parsed.netloc
+            if not (is_linkedin or is_indeed):
+                raise ValueError("URL must be a valid LinkedIn or Indeed job posting URL")
         return v
 
     @field_validator("job_id", mode="before")

@@ -1,5 +1,3 @@
-import time
-import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -7,13 +5,7 @@ from typing import Any, Dict, List, Tuple
 import yaml
 from playwright.sync_api import Page
 
-from config.app_config import (
-    COLLECT_INFO_MODE,
-    MAX_APPLIES_NUM,
-    MINIMUM_WAIT_TIME_SEC,
-    MONKEY_MODE,
-    TEST_MODE,
-)
+from config.app_config import MAX_APPLIES_NUM, TEST_MODE
 from config.constants import (
     ANSWERS_FILE,
     COVER_LETTER_DIR,
@@ -26,13 +18,12 @@ from src.job_manager.indeed.easy_applier import IndeedEasyApplier
 from src.pydantic_models.job_models import Job, JobInfo, JobManagerCache
 from src.telegram.telegram_manager import TelegramReportSender
 from src.utils.browser_utils import (
+    debug_capture,
     find_element_safely,
     find_elements_safely,
-    get_clean_text,
     safe_click,
-    scroll_slowly,
 )
-from src.utils.utils import load_yaml_file, pause, sanitize_text, save_yaml_file, sleep
+from src.utils.utils import load_yaml_file, pause, sanitize_text
 
 search_config = load_yaml_file(SEARCH_CONFIG_FILE)
 logger.info(f"Maximum allowed number of applications: {MAX_APPLIES_NUM}")
@@ -169,6 +160,7 @@ class IndeedJobApplier:
             return cards or []
         except Exception as e:
             logger.warning(f"Could not find job cards: {e}")
+            await debug_capture(self.page, "vacancies_not_found")
             return []
 
     async def apply_job(self, vacancy: Any) -> str:
@@ -180,11 +172,15 @@ class IndeedJobApplier:
 
             already_seen, reason = self._job_is_already_seen(job)
             if already_seen:
-                logger.info(f"Skipping already seen job: {job.title} at {job.company} ({reason})")
+                logger.info(
+                    f"Skipping already seen job: {job.job_title} at {job.company_name} ({reason})"
+                )
                 return "skipped"
 
-            if self.search_component.is_job_blacklisted(job.title, job.company, job.location):
-                logger.info(f"Skipping blacklisted job: {job.title} at {job.company}")
+            if self.search_component.is_job_blacklisted(
+                job.job_title, job.company_name, job.location
+            ):
+                logger.info(f"Skipping blacklisted job: {job.job_title} at {job.company_name}")
                 return "skipped"
 
             result, cover_letter = await self.easy_apply(job)
@@ -193,6 +189,7 @@ class IndeedJobApplier:
 
         except Exception as e:
             logger.error(f"Error in apply_job: {e}", exc_info=True)
+            await debug_capture(self.page, "apply_job_error")
             self.error_num += 1
             return "error"
 
@@ -242,10 +239,10 @@ class IndeedJobApplier:
             )
 
             company_el = await find_element_safely(card, INDEED_COMPANY_SELECTOR, timeout=3000)
-            company = await company_el.text_content() or "" if company_el else ""
+            company = (await company_el.text_content() or "") if company_el else ""
 
             location_el = await find_element_safely(card, INDEED_LOCATION_SELECTOR, timeout=3000)
-            location = await location_el.text_content() or "" if location_el else ""
+            location = (await location_el.text_content() or "") if location_el else ""
 
             easy_apply_badge = await find_element_safely(
                 card, INDEED_EASY_APPLY_BADGE, timeout=2000
@@ -253,16 +250,17 @@ class IndeedJobApplier:
             apply_method = "easy_apply" if easy_apply_badge else "external"
 
             job = Job(
-                title=sanitize_text(title),
-                company=sanitize_text(company),
+                job_title=sanitize_text(title),
+                company_name=sanitize_text(company),
                 location=sanitize_text(location),
-                link=job_url,
+                url=job_url,
                 apply_method=apply_method,
             )
             return job
 
         except Exception as e:
             logger.warning(f"Failed to extract job from card: {e}")
+            await debug_capture(self.page, "extract_job_error")
             return None
 
     async def _dismiss_overlays(self) -> None:
@@ -296,15 +294,16 @@ class IndeedJobApplier:
             return True
         except Exception as e:
             logger.warning(f"Could not navigate to next page: {e}")
+            await debug_capture(self.page, "next_page_error")
             return False
 
     async def _handle_apply_result(self, result: str, job: Job, cover_letter: str) -> None:
         """Save job result to the appropriate YAML file"""
         record = {
-            "title": job.title,
-            "company": job.company,
+            "title": job.job_title,
+            "company": job.company_name,
             "location": job.location,
-            "link": job.link,
+            "link": job.url,
             "date": datetime.now().isoformat(),
         }
         filename_map = {
@@ -328,7 +327,7 @@ class IndeedJobApplier:
             **self.skipped_companies,
             **self.failed_companies,
         }
-        company_key = sanitize_text(job.company)
+        company_key = sanitize_text(job.company_name)
         if self.apply_once_at_company and company_key in all_companies:
             return True, "apply_once_at_company"
         return False, ""

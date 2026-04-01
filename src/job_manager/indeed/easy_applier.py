@@ -8,7 +8,12 @@ from config.logger_config import logger
 from src.job_manager.resume_anonymizer import ResumeAnonymizer
 from src.llm.llm_manager import GPTAnswerer
 from src.pydantic_models.job_models import Job, Question
-from src.utils.browser_utils import find_element_safely, find_elements_safely, get_clean_text
+from src.utils.browser_utils import (
+    debug_capture,
+    find_element_safely,
+    find_elements_safely,
+    get_clean_text,
+)
 from src.utils.utils import load_yaml_file, pause, sanitize_text, save_yaml_file
 
 INDEED_APPLY_BUTTON_SELECTOR = "button#indeedApplyButton, button[data-jk], .ia-IndeedApplyButton"
@@ -58,8 +63,8 @@ class IndeedEasyApplier:
 
     async def apply_to_job(self, job: Job) -> None:
         """Entry point - navigate to job page and apply"""
-        logger.info(f"Navigating to Indeed job: {job.link}")
-        await self.page.goto(job.link, wait_until="domcontentloaded")
+        logger.info(f"Navigating to Indeed job: {job.url}")
+        await self.page.goto(job.url, wait_until="domcontentloaded")
         pause(1, 2)
         await self.job_apply(job)
 
@@ -72,7 +77,7 @@ class IndeedEasyApplier:
         try:
             apply_btn = await self._find_apply_button(job)
             if not apply_btn:
-                logger.warning(f"No apply button found for: {job.title} at {job.company}")
+                logger.warning(f"No apply button found for: {job.job_title} at {job.company_name}")
                 return "skipped", cover_letter
 
             await apply_btn.click()
@@ -88,7 +93,8 @@ class IndeedEasyApplier:
             return ("success" if result else "error"), cover_letter
 
         except Exception as e:
-            logger.error(f"Error applying to Indeed job {job.title}: {e}", exc_info=True)
+            logger.error(f"Error applying to Indeed job {job.job_title}: {e}", exc_info=True)
+            await debug_capture(self.page, "indeed_job_apply_error")
             try:
                 await self._discard_application()
             except Exception:
@@ -101,7 +107,7 @@ class IndeedEasyApplier:
 
     async def _find_apply_button(self, job: Job) -> Any:
         """Locate the Indeed apply button on the job detail page"""
-        await self.page.goto(job.link, wait_until="domcontentloaded")
+        await self.page.goto(job.url, wait_until="domcontentloaded")
         pause(1, 2)
 
         for selector in INDEED_APPLY_BUTTON_SELECTOR.split(", "):
@@ -159,6 +165,7 @@ class IndeedEasyApplier:
                 await self._process_form_section(section, job)
         except Exception as e:
             logger.error(f"Error filling form step: {e}", exc_info=True)
+            await debug_capture(self.page, "indeed_fill_form_error")
 
     async def _process_form_section(self, section: Any, job: Job) -> None:
         """Fill a single form section based on its detected type"""
@@ -189,6 +196,7 @@ class IndeedEasyApplier:
 
         except Exception as e:
             logger.warning(f"Error processing form section: {e}")
+            await debug_capture(self.page, "indeed_form_section_error")
 
     async def _handle_radio_section(self, section: Any, job: Job) -> None:
         """Select appropriate radio option using LLM"""
@@ -208,9 +216,7 @@ class IndeedEasyApplier:
                 else:
                     labels.append("")
             options_str = ", ".join(labels)
-            answer = await self._get_llm_answer(
-                f"{question_text}. Options: {options_str}", job
-            )
+            answer = await self._get_llm_answer(f"{question_text}. Options: {options_str}", job)
             for radio, label in zip(radios, labels):
                 if answer.lower() in label.lower():
                     await radio.click()
@@ -220,6 +226,7 @@ class IndeedEasyApplier:
             await radios[0].click()
         except Exception as e:
             logger.warning(f"Error handling radio section: {e}")
+            await debug_capture(self.page, "indeed_radio_error")
 
     async def _handle_dropdown_section(self, section: Any, select: Any, job: Job) -> None:
         """Select appropriate dropdown option using LLM"""
@@ -228,9 +235,7 @@ class IndeedEasyApplier:
             options = await select.query_selector_all("option")
             option_texts = [await get_clean_text(o) for o in options]
             options_str = ", ".join(option_texts)
-            answer = await self._get_llm_answer(
-                f"{question_text}. Options: {options_str}", job
-            )
+            answer = await self._get_llm_answer(f"{question_text}. Options: {options_str}", job)
             for opt_text in option_texts:
                 if answer.lower() in opt_text.lower():
                     await select.select_option(label=opt_text)
@@ -241,6 +246,7 @@ class IndeedEasyApplier:
                 await select.select_option(label=option_texts[1])
         except Exception as e:
             logger.warning(f"Error handling dropdown section: {e}")
+            await debug_capture(self.page, "indeed_dropdown_error")
 
     async def _get_llm_answer(self, question: str, job: Job) -> str:
         """Get LLM answer for a form question"""
@@ -266,6 +272,7 @@ class IndeedEasyApplier:
             return True
         except Exception as e:
             logger.error(f"Error submitting Indeed application: {e}", exc_info=True)
+            await debug_capture(self.page, "indeed_submit_error")
             return False
 
     async def _discard_application(self) -> None:
@@ -284,6 +291,7 @@ class IndeedEasyApplier:
                     return
         except Exception as e:
             logger.warning(f"Could not discard Indeed application: {e}")
+            await debug_capture(self.page, "indeed_discard_error")
 
     def _load_questions(self) -> List[Question]:
         """Load previously answered questions from YAML cache"""
