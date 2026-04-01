@@ -5,7 +5,7 @@ from playwright.sync_api import Page
 
 from config.logger_config import logger
 from src.utils.browser_utils import find_element_safely, safe_click, safe_fill
-from src.utils.utils import pause
+from src.utils.utils import async_pause
 
 
 class LinkedInAuthenticator:
@@ -54,18 +54,13 @@ class LinkedInAuthenticator:
                 logger.warning("Redirected to login page, user not authorized")
                 return False
 
-            # Additional check - look for the main nav bar (reliable across LinkedIn redesigns)
-            nav_selectors = [
-                "nav[aria-label='Main']",
-                "button[aria-label*='Home']",
-                ".feed-shared-update-v2",
-                "[data-view-name='feed-full-content']",
-            ]
-            for selector in nav_selectors:
-                element = await find_element_safely(self.page, selector, timeout=5000)
-                if element:
-                    logger.info(f"Logged-in indicator found ({selector}), user is logged in")
-                    return True
+            # Additional check - look for feed content
+            feed_element = await find_element_safely(
+                self.page, ".feed-shared-update-v2", timeout=30000
+            )
+            if feed_element:
+                logger.info("Feed content found, user is logged in")
+                return True
 
             logger.warning("Could not determine authorization status, assuming not logged in")
             return False
@@ -80,7 +75,7 @@ class LinkedInAuthenticator:
 
         try:
             await self.page.goto("https://www.linkedin.com/login")
-            pause(1, 2)
+            await async_pause(1, 2)
             return await self.enter_credentials()
 
         except Exception as e:
@@ -108,7 +103,7 @@ class LinkedInAuthenticator:
                 return False
             logger.info("Password entered")
 
-            pause(1, 2)
+            await async_pause(1, 2)
 
             # Click login button with multiple selectors
             login_selectors = [
@@ -126,7 +121,7 @@ class LinkedInAuthenticator:
                 return False
 
             # Wait for login to complete
-            pause(3, 5)
+            await async_pause(3, 5)
 
             # Check login success
             if await self.check_login_success():
@@ -203,11 +198,11 @@ class LinkedInAuthenticator:
                 # Check for redirect or checkpoint pages
                 if "/checkpoint/challenge" in current_url or "/challenge" in current_url:
                     logger.warning(
-                        "LinkedIn security checkpoint detected - waiting 60s for resolution before next try"
+                        "LinkedIn security checkpoint detected - waiting 60s for resolution"
                     )
-                    pause(60, 60)
+                    await async_pause(60, 60)
 
-                pause(1, 2)
+                await async_pause(1, 2)
 
             # Final attempt - check if we can detect logged-in state
             logger.info("Login timeout reached")
