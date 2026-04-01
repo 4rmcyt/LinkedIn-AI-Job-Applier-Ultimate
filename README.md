@@ -162,8 +162,7 @@ This project enhances the original codebase with several powerful new features:
     linkedin_password="your_linkedin_password"
 
     # Your Indeed credentials (used when JOB_SITE="indeed" in app_config.py)
-    # indeed_email="your_indeed_email@example.com"
-    # indeed_password="your_indeed_password"
+    indeed_email="your_indeed_email@example.com"
 
     # Your LLM API Key (e.g., Gemini)
     llm_api_key="your_llm_api_key"

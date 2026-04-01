@@ -29,7 +29,6 @@ from src.utils.browser_utils import (
     find_element_safely,
     find_elements_safely,
     get_clean_text,
-    get_element_text,
     safe_click,
     scroll_slowly,
 )
@@ -45,7 +44,9 @@ INDEED_JOB_TITLE_SELECTOR = "h2.jobTitle a, [data-testid='jobTitle'] a"
 INDEED_COMPANY_SELECTOR = "[data-testid='company-name'], .companyName"
 INDEED_LOCATION_SELECTOR = "[data-testid='text-location'], .companyLocation"
 INDEED_EASY_APPLY_BADGE = "span.iaLabel, [data-testid='ia-badge']"
-INDEED_NEXT_PAGE_SELECTOR = "a[data-testid='pagination-page-next'], nav[role='navigation'] a[aria-label='Next Page']"
+INDEED_NEXT_PAGE_SELECTOR = (
+    "a[data-testid='pagination-page-next'], nav[role='navigation'] a[aria-label='Next Page']"
+)
 
 
 class IndeedJobApplier:
@@ -84,9 +85,7 @@ class IndeedJobApplier:
         logger.info("Setting IndeedJobApplier parameters")
         self.max_applies_num = MAX_APPLIES_NUM
         self.apply_once_at_company = parameters.get("apply_once_at_company", True)
-        self.job_blacklist = [
-            sanitize_text(j) for j in parameters.get("job_blacklist", [])
-        ]
+        self.job_blacklist = [sanitize_text(j) for j in parameters.get("job_blacklist", [])]
         self.success_companies = self._load_companies_from_yaml("success.yaml")
         self.skipped_companies = self._load_companies_from_yaml("skipped.yaml")
         self.failed_companies = self._load_companies_from_yaml("failed.yaml")
@@ -234,7 +233,7 @@ class IndeedJobApplier:
             title_el = await find_element_safely(card, INDEED_JOB_TITLE_SELECTOR, timeout=3000)
             if not title_el:
                 return None
-            title = await get_element_text(title_el)
+            title = await title_el.text_content() or ""
             job_url_path = await title_el.get_attribute("href") or ""
             job_url = (
                 job_url_path
@@ -243,10 +242,10 @@ class IndeedJobApplier:
             )
 
             company_el = await find_element_safely(card, INDEED_COMPANY_SELECTOR, timeout=3000)
-            company = await get_element_text(company_el) if company_el else ""
+            company = await company_el.text_content() or "" if company_el else ""
 
             location_el = await find_element_safely(card, INDEED_LOCATION_SELECTOR, timeout=3000)
-            location = await get_element_text(location_el) if location_el else ""
+            location = await location_el.text_content() or "" if location_el else ""
 
             easy_apply_badge = await find_element_safely(
                 card, INDEED_EASY_APPLY_BADGE, timeout=2000
@@ -266,6 +265,19 @@ class IndeedJobApplier:
             logger.warning(f"Failed to extract job from card: {e}")
             return None
 
+    async def _dismiss_overlays(self) -> None:
+        """Dismiss Indeed overlay portals that intercept clicks"""
+        for selector in ["ifl-portal", "div.gnav-hovbc7"]:
+            try:
+                count = await self.page.locator(selector).count()
+                if count > 0:
+                    await self.page.evaluate(
+                        f"document.querySelectorAll('{selector}').forEach(el => el.remove())"
+                    )
+                    logger.debug(f"Dismissed {count} overlay(s) matching '{selector}'")
+            except Exception:
+                pass
+
     async def _go_to_next_page(self) -> bool:
         """Click next page button and return True if successful"""
         try:
@@ -273,7 +285,11 @@ class IndeedJobApplier:
             if not next_btn:
                 logger.info("No next page button found - reached last page")
                 return False
-            await safe_click(self.page, INDEED_NEXT_PAGE_SELECTOR, timeout=5000)
+            await self._dismiss_overlays()
+            clicked = await safe_click(self.page, INDEED_NEXT_PAGE_SELECTOR, timeout=5000)
+            if not clicked:
+                logger.debug("Normal click failed, retrying with force")
+                await next_btn.click(force=True, timeout=5000)
             await self.page.wait_for_load_state("domcontentloaded")
             pause(1, 2)
             logger.info(f"Moved to page {self.page_num + 2}")

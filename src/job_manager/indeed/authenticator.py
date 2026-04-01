@@ -20,7 +20,7 @@ class IndeedAuthenticator:
 
         logger.info("Indeed authenticator initialized")
 
-    def set_parameters(self, email: str, password: str) -> None:
+    def set_parameters(self, email: str, password: str = None) -> None:
         logger.info("Setting Indeed Authenticator parameters")
         self.email = email
         self.password = password
@@ -76,13 +76,13 @@ class IndeedAuthenticator:
             return False
 
     async def enter_credentials(self) -> bool:
-        """Enter user credentials on Indeed login form"""
-        logger.info("Entering user credentials in Indeed...")
+        """Enter email on Indeed login form and wait for manual login completion"""
+        logger.info("Entering email in Indeed login form...")
         try:
             if not await safe_fill(self.page, "input[type='email']", self.email):
                 logger.error("Failed to fill email field")
                 return False
-            logger.info("Email entered")
+            logger.info("Email entered. Please complete login manually within 60 seconds...")
 
             continue_selectors = [
                 "button[type='submit']",
@@ -91,26 +91,8 @@ class IndeedAuthenticator:
             for selector in continue_selectors:
                 if await safe_click(self.page, selector, timeout=10000):
                     break
-            else:
-                logger.error("Could not click continue/submit button after email")
-                return False
 
-            pause(1, 2)
-
-            if not await safe_fill(self.page, "input[type='password']", self.password):
-                logger.error("Failed to fill password field")
-                return False
-            logger.info("Password entered")
-
-            for selector in continue_selectors:
-                if await safe_click(self.page, selector, timeout=10000):
-                    logger.info(f"Login button clicked using selector: {selector}")
-                    break
-            else:
-                logger.error("Could not find or click login button")
-                return False
-
-            pause(3, 5)
+            pause(60, 60)
 
             return await self.check_login_success()
 

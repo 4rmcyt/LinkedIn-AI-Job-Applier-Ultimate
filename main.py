@@ -86,7 +86,7 @@ class ConfigValidator:
         secrets = {**dotenv.dotenv_values(".env")}
         try:
             if JOB_SITE == "indeed":
-                required_keys = ["indeed_email", "indeed_password"]
+                required_keys = ["indeed_email"]
             else:
                 required_keys = ["linkedin_email", "linkedin_password"]
 
@@ -205,8 +205,8 @@ async def create_and_run_bot(
     try:
         # Resolve credentials based on active site
         if JOB_SITE == "indeed":
-            site_email = secrets.get("indeed_email") or ""
-            site_password = secrets.get("indeed_password") or ""
+            site_email = secrets["indeed_email"]
+            site_password = None
         else:
             site_email = secrets["linkedin_email"]
             site_password = secrets["linkedin_password"]
