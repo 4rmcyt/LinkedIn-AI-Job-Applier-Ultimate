@@ -1,5 +1,3 @@
-import os
-
 # Dummy personal data for anonymization (male)
 DUMMY_PERSONAL_INFO_MALE = {
     "name": "Zorquill Thalaorix",
@@ -37,7 +35,6 @@ RESUME_DIR = "data/resumes"
 COVER_LETTER_DIR = "data/cover_letters"
 BROWSER_STORAGE_STATE = "browser_session/browser_state.json"
 CHROME_PROFILE_DIR = "browser_session/chrome_profile"
-# CHROME_PROFILE_DIR = os.path.expanduser("~/.config/google-chrome")
 APP_CONFIG_FILE = "config/app_config.yaml"
 
 # Default cost per token fallback when model is not in PRICE_DICT

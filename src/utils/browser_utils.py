@@ -4,13 +4,13 @@ import os
 import random
 import re
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
-from playwright.async_api import BrowserContext, Page, async_playwright
-from playwright_stealth import Stealth
+from camoufox.async_api import AsyncCamoufox
+from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
 from config.app_config import DEBUG_MODE, HEADLESS_MODE
-from config.constants import BROWSER_STORAGE_STATE, CHROME_PROFILE_DIR, DEBUG_DIR
+from config.constants import BROWSER_STORAGE_STATE, DEBUG_DIR
 from config.logger_config import logger
 
 
@@ -53,7 +53,7 @@ _USER_AGENTS = [
     # "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
     # "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
     # "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.7680.177-1 Safari/537.36",
 ]
 
 _VIEWPORTS = [
@@ -65,89 +65,37 @@ _VIEWPORTS = [
 ]
 
 
-def get_playwright_browser_options() -> Dict[str, Any]:
-    """Get Playwright browser launch options with human-like settings"""
-    logger.info("Configuring Playwright browser options")
-    ensure_playwright_profile()
-
-    viewport = random.choice(_VIEWPORTS)
-    user_agent = random.choice(_USER_AGENTS)
-
-    # These flags are only safe in Docker/headless — real desktop Chrome never uses them
-    # and Cloudflare detects their presence.
-    headless_only_args = [
-        "--no-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-    ]
-
-    args = [
-        "--window-position=0,0",
-        f"--window-size={viewport['width']},{viewport['height']}",
-        "--disable-background-timer-throttling",
-        "--disable-backgrounding-occluded-windows",
-        "--disable-translate",
-        "--disable-popup-blocking",
-        "--no-first-run",
-        "--no-default-browser-check",
-    ]
-    if HEADLESS_MODE:
-        args.extend(headless_only_args)
-
-    launch_options = {
-        "headless": HEADLESS_MODE,
-        "channel": "chrome",
-        "args": args,
-        "ignore_default_args": ["--enable-automation", "--enable-logging"],
-        "chromium_sandbox": not HEADLESS_MODE,
-    }
-
-    # Context options for session persistence and anti-detection
-    context_options = {
-        "viewport": viewport,
-        "screen": viewport,
-        "user_agent": user_agent,
-        "locale": "en-US",
-        "timezone_id": "America/New_York",
-        "permissions": ["notifications"],
-        "extra_http_headers": {
-            "Accept-Language": "en-US,en;q=0.9",
-        },
-        "storage_state": BROWSER_STORAGE_STATE if os.path.exists(BROWSER_STORAGE_STATE) else None,
-    }
-
-    return {"launch_options": launch_options, "context_options": context_options}
-
-
-async def create_playwright_browser() -> tuple[None, BrowserContext, Page]:
+async def create_playwright_browser() -> tuple[Browser, BrowserContext, Page]:
     """Create Playwright browser, context and page asynchronously (PRIMARY METHOD)
 
-    Uses launch_persistent_context with a dedicated Chrome profile so that
-    Cloudflare trust cookies and browser fingerprint are preserved across runs.
-    On first run, browse to the target site manually to establish trust.
-    browser is always None — call context.close() to shut down the browser process.
+    Uses camoufox (Firefox-based) which patches hundreds of browser fingerprint
+    signals to bypass Cloudflare and other bot detection systems.
+    Session cookies are persisted via browser_state.json.
     """
     logger.info("Creating Playwright browser (async)")
 
     try:
-        playwright = await async_playwright().start()
-        options = get_playwright_browser_options()
+        ensure_playwright_profile()
+        viewport = random.choice(_VIEWPORTS)
+        storage_state = BROWSER_STORAGE_STATE if os.path.exists(BROWSER_STORAGE_STATE) else None
 
-        profile_dir = os.path.abspath(CHROME_PROFILE_DIR)
-        os.makedirs(profile_dir, exist_ok=True)
+        browser = await AsyncCamoufox(
+            headless=HEADLESS_MODE,
+            humanize=True,
+            os="linux",
+            locale="en-US",
+            geoip=True,
+        ).__aenter__()
 
-        # launch_persistent_context takes launch + context options merged together;
-        # storage_state is redundant since the profile already persists cookies.
-        context_opts = {k: v for k, v in options["context_options"].items() if k != "storage_state"}
-
-        context = await playwright.chromium.launch_persistent_context(
-            profile_dir,
-            **options["launch_options"],
-            **context_opts,
+        context = await browser.new_context(
+            viewport=viewport,
+            screen=viewport,
+            storage_state=storage_state,
+            permissions=["notifications"],
+            extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
         )
 
         page = await context.new_page()
-        await Stealth().apply_stealth_async(page)
 
         if DEBUG_MODE:
             await context.tracing.start(screenshots=True, snapshots=True, sources=True)
@@ -156,7 +104,7 @@ async def create_playwright_browser() -> tuple[None, BrowserContext, Page]:
             )
 
         logger.info("Playwright browser created successfully")
-        return None, context, page
+        return browser, context, page
 
     except Exception as e:
         logger.error(f"Failed to create Playwright browser: {e}")
