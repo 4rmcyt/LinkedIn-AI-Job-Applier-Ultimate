@@ -29,6 +29,7 @@ dependencies = [
     "telethon==1.39.0",
     "pynput==1.8.1",
     "python-telegram-bot==21.9",
+    "playwright-stealth==2.0.2",
 ]
 
 [project.optional-dependencies]

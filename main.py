@@ -299,8 +299,11 @@ async def create_and_run_bot(
         try:
             await save_browser_session(context)
             await stop_tracing(context)
-            # Close Playwright browser
-            await browser.close()
+            # Close Playwright browser (browser is None when using persistent context)
+            if browser is not None:
+                await browser.close()
+            else:
+                await context.close()
             logger.info("Playwright browser closed")
 
         except Exception as e:

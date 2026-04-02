@@ -34,6 +34,7 @@ LOG_DIR = "logs"
 RESUME_DIR = "data/resumes"
 COVER_LETTER_DIR = "data/cover_letters"
 BROWSER_STORAGE_STATE = "browser_session/browser_state.json"
+CHROME_PROFILE_DIR = "browser_session/chrome_profile"
 APP_CONFIG_FILE = "config/app_config.yaml"
 
 # Default cost per token fallback when model is not in PRICE_DICT

@@ -6,10 +6,11 @@ import re
 import time
 from typing import Any, Dict, List, Optional
 
-from playwright.async_api import Browser, BrowserContext, Page, async_playwright
+from playwright.async_api import BrowserContext, Page, async_playwright
+from playwright_stealth import Stealth
 
 from config.app_config import DEBUG_MODE, HEADLESS_MODE
-from config.constants import BROWSER_STORAGE_STATE, DEBUG_DIR
+from config.constants import BROWSER_STORAGE_STATE, CHROME_PROFILE_DIR, DEBUG_DIR
 from config.logger_config import logger
 
 
@@ -73,6 +74,7 @@ def get_playwright_browser_options() -> Dict[str, Any]:
 
     launch_options = {
         "headless": HEADLESS_MODE,
+        "channel": "chrome",
         "args": [
             "--window-position=0,0",
             f"--window-size={viewport['width']},{viewport['height']}",
@@ -108,18 +110,35 @@ def get_playwright_browser_options() -> Dict[str, Any]:
     return {"launch_options": launch_options, "context_options": context_options}
 
 
-async def create_playwright_browser() -> tuple[Browser, BrowserContext, Page]:
-    """Create Playwright browser, context and page asynchronously (PRIMARY METHOD)"""
+async def create_playwright_browser() -> tuple[None, BrowserContext, Page]:
+    """Create Playwright browser, context and page asynchronously (PRIMARY METHOD)
+
+    Uses launch_persistent_context with a dedicated Chrome profile so that
+    Cloudflare trust cookies and browser fingerprint are preserved across runs.
+    On first run, browse to the target site manually to establish trust.
+    browser is always None — call context.close() to shut down the browser process.
+    """
     logger.info("Creating Playwright browser (async)")
 
     try:
         playwright = await async_playwright().start()
         options = get_playwright_browser_options()
 
-        browser = await playwright.chromium.launch(**options["launch_options"])
-        context = await browser.new_context(**options["context_options"])
+        profile_dir = os.path.abspath(CHROME_PROFILE_DIR)
+        os.makedirs(profile_dir, exist_ok=True)
+
+        # launch_persistent_context takes launch + context options merged together;
+        # storage_state is redundant since the profile already persists cookies.
+        context_opts = {k: v for k, v in options["context_options"].items() if k != "storage_state"}
+
+        context = await playwright.chromium.launch_persistent_context(
+            profile_dir,
+            **options["launch_options"],
+            **context_opts,
+        )
 
         page = await context.new_page()
+        await Stealth().apply_stealth_async(page)
 
         if DEBUG_MODE:
             await context.tracing.start(screenshots=True, snapshots=True, sources=True)
@@ -128,7 +147,7 @@ async def create_playwright_browser() -> tuple[Browser, BrowserContext, Page]:
             )
 
         logger.info("Playwright browser created successfully")
-        return browser, context, page
+        return None, context, page
 
     except Exception as e:
         logger.error(f"Failed to create Playwright browser: {e}")
