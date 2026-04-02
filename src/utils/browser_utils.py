@@ -47,20 +47,21 @@ def ensure_playwright_profile() -> str:
 
 
 _USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    # "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    # "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    # "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+    # "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    # "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    # "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
 ]
 
 _VIEWPORTS = [
     {"width": 1920, "height": 1080},
-    {"width": 1920, "height": 1080},
-    {"width": 1920, "height": 1080},
-    {"width": 1680, "height": 1050},
-    {"width": 1440, "height": 900},
+    # {"width": 1920, "height": 1080},
+    # {"width": 1920, "height": 1080},
+    # {"width": 1680, "height": 1050},
+    # {"width": 1440, "height": 900},
 ]
 
 
@@ -72,25 +73,33 @@ def get_playwright_browser_options() -> Dict[str, Any]:
     viewport = random.choice(_VIEWPORTS)
     user_agent = random.choice(_USER_AGENTS)
 
+    # These flags are only safe in Docker/headless — real desktop Chrome never uses them
+    # and Cloudflare detects their presence.
+    headless_only_args = [
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+    ]
+
+    args = [
+        "--window-position=0,0",
+        f"--window-size={viewport['width']},{viewport['height']}",
+        "--disable-background-timer-throttling",
+        "--disable-backgrounding-occluded-windows",
+        "--disable-translate",
+        "--disable-popup-blocking",
+        "--no-first-run",
+        "--no-default-browser-check",
+    ]
+    if HEADLESS_MODE:
+        args.extend(headless_only_args)
+
     launch_options = {
         "headless": HEADLESS_MODE,
         "channel": "chrome",
-        "args": [
-            "--window-position=0,0",
-            f"--window-size={viewport['width']},{viewport['height']}",
-            "--no-sandbox",
-            "--disable-dev-shm-usage",
-            "--ignore-certificate-errors",
-            "--disable-gpu",
-            "--disable-background-timer-throttling",
-            "--disable-backgrounding-occluded-windows",
-            "--disable-translate",
-            "--disable-popup-blocking",
-            "--no-first-run",
-            "--no-default-browser-check",
-            "--disable-blink-features=AutomationControlled",
-        ],
+        "args": args,
         "ignore_default_args": ["--enable-automation", "--enable-logging"],
+        "chromium_sandbox": not HEADLESS_MODE,
     }
 
     # Context options for session persistence and anti-detection
