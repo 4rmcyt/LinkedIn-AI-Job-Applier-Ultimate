@@ -14,7 +14,7 @@ from src.utils.browser_utils import (
     find_elements_safely,
     get_clean_text,
 )
-from src.utils.utils import load_yaml_file, pause, sanitize_text, save_yaml_file
+from src.utils.utils import async_pause, load_yaml_file, sanitize_text, save_yaml_file
 
 INDEED_APPLY_BUTTON_SELECTOR = "button#indeedApplyButton, button[data-jk], .ia-IndeedApplyButton"
 INDEED_APPLY_MODAL_SELECTOR = "div.ia-BasePage, div[data-testid='ia-container']"
@@ -65,7 +65,7 @@ class IndeedEasyApplier:
         """Entry point - navigate to job page and apply"""
         logger.info(f"Navigating to Indeed job: {job.url}")
         await self.page.goto(job.url, wait_until="domcontentloaded")
-        pause(1, 2)
+        await async_pause(1, 2)
         await self.job_apply(job)
 
     async def job_apply(self, job: Job) -> Tuple[str, str]:
@@ -81,7 +81,7 @@ class IndeedEasyApplier:
                 return "skipped", cover_letter
 
             await apply_btn.click()
-            pause(1, 2)
+            await async_pause(1, 2)
 
             if self.test_mode:
                 logger.info("TEST_MODE: skipping form submission")
@@ -108,7 +108,7 @@ class IndeedEasyApplier:
     async def _find_apply_button(self, job: Job) -> Any:
         """Locate the Indeed apply button on the job detail page"""
         await self.page.goto(job.url, wait_until="domcontentloaded")
-        pause(1, 2)
+        await async_pause(1, 2)
 
         for selector in INDEED_APPLY_BUTTON_SELECTOR.split(", "):
             btn = await find_element_safely(self.page, selector.strip(), timeout=5000)
@@ -150,7 +150,7 @@ class IndeedEasyApplier:
                 break
 
             await next_btn.click()
-            pause(1, 2)
+            await async_pause(1, 2)
 
         return cover_letter
 
@@ -267,7 +267,7 @@ class IndeedEasyApplier:
                 logger.error("Submit button not found")
                 return False
             await submit_btn.click()
-            pause(2, 4)
+            await async_pause(2, 4)
             logger.info("Application submitted on Indeed")
             return True
         except Exception as e:

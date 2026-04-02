@@ -22,9 +22,9 @@ from src.utils.browser_utils import (
 )
 from src.utils.utils import (
     ConfigError,
+    async_pause,
     get_first_pdf_file,
     load_yaml_file,
-    pause,
     sanitize_text,
     save_yaml_file,
 )
@@ -77,7 +77,7 @@ class EasyApplier:
             attempts += 1
             is_redirected = True
             await self.page.goto(job.url)
-            pause(2, 3)
+            await async_pause(2, 3)
             current_url = self.page.url
 
         if "linkedin.com/premium" in current_url:
@@ -128,10 +128,10 @@ class EasyApplier:
                         "No clickable 'Easy Apply' button found, maybe you already applied to this job",
                     )
                 logger.debug("'Easy Apply' button clicked successfully")
-                pause()
+                await async_pause()
                 # Click 'Continue Applying' button if it appears
                 await self._click_continue_applying_button()
-                pause()
+                await async_pause()
                 # Check for premium redirect
                 if not await self.check_for_premium_redirect(self.current_job):
                     break
@@ -139,7 +139,7 @@ class EasyApplier:
                     logger.debug("Redirected to premium page, trying again")
 
             logger.info("Filling out application form")
-            pause(2, 3)
+            await async_pause(2, 3)
             await self._fill_application_form(job)
             logger.info(f"Successfully applied to job: {job.job_title}")
             return "Success", ""
@@ -254,7 +254,7 @@ class EasyApplier:
             if attempt == 0:
                 logger.debug("Refreshing page to retry finding 'Easy Apply' button")
                 await self.page.reload()
-                pause(3, 5)
+                await async_pause(3, 5)
             attempt += 1
 
         page_url = self.page.url
@@ -321,7 +321,7 @@ class EasyApplier:
         if "submit application" in button_text:
             logger.debug("Submit button found, submitting application")
             await self._unfollow_company()
-            pause()
+            await async_pause()
             if self.test_mode:
                 logger.debug("Test mode is enabled, skipping application form submission")
                 await self._discard_application()
@@ -348,23 +348,23 @@ class EasyApplier:
     async def _check_and_fix_errors(self, next_button: Any) -> bool:
         """Check for errors in the form and try to fix them (async)"""
         logger.info("Checking for errors in the form and trying to fix them")
-        pause(1, 2)
+        await async_pause(1, 2)
         await next_button.click(timeout=1000)
-        pause(2, 3)
+        await async_pause(2, 3)
         attempt = 0
         while attempt < 3:
             error_texts = await self._find_all_form_errors()
             if len(error_texts) > 0:
                 logger.info(f"Found {len(error_texts)} errors")
                 await self._fill_textbox_question_errors()
-                pause(1, 2)
+                await async_pause(1, 2)
                 next_button, _ = await self._find_next_or_submit_button()
                 try:
                     await next_button.click(timeout=1000)
                 except Exception as e:
                     logger.warning(f"Failed to click next button: {e}")
                     await debug_capture(self.page, "next_button_click_error")
-                pause(2, 3)
+                await async_pause(2, 3)
             else:
                 return True
             attempt += 1
@@ -383,13 +383,13 @@ class EasyApplier:
             )
             if dismiss:
                 await dismiss.click(timeout=1000)
-                pause(2, 3)
+                await async_pause(2, 3)
             confirm_buttons = self.page.locator(
                 "xpath=//*[contains(@class, 'artdeco-modal__confirm-dialog-btn')]"
             )
             if await confirm_buttons.count() > 0:
                 await confirm_buttons.first.click(timeout=1000)
-                pause(2, 3)
+                await async_pause(2, 3)
         except Exception as e:
             logger.warning(f"Failed to discard application: {e}")
             await debug_capture(self.page, "discard_application_error")
@@ -403,13 +403,13 @@ class EasyApplier:
             )
             if dismiss:
                 await dismiss.click(timeout=1000)
-                pause(2, 3)
+                await async_pause(2, 3)
             confirm_buttons = self.page.locator(
                 "xpath=//*[contains(@class, 'artdeco-modal__confirm-dialog-btn')]"
             )
             if await confirm_buttons.count() > 1:
                 await confirm_buttons.nth(1).click(timeout=1000)
-                pause(2, 3)
+                await async_pause(2, 3)
         except Exception as e:
             logger.error(f"Failed to save application process: {e}")
             await debug_capture(self.page, "save_application_error")
@@ -613,7 +613,7 @@ class EasyApplier:
                         logger.info(
                             f"Resume uploaded from path: {self.ready_made_resume_path.resolve()}"
                         )
-                        pause(2, 3)
+                        await async_pause(2, 3)
                     else:
                         await self._create_and_upload_resume(upload_element, job)
                 elif "cover" in container_text:
@@ -704,7 +704,7 @@ class EasyApplier:
                             f"Rate limit exceeded, waiting {wait_time} seconds before retrying..."
                         )
 
-                    pause(wait_time, wait_time + 1)
+                    await async_pause(wait_time, wait_time + 1)
                 else:
                     logger.error(f"HTTP error: {e}")
                     raise
@@ -715,7 +715,7 @@ class EasyApplier:
                 logger.error(f"Traceback: {tb_str}")
                 if "RateLimitError" in str(e):
                     logger.warning("Rate limit error encountered, retrying...")
-                    pause(20, 40)
+                    await async_pause(20, 40)
                 else:
                     raise
 
@@ -738,7 +738,7 @@ class EasyApplier:
         try:
             logger.debug(f"Uploading resume from path: {file_path_pdf}")
             await element.set_input_files(os.path.abspath(file_path_pdf))
-            pause(1, 2)
+            await async_pause(1, 2)
             logger.debug(f"Resume created and uploaded successfully: {file_path_pdf}")
         except Exception:
             tb_str = traceback.format_exc()
@@ -838,7 +838,7 @@ class EasyApplier:
         try:
             logger.info(f"Uploading cover letter from path: {file_path_pdf}")
             await element.set_input_files(os.path.abspath(file_path_pdf))
-            pause(1, 2)
+            await async_pause(1, 2)
             logger.info(f"Cover letter created and uploaded successfully: {file_path_pdf}")
         except Exception:
             tb_str = traceback.format_exc()
@@ -1308,7 +1308,7 @@ class EasyApplier:
 
     async def _process_autocomplete_suggestions(self, text_field: Any) -> None:
         """Handle autocomplete suggestions if they appear (async)"""
-        pause(1, 2)
+        await async_pause(1, 2)
         try:
             # Check if autocomplete suggestions are visible
             suggestions = self.page.locator(".basic-typeahead__selectable")
@@ -1316,7 +1316,7 @@ class EasyApplier:
                 logger.debug("Autocomplete suggestions detected, selecting first option")
                 try:
                     await self.page.keyboard.press("ArrowDown")
-                    pause()
+                    await async_pause()
                     await self.page.keyboard.press("Enter")
                 except Exception:
                     pass
@@ -1925,7 +1925,7 @@ if __name__ == "__main__":
             # Navigate to job page
             logger.info(f"Navigating to job page: {job_url}")
             await page.goto(job_url)
-            pause(3, 5)
+            await async_pause(3, 5)
 
             # Test the apply_to_job method
             logger.info("Testing EasyApplier.apply_to_job method...")
@@ -1947,7 +1947,7 @@ if __name__ == "__main__":
             logger.info(
                 "Test completed. Browser will remain open for 5 minutes for manual inspection..."
             )
-            pause(300, 300)
+            await async_pause(300, 300)
             try:
                 await save_browser_session(context)
             except Exception:

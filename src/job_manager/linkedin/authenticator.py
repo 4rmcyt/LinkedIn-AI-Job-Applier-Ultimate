@@ -138,7 +138,6 @@ class LinkedInAuthenticator:
     async def check_login_success(self) -> bool:
         """Check login success with improved detection (async)"""
         try:
-            await self.page.goto("https://www.linkedin.com/company/challenge-day-app/")
             # Wait up to 30 seconds for login process to complete
             for attempt in range(30):
                 current_url = self.page.url

@@ -23,7 +23,7 @@ from src.utils.browser_utils import (
     find_elements_safely,
     safe_click,
 )
-from src.utils.utils import load_yaml_file, pause, sanitize_text
+from src.utils.utils import async_pause, load_yaml_file, sanitize_text
 
 search_config = load_yaml_file(SEARCH_CONFIG_FILE)
 logger.info(f"Maximum allowed number of applications: {MAX_APPLIES_NUM}")
@@ -123,7 +123,7 @@ class IndeedJobApplier:
 
             self.page_num = 0
             await self.page.goto(url, wait_until="domcontentloaded")
-            pause(1, 2)
+            await async_pause(1, 2)
 
             while True:
                 if self.applies_num >= self.max_applies_num:
@@ -258,7 +258,7 @@ class IndeedJobApplier:
             else:
                 # Click the card to open detail panel and check for apply button
                 await title_el.click()
-                pause(0.5, 1)
+                await async_pause(0.5, 1)
                 apply_button = await find_element_safely(
                     self.page, INDEED_APPLY_BUTTON, timeout=3000
                 )
@@ -304,7 +304,7 @@ class IndeedJobApplier:
                 logger.debug("Normal click failed, retrying with force")
                 await next_btn.click(force=True, timeout=5000)
             await self.page.wait_for_load_state("domcontentloaded")
-            pause(1, 2)
+            await async_pause(1, 2)
             logger.info(f"Moved to page {self.page_num + 2}")
             return True
         except Exception as e:

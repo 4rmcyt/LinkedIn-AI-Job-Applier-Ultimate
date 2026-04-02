@@ -4,7 +4,7 @@ from playwright.sync_api import Page
 
 from config.logger_config import logger
 from src.utils.browser_utils import find_element_safely, safe_click, safe_fill
-from src.utils.utils import pause
+from src.utils.utils import async_pause
 
 
 class IndeedAuthenticator:
@@ -69,7 +69,7 @@ class IndeedAuthenticator:
         logger.info("Navigating to Indeed login page...")
         try:
             await self.page.goto(self.INDEED_LOGIN_URL)
-            pause(1, 2)
+            await async_pause(1, 2)
             return await self.enter_credentials()
         except Exception as e:
             logger.error(f"Error accessing Indeed login: {e}")
@@ -92,7 +92,7 @@ class IndeedAuthenticator:
                 if await safe_click(self.page, selector, timeout=10000):
                     break
 
-            pause(60, 60)
+            await async_pause(60, 60)
 
             return await self.check_login_success()
 
@@ -134,9 +134,9 @@ class IndeedAuthenticator:
                     logger.warning(
                         "Indeed security challenge detected - waiting 60s for resolution"
                     )
-                    pause(60, 60)
+                    await async_pause(60, 60)
 
-                pause(1, 2)
+                await async_pause(1, 2)
 
             logger.info("Indeed login timeout reached")
             return False

@@ -11,7 +11,7 @@ from config.logger_config import logger
 
 # Import Playwright utilities for enhanced functionality
 from src.utils.browser_utils import find_element_safely, safe_click, safe_fill
-from src.utils.utils import pause
+from src.utils.utils import async_pause
 
 
 class SearchCustomizer:
@@ -59,7 +59,7 @@ class SearchCustomizer:
                     ):
                         logger.info(f"Keywords set: {', '.join(self.positions)}")
                         keywords_filled = True
-                        pause(1, 2)
+                        await async_pause(1, 2)
                         break
 
                 if not keywords_filled:
@@ -81,7 +81,7 @@ class SearchCustomizer:
                         self.page, selector, ", ".join(self.locations), wait_for_timeout=2000
                     ):
                         logger.info(f"Location set: {', '.join(self.locations)}")
-                        pause()
+                        await async_pause()
 
                         # Try to press Enter to apply location
                         element = await find_element_safely(self.page, selector)
@@ -94,7 +94,7 @@ class SearchCustomizer:
                 if not location_filled:
                     logger.warning("Could not find or fill location field")
 
-                pause()
+                await async_pause()
 
         except Exception as e:
             logger.error(f"Error setting basic search parameters: {e}")
@@ -111,7 +111,7 @@ class SearchCustomizer:
 
             for selector in filters_selectors:
                 if await safe_click(self.page, selector):
-                    pause()
+                    await async_pause()
                     logger.info("Filters modal window opened")
                     return True
 
@@ -156,7 +156,7 @@ class SearchCustomizer:
                     if not date_set:
                         logger.warning(f"Could not set date filter: {date_text}")
 
-                    pause()
+                    await async_pause()
                     break
 
         except Exception as e:
@@ -199,7 +199,7 @@ class SearchCustomizer:
                     if not exp_set:
                         logger.warning(f"Element not found for experience level: {exp_text}")
 
-                    pause()
+                    await async_pause()
 
         except Exception as e:
             logger.error(f"Error setting experience level filter: {e}")
@@ -244,7 +244,7 @@ class SearchCustomizer:
                     if not job_type_set:
                         logger.warning(f"Element not found for job type: {job_type_text}")
 
-                    pause()
+                    await async_pause()
 
         except Exception as e:
             logger.error(f"Error setting job type filter: {e}")
@@ -279,7 +279,7 @@ class SearchCustomizer:
                 if not location_set:
                     logger.warning(f"Element not found for location type: {location_type}")
 
-                pause()
+                await async_pause()
 
         except Exception as e:
             logger.error(f"Error setting work location filter: {e}")
@@ -298,7 +298,7 @@ class SearchCustomizer:
 
             for selector in apply_selectors:
                 if await safe_click(self.page, selector, timeout=10000):
-                    pause()
+                    await async_pause()
                     logger.info("Filters applied")
                     return True
 
@@ -316,11 +316,11 @@ class SearchCustomizer:
         try:
             # Navigate to LinkedIn jobs search
             await self.page.goto("https://www.linkedin.com/jobs/search/")
-            pause(2, 3)
+            await async_pause(2, 3)
 
             # Set basic search terms (keywords and location)
             await self._set_basic_search_terms()
-            pause()
+            await async_pause()
 
             # Open advanced filters modal
             if await self._open_all_filters():
@@ -407,7 +407,7 @@ class SearchCustomizer:
                 if await safe_click(self.page, selector):
                     logger.info("Easy Apply filter enabled")
                     easy_apply_toggled = True
-                    pause()
+                    await async_pause()
                     break
 
             if not easy_apply_toggled:
@@ -491,7 +491,7 @@ if __name__ == "__main__":
             # Test async set_search_params
             await search_customizer.set_search_params()
 
-            pause(1000, 1000)
+            await async_pause(1000, 1000)
 
         except Exception as e:
             logger.error(f"Test failed: {e}")

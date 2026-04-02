@@ -8,9 +8,7 @@ from urllib.parse import quote_plus
 from playwright.sync_api import Page
 
 from config.logger_config import logger
-from src.utils.browser_utils import find_element_safely, safe_click, safe_fill
-from src.utils.utils import pause
-
+from src.utils.utils import async_pause
 
 # Indeed experience level mapping
 _EXPERIENCE_LEVEL_MAP = {
@@ -127,7 +125,7 @@ class IndeedSearchCustomizer:
         url = self._build_search_url(self.positions[0], location)
         logger.info(f"Navigating to Indeed search: {url}")
         await self.page.goto(url, wait_until="domcontentloaded")
-        pause(1, 2)
+        await async_pause(1, 2)
 
     def get_search_urls(self) -> list:
         """Return all search URL combinations (position x location)"""
@@ -156,7 +154,9 @@ class IndeedSearchCustomizer:
 
         for blacklisted in self.location_blacklist:
             if blacklisted.lower() in location_lower:
-                logger.info(f"Job in '{job_location}' skipped - location blacklisted: {blacklisted}")
+                logger.info(
+                    f"Job in '{job_location}' skipped - location blacklisted: {blacklisted}"
+                )
                 return True
 
         return False

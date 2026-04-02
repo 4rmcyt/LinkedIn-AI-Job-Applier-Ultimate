@@ -48,6 +48,9 @@ from src.utils.utils import (
     validate_and_prompt_resume_completion,
 )
 
+# TODO: finish indeed
+# TODO: replace pause with async pause in each async functions and methods
+
 # Create necessary directories if they don't exist
 os.makedirs(RESUME_DIR, exist_ok=True)
 

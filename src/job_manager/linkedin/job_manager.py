@@ -39,7 +39,7 @@ from src.utils.browser_utils import (
     safe_click,
     scroll_slowly,
 )
-from src.utils.utils import load_yaml_file, pause, sanitize_text, save_yaml_file, sleep
+from src.utils.utils import async_pause, load_yaml_file, sanitize_text, save_yaml_file, sleep
 
 search_config = load_yaml_file(SEARCH_CONFIG_FILE)
 logger.info(f"Maximum allowed number of applications: {MAX_APPLIES_NUM}")
@@ -278,12 +278,12 @@ class JobApplier:
         try:
             await self.page.goto(vacancy["url"])
             logger.info(f"Navigated to job URL: {vacancy['url']}")
-            pause(3, 4)
+            await async_pause(3, 4)
         except Exception as e:
             logger.error(f"Failed to navigate to job URL: {vacancy['url']}, error: {e}")
             await debug_capture(self._new_page, "navigate_job_error")
             await self._new_page.close()
-            pause()
+            await async_pause()
             self.page = self._original_page
             self.easy_applier_component.set_page(self.page)
             return "Error"
@@ -308,17 +308,17 @@ class JobApplier:
                 reason += "Job description is empty\n"
             apply_result = "Skip", reason
             logger.warning(f"Job is not valid for application, skipping:\n{reason}")
-            pause(1, 2)
+            await async_pause(1, 2)
         elif self._is_blacklisted(sanitize_text(company_name)):
             apply_result = "Skip", "Vacancy in the blacklist"
             logger.warning("Vacancy in the blacklist, skipping")
-            pause(1, 2)
+            await async_pause(1, 2)
         else:
             is_seen, reason = self._job_is_already_seen(job)
             if is_seen:
                 apply_result = "Skip", reason
                 logger.warning(f"Skipping the vacancy for the reason: {reason}")
-                pause(1, 2)
+                await async_pause(1, 2)
             else:
                 if MONKEY_MODE is True and COLLECT_INFO_MODE is False:
                     # in 'monkey mode' any vacancy is considered interesting
@@ -370,7 +370,7 @@ class JobApplier:
                     logger.debug("Vacancy is not interesting, skipping")
         # Switch back to the original window
         await self._new_page.close()
-        pause()
+        await async_pause()
         self.page = self._original_page
         self.easy_applier_component.set_page(self.page)
         # if we are in one of the information collection modes - do not track vacancy application statistics
@@ -404,7 +404,7 @@ class JobApplier:
                         f"Skipping the vacancy of the company {job.company_name} for the reason: {apply_result[1]}"
                     )
                     return apply_result
-            pause()
+            await async_pause()
         except Exception as e:
             tb_str = traceback.format_exc()
             logger.error(
@@ -585,7 +585,7 @@ class JobApplier:
                 try:
                     # Scroll to bottom, then back to top to load all content
                     if await scroll_slowly(element, "down"):
-                        pause(0.2, 0.3)
+                        await async_pause(0.2, 0.3)
                         await scroll_slowly(element, "up")
                 except Exception as e:
                     logger.debug(f"Element scrolling failed: {e}")
@@ -882,9 +882,9 @@ class JobApplier:
                     logger.debug("Clicking apply button")
                     await button.first.click(timeout=1000)
                 new_page = await new_page_info.value
-                pause()
+                await async_pause()
                 link = new_page.url
-                pause()
+                await async_pause()
                 await new_page.close()
                 logger.debug(f"Apply button link is obtained successfully: {link}")
                 return link
@@ -1184,7 +1184,7 @@ class JobApplier:
         if not page_clicked:
             logger.warning("Could not find or click next page button")
 
-        pause(2, 3)
+        await async_pause(2, 3)
 
 
 if __name__ == "__main__":
@@ -1233,7 +1233,7 @@ if __name__ == "__main__":
             print("✅ Page loaded")
 
             # Wait a bit for dynamic content to load
-            pause(5, 6)
+            await async_pause(5, 6)
 
             # Find all job listing elements using multiple selectors
             print("🔍 Looking for job elements...")
@@ -1310,7 +1310,7 @@ if __name__ == "__main__":
                 print(f"\n🔗 Navigating to first job URL: {first_url}")
                 await page.goto(first_url)
                 print("✅ Page loaded")
-                pause(3, 4)
+                await async_pause(3, 4)
 
                 # Create JobApplier instance with dummy dependencies to test extraction
                 print("🔍 Extracting detailed job description...")
@@ -1345,7 +1345,7 @@ if __name__ == "__main__":
 
             # Keep browser open for a moment to see results
             print("\n⏳ Keeping browser open for 10 seconds to observe results...")
-            pause(10, 11)
+            await async_pause(10, 11)
 
         except Exception as e:
             print(f"❌ Test failed with error: {e}")
