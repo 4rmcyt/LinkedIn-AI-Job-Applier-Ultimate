@@ -45,19 +45,40 @@ def ensure_playwright_profile() -> str:
     return session_dir
 
 
+_USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+]
+
+_VIEWPORTS = [
+    {"width": 1920, "height": 1080},
+    {"width": 1920, "height": 1080},
+    {"width": 1920, "height": 1080},
+    {"width": 1680, "height": 1050},
+    {"width": 1440, "height": 900},
+]
+
+
 def get_playwright_browser_options() -> Dict[str, Any]:
-    """Get Playwright browser launch options with LinkedIn-optimized settings"""
+    """Get Playwright browser launch options with human-like settings"""
     logger.info("Configuring Playwright browser options")
     ensure_playwright_profile()
+
+    viewport = random.choice(_VIEWPORTS)
+    user_agent = random.choice(_USER_AGENTS)
 
     launch_options = {
         "headless": HEADLESS_MODE,
         "args": [
             "--window-position=0,0",
+            f"--window-size={viewport['width']},{viewport['height']}",
             "--no-sandbox",
             "--disable-dev-shm-usage",
             "--ignore-certificate-errors",
-            "--disable-extensions",
             "--disable-gpu",
             "--disable-background-timer-throttling",
             "--disable-backgrounding-occluded-windows",
@@ -65,21 +86,22 @@ def get_playwright_browser_options() -> Dict[str, Any]:
             "--disable-popup-blocking",
             "--no-first-run",
             "--no-default-browser-check",
-            "--disable-logging",
-            "--disable-autofill",
-            "--disable-plugins",
             "--disable-blink-features=AutomationControlled",
         ],
-        # "ignore_default_args": ["--enable-automation", "--enable-logging"],
+        "ignore_default_args": ["--enable-automation", "--enable-logging"],
     }
 
     # Context options for session persistence and anti-detection
     context_options = {
-        "viewport": {"width": 1920, "height": 1080},
-        "screen": {"width": 1920, "height": 1080},
-        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "viewport": viewport,
+        "screen": viewport,
+        "user_agent": user_agent,
         "locale": "en-US",
+        "timezone_id": "America/New_York",
         "permissions": ["notifications"],
+        "extra_http_headers": {
+            "Accept-Language": "en-US,en;q=0.9",
+        },
         "storage_state": BROWSER_STORAGE_STATE if os.path.exists(BROWSER_STORAGE_STATE) else None,
     }
 
