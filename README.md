@@ -89,25 +89,9 @@ This project enhances the original codebase with several powerful new features:
     # Clone the repository
     git clone https://github.com/beatwad/LinkedIn-AI-Job-Applier-Ultimate.git
     cd LinkedIn-AI-Job-Applier-Ultimate
-
-    # Create and activate a virtual environment (can miss this step if using uv)
-    python -m venv venv
-    source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
     ```
 
 2.  **Install dependencies**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-    or
-
-    ```bash
-    uv pip install -r requirements.txt
-    ```
-
-    or
-
     ```bash
     uv sync
     ```
@@ -202,7 +186,7 @@ This project enhances the original codebase with several powerful new features:
     ```
 
 3.  **Application Settings (`config/app_config.py`):**
-    Copy this file from `examples/config/app_config.py` and fine-tune the bot's behavior in this file. 
+    Copy this file from `examples/config/app_config.py` and fine-tune the bot's behavior in this file.
     Key settings include:
     *   `MAX_APPLIES_NUM`: The maximum number of jobs to apply for in a single run.
     *   `HEADLESS_MODE`: If this mode is activated - the browser will be launched in headless mode. Convenient if you plan to
@@ -290,11 +274,6 @@ This project enhances the original codebase with several powerful new features:
 ## ▶️ Usage
 
 Once you have completed the installation and configuration steps, you can run the bot:
-
-```bash
-python main.py
-```
-or
 
 ```bash
 uv run python main.py

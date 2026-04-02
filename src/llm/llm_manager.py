@@ -47,7 +47,7 @@ class AIModel(ABC):
 class GeminiModel(AIModel):
     """Get access to Gemini model"""
 
-    def __init__(self, api_key: str, llm_model: str, llm_proxy: str) -> None:
+    def __init__(self, api_key: str, llm_model: str, llm_proxy: str = None) -> None:
         from google.genai import types
         from langchain_google_genai import ChatGoogleGenerativeAI, HarmBlockThreshold, HarmCategory
 
@@ -98,29 +98,29 @@ class OpenAIModel(AIModel):
         self.llm_proxy = llm_proxy
         self.model_name = llm_model
         self.openai_api_key = api_key
+        is_reasoning_model = (
+            "o1" in self.model_name
+            or "o3" in self.model_name
+            or "o4" in self.model_name
+            or "gpt-5" in self.model_name
+        )
+        extra = {"reasoning_effort": "minimal"} if is_reasoning_model else {}
         self.model = ChatOpenAI(
             model_name=self.model_name,
             openai_api_key=self.openai_api_key,
             http_client=http_client,
-            temperature=1 if "o1" in self.model_name or "gpt-5" in self.model_name else TEMPERATURE,
+            temperature=1 if is_reasoning_model or "gpt-5" in self.model_name else TEMPERATURE,
             presence_penalty=0,
             frequency_penalty=0,
             timeout=60,
-            reasoning_effort="minimal",
+            **extra,
         )
 
     def invoke(self, prompt: ChatPromptTemplate) -> BaseMessage:
         logger.info("Got access to model via OpenAI API")
         prompt_messages = [SystemMessage(content=prompts.custom_instructions)] + prompt.messages
-        try:
-            response = self.model.invoke(prompt_messages)
-            return response
-        except Exception:
-            tb_str = traceback.format_exc()
-            logger.error(
-                f"LLM access error using proxy {self.llm_proxy.split('@')[-1]}: \n Traceback: {tb_str}"
-            )
-            pause(3, 4)
+        response = self.model.invoke(prompt_messages)
+        return response
 
 
 class ClaudeModel(AIModel):
@@ -176,13 +176,8 @@ class OpenRouterModel(AIModel):
     def invoke(self, prompt: ChatPromptTemplate) -> BaseMessage:
         logger.info("Got access to model via OpenRouter API")
         prompt_messages = [SystemMessage(content=prompts.custom_instructions)] + prompt.messages
-        try:
-            response = self.model.invoke(prompt_messages)
-            return response
-        except Exception:
-            tb_str = traceback.format_exc()
-            logger.error(f"LLM access error via OpenRouter: \n Traceback: {tb_str}")
-            pause(3, 4)
+        response = self.model.invoke(prompt_messages)
+        return response
 
 
 # class xAIModel(AIModel):
