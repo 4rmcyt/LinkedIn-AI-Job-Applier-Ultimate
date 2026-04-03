@@ -6,8 +6,7 @@ import re
 import time
 from typing import Any, List, Optional
 
-from camoufox.async_api import AsyncCamoufox
-from playwright.async_api import Browser, BrowserContext, Page, async_playwright
+from patchright.async_api import Browser, BrowserContext, Page, async_playwright
 
 from config.app_config import DEBUG_MODE, HEADLESS_MODE
 from config.constants import BROWSER_STORAGE_STATE, DEBUG_DIR
@@ -54,8 +53,8 @@ _VIEWPORTS = [
 async def create_playwright_browser() -> tuple[Browser, BrowserContext, Page]:
     """Create Playwright browser, context and page asynchronously (PRIMARY METHOD)
 
-    Uses camoufox (Firefox-based) which patches hundreds of browser fingerprint
-    signals to bypass Cloudflare and other bot detection systems.
+    Uses patchright (Chromium-based) which patches automation detection signals
+    to bypass Cloudflare and other bot detection systems.
     Session cookies are persisted via browser_state.json.
     """
     logger.info("Creating Playwright browser (async)")
@@ -65,18 +64,16 @@ async def create_playwright_browser() -> tuple[Browser, BrowserContext, Page]:
         viewport = random.choice(_VIEWPORTS)
         storage_state = BROWSER_STORAGE_STATE if os.path.exists(BROWSER_STORAGE_STATE) else None
 
-        browser = await AsyncCamoufox(
+        playwright = await async_playwright().start()
+        browser = await playwright.chromium.launch(
             headless=HEADLESS_MODE,
-            humanize=False,
-            os="linux",
-            locale="en-US",
-            geoip=True,
-        ).__aenter__()
+        )
 
         context = await browser.new_context(
             viewport=viewport,
             screen=viewport,
             storage_state=storage_state,
+            locale="en-US",
             permissions=["notifications"],
             extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
         )
