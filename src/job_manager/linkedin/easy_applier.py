@@ -576,16 +576,18 @@ class EasyApplier:
                 container_text = (await parent.text_content() or "").lower()
 
                 # Also check the label text if available
-                labels = []
-                try:
-                    input_id = await upload_element.get_attribute("id") or ""
-                    if input_id:
-                        labels = await self.page.locator(f"xpath=//label[@for='{input_id}']").all()
-                except Exception:
-                    labels = []
-                if labels:
-                    label_text = (await labels[0].text_content() or "").lower()
-                    container_text += " " + label_text
+                # try:
+                #     input_id = await upload_element.get_attribute("id") or ""
+                #     if input_id:
+                #         label_text = (
+                #             await self.page.locator(
+                #                 f"xpath=//label[@for='{input_id}']"
+                #             ).first.text_content()
+                #             or ""
+                #         ).lower()
+                #         container_text += " " + label_text
+                # except Exception:
+                #     pass
 
                 # Make the hidden input visible for uploading
                 try:
@@ -631,21 +633,16 @@ class EasyApplier:
         """Detect if the is already selected resume in Easy Apply form"""
         already_selected = False
         try:
-            toggle_labels_local = await parent.locator(
-                ".jobs-document-upload-redesign-card__toggle-label"
-            ).all()
-        except Exception:
-            toggle_labels_local = []
-        try:
-            toggle_labels_global = await self.page.locator(
-                ".jobs-document-upload-redesign-card__toggle-label"
-            ).all()
-        except Exception:
-            toggle_labels_global = []
-        toggle_labels = toggle_labels_local or toggle_labels_global
-        for lbl in toggle_labels:
-            try:
-                lbl_text = (await lbl.text_content() or "").strip()
+            sel = ".jobs-document-upload-redesign-card__toggle-label"
+            texts = await parent.locator(sel).evaluate_all(
+                "els => els.map(e => e.textContent || '')"
+            )
+            if not texts:
+                texts = await self.page.locator(sel).evaluate_all(
+                    "els => els.map(e => e.textContent || '')"
+                )
+            for lbl_text in texts:
+                lbl_text = lbl_text.strip()
                 st = sanitize_text(lbl_text)
                 if st.startswith("deselect") and st.endswith(".pdf"):
                     already_selected = True
@@ -653,8 +650,8 @@ class EasyApplier:
                         f"Resume already selected via toggle label, skipping upload: {lbl_text}"
                     )
                     break
-            except Exception:
-                continue
+        except Exception:
+            pass
         if already_selected:
             return True
         return False
@@ -867,10 +864,13 @@ class EasyApplier:
 
     async def _handle_terms_of_service(self, element: Any) -> bool:
         """Handle terms of service checkbox (async)"""
-        checkbox = await element.locator("xpath=.//label").all()
-        if checkbox:
-            # Get text content first, then check if it contains terms
-            checkbox_text = (await checkbox[0].text_content() or "").lower()
+        try:
+            checkbox_text = (
+                await element.locator("xpath=.//label").first.text_content() or ""
+            ).lower()
+        except Exception:
+            return False
+        if checkbox_text:
             if any(
                 term in checkbox_text
                 for term in [
@@ -882,7 +882,7 @@ class EasyApplier:
                     "accept",
                 ]
             ):
-                await checkbox[0].click(timeout=1000)
+                await element.locator("xpath=.//input[@type='checkbox']").first.click(timeout=1000)
                 logger.debug("Clicked terms of service checkbox")
                 return True
         return False
@@ -1117,9 +1117,10 @@ class EasyApplier:
         ]
 
         for selector in radio_selectors:
-            found_radios = await find_elements_safely(section, selector, "css selector")
-            for radio in found_radios:
-                radio_id = await radio.get_attribute("id")
+            loc = section.locator(selector)
+            ids = await loc.evaluate_all("els => els.map(e => e.id || '')")
+            found_radios = await loc.all()
+            for radio, radio_id in zip(found_radios, ids):
                 if radio_id and radio_id not in radios:
                     radios[radio_id] = radio
 
@@ -1142,20 +1143,20 @@ class EasyApplier:
                 question_text = ""
 
             # Extract options text from radio buttons and their labels
-            options = []
-            for radio in radios:
-                option_text = ""
-
-                # Look for label with matching 'for' attribute
-                radio_id = await radio.get_attribute("id")
-                if radio_id:
-                    label = section.locator(f"label[for='{radio_id}']").first
-                    option_text = (await label.text_content() or "").strip().lower()
-
-                if option_text:
-                    options.append(option_text)
-
-            # Remove duplicates while preserving order
+            options = await section.locator(",".join(radio_selectors)).evaluate_all(
+                """els => {
+                    const seen = new Set();
+                    return els.reduce((acc, e) => {
+                        if (e.id && !seen.has(e.id)) {
+                            seen.add(e.id);
+                            const lbl = document.querySelector('label[for="' + e.id + '"]');
+                            const text = (lbl?.textContent || '').trim().toLowerCase();
+                            if (text) acc.push(text);
+                        }
+                        return acc;
+                    }, []);
+                }"""
+            )
             options = list(dict.fromkeys(options))
 
             existing_answer = None
@@ -1218,9 +1219,8 @@ class EasyApplier:
                 ]
 
                 for label_selector in label_selectors:
-                    labels = await section.locator(label_selector).all()
-                    if labels:
-                        label = labels[0]
+                    label = await find_element_safely(section, label_selector, "css selector")
+                    if label:
                         break
 
                 if label:
@@ -1356,11 +1356,12 @@ class EasyApplier:
                 options = []
                 try:
                     # For native select elements, get options via DOM
-                    options_elements = await dropdown.locator("option").all()
                     options = [
-                        await opt.text_content()
-                        for opt in options_elements
-                        if (await opt.text_content() or "").strip()
+                        t
+                        for t in await dropdown.locator("option").evaluate_all(
+                            "els => els.map(e => e.textContent?.trim() ?? '')"
+                        )
+                        if t
                     ]
                 except Exception:
                     options = []
@@ -1375,9 +1376,9 @@ class EasyApplier:
 
                     question_text = ""
                     for label_selector in label_selectors:
-                        labels = await section.locator(label_selector).all()
-                        if labels:
-                            question_text = (await labels[0].text_content() or "").lower().strip()
+                        label = await find_element_safely(section, label_selector, "css selector")
+                        if label:
+                            question_text = (await label.text_content() or "").lower().strip()
                             question_text = self._deduplicate_question_text(question_text)
                             self.previous_question_texts.append(question_text)
                             break
@@ -1487,9 +1488,7 @@ class EasyApplier:
                     # Try different ways to click the radio button
                     try:
                         # First try clicking the associated label (most reliable for LinkedIn)
-                        radio_id = await radio.get_attribute("id")
                         if radio_id:
-                            label = section.locator(f"label[for='{radio_id}']").first
                             await label.click(timeout=1000)
                             logger.debug(f"Clicked radio label: {radio_text}")
                             return
@@ -1552,18 +1551,13 @@ class EasyApplier:
 
         # Inspect available <option> elements to resolve the correct value
         try:
-            options = await element.locator("option").all()
             matched_value = None
-            # Build choices of (norm_label, value)
-            norm_to_value = []
-            for opt in options:
-                try:
-                    opt_label_raw = await opt.text_content() or ""
-                    opt_value = await opt.get_attribute("value") or ""
-                    opt_label_norm = normalize_label(opt_label_raw)
-                    norm_to_value.append((opt_label_norm, opt_value))
-                except Exception:
-                    continue
+            opts_data = await element.locator("option").evaluate_all(
+                "els => els.map(e => ({label: e.textContent || '', value: e.value || ''}))"
+            )
+            norm_to_value = [
+                (normalize_label(d["label"]), d["value"]) for d in opts_data if d["label"].strip()
+            ]
 
             # Exact match on normalized labels
             for cand in normalized_candidates:
@@ -1615,18 +1609,15 @@ class EasyApplier:
         seen: set[str] = set()
         for selector in error_selectors:
             try:
-                elements = await self.page.locator(selector).all()
-            except Exception as e:
-                logger.debug(f"Failed to locate error elements with '{selector}': {e}")
-                continue
-            for element in elements:
-                try:
-                    txt = (await element.text_content(timeout=1000) or "").strip()
+                texts = await self.page.locator(selector).evaluate_all(
+                    "els => els.map(e => e.textContent?.trim() || '')"
+                )
+                for txt in texts:
                     if txt and txt not in seen:
                         seen.add(txt)
                         errors_text.append(txt)
-                except Exception as e:
-                    logger.warning(f"Failed to get error text: {e}")
+            except Exception as e:
+                logger.debug(f"Failed to locate error elements with '{selector}': {e}")
         return errors_text
 
     async def _find_textbox_question_errors(self) -> List[Tuple[Any, str, str]]:
@@ -1674,20 +1665,15 @@ class EasyApplier:
                     "[role='alert'][data-test-form-element-error-messages]",
                 ]
                 for selector in error_selectors:
-                    candidates = await section.locator(selector).all()
-                    if candidates:
+                    loc = section.locator(selector)
+                    cand_data = await loc.evaluate_all(
+                        "els => els.map((e, i) => ({i, visible: e.offsetParent !== null, text: e.textContent?.trim() || ''}))"
+                    )
+                    match = next((d for d in cand_data if d["visible"] and d["text"]), None)
+                    if match:
+                        error_element = loc.nth(match["i"])
+                        error_text = match["text"]
                         break
-
-                for cand in candidates:
-                    try:
-                        if await cand.is_visible():
-                            txt = (await cand.text_content() or "").strip()
-                            if txt:
-                                error_element = cand
-                                error_text = txt
-                                break
-                    except Exception:
-                        continue
             except Exception:
                 error_element = None
 
@@ -1695,31 +1681,15 @@ class EasyApplier:
                 continue
 
             # Find the textbox/textarea to correct within this section
-            inputs: List[Any] = []
-            input_selectors = [
-                "input[type='text']",
-                "textarea",
-                ".artdeco-text-input--input",
-            ]
-            for selector in input_selectors:
-                inp = await find_elements_safely(section, selector, "css selector")
-                inputs.extend(inp)
-
-            if not inputs:
-                # Fallback to a generic search
-                try:
-                    inputs = await section.locator("xpath=.//input | .//textarea").all()
-                except Exception:
-                    inputs = []
-
             target_input: Any | None = None
-            for inp in inputs:
-                try:
-                    if await inp.is_visible():
-                        target_input = inp
-                        break
-                except Exception:
-                    continue
+            all_inputs_loc = section.locator(
+                "input[type='text'], textarea, .artdeco-text-input--input, xpath=.//input | .//textarea"
+            )
+            vis_indices = await all_inputs_loc.evaluate_all(
+                "els => els.map((e, i) => e.offsetParent !== null ? i : -1).filter(i => i >= 0)"
+            )
+            if vis_indices:
+                target_input = all_inputs_loc.nth(vis_indices[0])
 
             if not target_input:
                 # If no visible input found, skip this section

@@ -46,22 +46,8 @@ def ensure_playwright_profile() -> str:
     return session_dir
 
 
-_USER_AGENTS = [
-    # "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    # "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
-    # "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
-    # "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    # "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
-    # "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.7680.177-1 Safari/537.36",
-]
-
 _VIEWPORTS = [
     {"width": 1920, "height": 1080},
-    # {"width": 1920, "height": 1080},
-    # {"width": 1920, "height": 1080},
-    # {"width": 1680, "height": 1050},
-    # {"width": 1440, "height": 900},
 ]
 
 
@@ -81,7 +67,7 @@ async def create_playwright_browser() -> tuple[Browser, BrowserContext, Page]:
 
         browser = await AsyncCamoufox(
             headless=HEADLESS_MODE,
-            humanize=True,
+            humanize=False,
             os="linux",
             locale="en-US",
             geoip=True,
@@ -420,20 +406,13 @@ async def get_element_attribute_safely(
     try:
         # Handle Playwright Locator objects
         if hasattr(element, "evaluate"):
-            # Direct Playwright Locator - find child element
             child_locator = element.locator(selector)
-            if await child_locator.count() > 0:
-                return await child_locator.get_attribute(attribute) or ""
         elif hasattr(element, "locator"):
-            # Element wrapper - get locator and find child
-            if callable(element.locator):
-                locator = element.locator()
-            else:
-                locator = element.locator
-            child_locator = locator.locator(selector)
-            if await child_locator.count() > 0:
-                return await child_locator.get_attribute(attribute) or ""
-        return ""
+            parent = element.locator() if callable(element.locator) else element.locator
+            child_locator = parent.locator(selector)
+        else:
+            return ""
+        return await child_locator.first.get_attribute(attribute) or ""
     except Exception as e:
         logger.debug(f"Failed to get attribute {attribute} from element {selector}: {e}")
         return ""
@@ -494,52 +473,48 @@ async def scroll_slowly(
         locator: Element to scroll (PlaywrightElementWrapper or Playwright Locator)
         direction: "down", "up"
         time_to_scroll_sec: Total time to spend scrolling
-        delay: Delay between scroll steps
+        delay: Delay between scroll steps (unused, kept for API compatibility)
 
     Returns:
         bool: True if scrolling was successful, False otherwise
     """
     try:
-        scroll_height = await locator.evaluate("(element) => element.scrollHeight")
-        client_height = await locator.evaluate("(element) => element.clientHeight")
-        distance = scroll_height - client_height
+        result = await locator.evaluate(
+            """
+            (element, args) => new Promise((resolve) => {
+                const scrollHeight = element.scrollHeight;
+                const clientHeight = element.clientHeight;
+                let distance = scrollHeight - clientHeight;
+                if (distance <= 30) { resolve(false); return; }
+                distance += 500;
 
-        # If there's no scrollable content, return early
-        if distance <= 10:
-            logger.debug("Element has no scrollable content or distance is too short")
-            return False
-        else:
-            distance += 300
+                const startTop = element.scrollTop;
+                const durationMs = args.durationMs;
+                const goDown = args.direction === 'down';
+                const target = goDown
+                    ? Math.min(startTop + distance, scrollHeight - clientHeight)
+                    : Math.max(startTop - distance, 0);
 
-        # Calculate number of steps and step size
-        total_steps = int(time_to_scroll_sec / delay)
-        step_size = int(distance / total_steps) if total_steps > 0 else distance
-
-        logger.debug(
-            f"Scrolling {direction}: distance={distance}, steps={total_steps}, step_size={step_size:.2f}"
+                const startTime = performance.now();
+                function step(now) {
+                    const elapsed = now - startTime;
+                    const progress = Math.min(elapsed / durationMs, 1);
+                    element.scrollTop = startTop + (target - startTop) * progress;
+                    if (progress < 1) {
+                        requestAnimationFrame(step);
+                    } else {
+                        resolve(true);
+                    }
+                }
+                requestAnimationFrame(step);
+            })
+            """,
+            {"durationMs": int(time_to_scroll_sec * 1000), "direction": direction},
         )
 
-        # Get current scroll position
-        current_scroll = await locator.evaluate("(element) => element.scrollTop")
-
-        for i in range(total_steps + 1):
-            if direction == "down":
-                target_scroll = current_scroll + (step_size * i)
-                # Don't scroll beyond the maximum
-                target_scroll = min(target_scroll, distance)
-            elif direction == "up":
-                target_scroll = current_scroll - (step_size * i)
-                # Don't scroll above 0
-                target_scroll = max(target_scroll, 0)
-            else:
-                logger.warning(f"Unsupported scroll direction: {direction}")
-                return False
-
-            # Apply the scroll
-            await locator.evaluate(f"(element) => {{ element.scrollTop = {target_scroll}; }}")
-            await asyncio.sleep(delay)
-
-        return True
+        if not result:
+            logger.debug("Element has no scrollable content or distance is too short")
+        return bool(result)
 
     except Exception as e:
         logger.warning(f"Error scrolling element {direction}: {e}")
