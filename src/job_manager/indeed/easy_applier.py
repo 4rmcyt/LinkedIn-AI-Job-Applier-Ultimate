@@ -1,4 +1,3 @@
-import traceback
 from pathlib import Path
 from typing import Any, List, Tuple
 
@@ -80,8 +79,17 @@ class IndeedEasyApplier:
                 logger.warning(f"No apply button found for: {job.job_title} at {job.company_name}")
                 return "skipped", cover_letter
 
-            await apply_btn.click()
-            await async_pause(1, 2)
+            try:
+                async with self.page.context.expect_page(timeout=5000) as new_page_info:
+                    await apply_btn.click()
+                new_page = await new_page_info.value
+                await new_page.wait_for_load_state("domcontentloaded")
+                self.page = new_page
+                logger.info("Application form opened in new tab, switched to it")
+            except Exception:
+                # No new tab — form is a modal on the current page
+                logger.debug("No new tab opened, form is modal on current page")
+                await async_pause(1, 2)
 
             if self.test_mode:
                 logger.info("TEST_MODE: skipping form submission")
@@ -141,12 +149,11 @@ class IndeedEasyApplier:
             # Fill visible form sections
             await self._fill_up(job)
 
-            # Click next
-            next_btn = await find_element_safely(
-                self.page, INDEED_NEXT_BUTTON_SELECTOR, timeout=5000
-            )
+            # Click next — find first *visible* button across the ordered selectors
+            next_btn = await self._find_visible_next_button()
             if not next_btn:
                 logger.warning("No next/submit button found")
+                await debug_capture(self.page, "indeed_no_next_button")
                 break
 
             await next_btn.click()
@@ -154,9 +161,38 @@ class IndeedEasyApplier:
 
         return cover_letter
 
+    async def _find_visible_next_button(self) -> Any:
+        """Return the first *visible* next/continue button, trying each selector in order."""
+        for selector in INDEED_NEXT_BUTTON_SELECTOR.split(", "):
+            selector = selector.strip()
+            try:
+                locator = self.page.locator(selector)
+                count = await locator.count()
+                for i in range(count):
+                    btn = locator.nth(i)
+                    if await btn.is_visible():
+                        return btn
+            except Exception:
+                continue
+        return None
+
     async def _fill_up(self, job: Job) -> None:
         """Fill visible form fields on the current step"""
         try:
+            # Handle special-case pages first
+            if await find_element_safely(
+                self.page, "[data-testid='resume-selection-form']", timeout=1000
+            ):
+                await self.page.wait_for_load_state("domcontentloaded")
+                await self._select_uploaded_resume()
+                return
+
+            if await find_element_safely(
+                self.page, "[data-testid='profile-location-page']", timeout=1000
+            ):
+                await self._fill_profile_location_page()
+                return
+
             sections = await find_elements_safely(
                 self.page,
                 "div.ia-Questions-item, div[data-testid='ia-Questions-item']",
@@ -166,6 +202,65 @@ class IndeedEasyApplier:
         except Exception as e:
             logger.error(f"Error filling form step: {e}", exc_info=True)
             await debug_capture(self.page, "indeed_fill_form_error")
+
+    async def _select_uploaded_resume(self) -> None:
+        """Select the already-uploaded file resume on the Indeed resume selection page"""
+        try:
+            radio = await find_element_safely(
+                self.page,
+                "input[data-testid='resume-selection-file-resume-radio-card-input']",
+                timeout=3000,
+            )
+            if radio:
+                await radio.dispatch_event("click")
+                logger.info("Selected uploaded resume on resume selection page")
+            else:
+                logger.warning("Uploaded resume radio not found on resume selection page")
+                await debug_capture(self.page, "indeed_resume_selection_error")
+        except Exception as e:
+            logger.error(f"Error selecting uploaded resume: {e}", exc_info=True)
+            await debug_capture(self.page, "indeed_resume_selection_error")
+
+    async def _fill_profile_location_page(self) -> None:
+        """Fill the 'Review your location details' profile page using resume data"""
+        try:
+            personal = {}
+            if self.gpt_answerer and hasattr(self.gpt_answerer, "resume_structured"):
+                personal = self.gpt_answerer.resume_structured.get("personal_information", {})
+
+            postal_code = str(personal.get("zip_code", "") or "")
+            city = str(personal.get("city", "") or "")
+            address = str(personal.get("address", "") or "")
+
+            if postal_code:
+                field = await find_element_safely(
+                    self.page,
+                    "input[data-testid='location-fields-postal-code-input']",
+                    timeout=3000,
+                )
+                if field:
+                    await field.fill(postal_code)
+                    logger.debug(f"Filled postal code: {postal_code}")
+
+            if city:
+                field = await find_element_safely(
+                    self.page, "input[data-testid='location-fields-locality-input']", timeout=3000
+                )
+                if field:
+                    await field.fill(city)
+                    logger.debug(f"Filled city: {city}")
+
+            if address:
+                field = await find_element_safely(
+                    self.page, "input[data-testid='location-fields-address-input']", timeout=3000
+                )
+                if field:
+                    await field.fill(address)
+                    logger.debug(f"Filled street address: {address}")
+
+        except Exception as e:
+            logger.error(f"Error filling profile location page: {e}", exc_info=True)
+            await debug_capture(self.page, "indeed_profile_location_error")
 
     async def _process_form_section(self, section: Any, job: Job) -> None:
         """Fill a single form section based on its detected type"""
@@ -265,6 +360,7 @@ class IndeedEasyApplier:
             )
             if not submit_btn:
                 logger.error("Submit button not found")
+                await debug_capture(self.page, "indeed_submit_button_not_found")
                 return False
             await submit_btn.click()
             await async_pause(2, 4)
