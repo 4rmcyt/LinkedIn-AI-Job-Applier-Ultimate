@@ -354,7 +354,7 @@ class IndeedEasyApplier:
         """Get LLM answer for a form question"""
         try:
             if self.gpt_answerer:
-                return await self.gpt_answerer.answer_question_textual_wide_range(
+                return self.gpt_answerer.answer_question_textual_wide_range(
                     question, self.previous_question_texts[:-1]
                 )
         except Exception as e:

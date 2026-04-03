@@ -222,18 +222,25 @@ class IndeedJobApplier:
 
     async def easy_apply(self, job: Job) -> Tuple[str, str]:
         """Delegate application to IndeedEasyApplier"""
-        easy_applier = IndeedEasyApplier(
-            page=self.page,
-            gpt_answerer=self.llm_answerer_component,
-            resume_anonymizer=self.resume_anonymizer,
-            resume_generator_manager=self.resume_generator_manager,
-            pause_checker=self.pause_checker,
-            answers_file=Path(ANSWERS_FILE),
-            resume_dir=Path(RESUME_DIR),
-            cover_letter_dir=Path(COVER_LETTER_DIR),
-            test_mode=TEST_MODE,
-        )
-        return await easy_applier.job_apply(job)
+        new_page = await self.page.context.new_page()
+        try:
+            await new_page.goto(job.url, wait_until="domcontentloaded")
+            await async_pause(1, 2)
+            easy_applier = IndeedEasyApplier(
+                page=new_page,
+                gpt_answerer=self.llm_answerer_component,
+                resume_anonymizer=self.resume_anonymizer,
+                resume_generator_manager=self.resume_generator_manager,
+                pause_checker=self.pause_checker,
+                answers_file=Path(ANSWERS_FILE),
+                resume_dir=Path(RESUME_DIR),
+                cover_letter_dir=Path(COVER_LETTER_DIR),
+                test_mode=TEST_MODE,
+            )
+            return await easy_applier.job_apply(job)
+        finally:
+            await new_page.close()
+            await self.page.bring_to_front()
 
     async def send_report(self, result: str) -> None:
         """Send Telegram report"""
