@@ -50,6 +50,7 @@ class IndeedEasyApplier:
         self.cover_letter_dir = cover_letter_dir
         self.test_mode = test_mode
         self.questions: List[Question] = self._load_questions()
+        self.previous_question_texts: List[str] = []
 
         logger.info("IndeedEasyApplier initialized")
 
@@ -134,6 +135,7 @@ class IndeedEasyApplier:
 
         for step in range(max_steps):
             logger.info(f"Application form step {step + 1}")
+            self.previous_question_texts = []
 
             if self.pause_checker:
                 await self.pause_checker()
@@ -272,6 +274,7 @@ class IndeedEasyApplier:
             if text_input:
                 question_label = await get_clean_text(section)
                 if question_label:
+                    self.previous_question_texts.append(question_label)
                     answer = await self._get_llm_answer(question_label, job)
                     await text_input.fill(answer)
                     logger.debug(f"Filled text field '{question_label}' with '{answer}'")
@@ -311,6 +314,8 @@ class IndeedEasyApplier:
                 else:
                     labels.append("")
             options_str = ", ".join(labels)
+            if question_text:
+                self.previous_question_texts.append(question_text)
             answer = await self._get_llm_answer(f"{question_text}. Options: {options_str}", job)
             for radio, label in zip(radios, labels):
                 if answer.lower() in label.lower():
@@ -330,6 +335,8 @@ class IndeedEasyApplier:
             options = await select.query_selector_all("option")
             option_texts = [await get_clean_text(o) for o in options]
             options_str = ", ".join(option_texts)
+            if question_text:
+                self.previous_question_texts.append(question_text)
             answer = await self._get_llm_answer(f"{question_text}. Options: {options_str}", job)
             for opt_text in option_texts:
                 if answer.lower() in opt_text.lower():
@@ -347,7 +354,9 @@ class IndeedEasyApplier:
         """Get LLM answer for a form question"""
         try:
             if self.gpt_answerer:
-                return await self.gpt_answerer.answer_question_textual_wide_range(question)
+                return await self.gpt_answerer.answer_question_textual_wide_range(
+                    question, self.previous_question_texts[:-1]
+                )
         except Exception as e:
             logger.warning(f"LLM answer failed for question '{question}': {e}")
         return ""
