@@ -157,12 +157,34 @@ class IndeedJobApplier:
         """Return all job card elements on the current page"""
         try:
             await self.page.wait_for_selector(INDEED_JOB_CARD_SELECTOR, timeout=15000)
+            await self._scroll_left_panel()
             cards = await find_elements_safely(self.page, INDEED_JOB_CARD_SELECTOR)
             return cards or []
         except Exception as e:
             logger.warning(f"Could not find job cards: {e}")
             await debug_capture(self.page, "vacancies_not_found")
             return []
+
+    async def _scroll_left_panel(self) -> None:
+        """Scroll the full page to trigger lazy-loading of job cards"""
+        await self.page.evaluate(
+            """
+            () => new Promise((resolve) => {
+                const distance = document.body.scrollHeight;
+                const durationMs = 2000;
+                const startTime = performance.now();
+                function step(now) {
+                    const progress = Math.min((now - startTime) / durationMs, 1);
+                    window.scrollTo(0, distance * progress);
+                    if (progress < 1) requestAnimationFrame(step);
+                    else resolve();
+                }
+                requestAnimationFrame(step);
+            })
+            """
+        )
+        await async_pause(1, 2)
+        await self.page.evaluate("() => window.scrollTo(0, 0)")
 
     async def apply_job(self, vacancy: Any) -> str:
         """Process a single Indeed job card"""
