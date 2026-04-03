@@ -546,6 +546,8 @@ class GPTAnswerer:
         """
         if "no info" in text.lower():
             return "no info"
+        if not options:
+            return "no info"
         logger.info(f"Searching for best match for text: '{text}' in options: {options}")
         distances = [(option, distance(text.lower(), option.lower())) for option in options]
         best_option = min(distances, key=lambda x: x[1])[0]

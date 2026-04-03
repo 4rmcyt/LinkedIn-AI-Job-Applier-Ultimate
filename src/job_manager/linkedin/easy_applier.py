@@ -1159,6 +1159,10 @@ class EasyApplier:
             )
             options = list(dict.fromkeys(options))
 
+            if not options:
+                logger.warning("No options extracted from radio buttons, skipping radio question")
+                return False
+
             existing_answer = None
             current_question_sanitized = sanitize_text(question_text)
             for item in self.all_questions:
@@ -1830,7 +1834,7 @@ if __name__ == "__main__":
         logger.info("Starting EasyApplier test...")
 
         # Test job URL
-        job_url = "https://www.linkedin.com/jobs/view/4356663414"
+        job_url = "https://linkedin.com/jobs/view/4397017085"
         # Initialize Playwright browser
         try:
             browser, context, page = await create_playwright_browser()
