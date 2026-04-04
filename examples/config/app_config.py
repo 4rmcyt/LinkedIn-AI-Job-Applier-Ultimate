@@ -9,6 +9,13 @@ If this mode is activated - the browser will be launched in headless mode
 HEADLESS_MODE = False
 
 """
+If this mode is activated, saves screenshots and page HTML to data/debug/ on every selector failure.
+Also enables Playwright tracing (saved to data/debug/trace.zip on exit, viewable at trace.playwright.dev).
+No-op when False (default).
+"""
+DEBUG_MODE = False
+
+"""
 If this mode is activated - apply to all vacancies indiscriminately,
 otherwise ask LLM to select only those vacancies that suit you
 by interests or by tech stack
