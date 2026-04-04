@@ -112,7 +112,7 @@ class IndeedAuthenticator:
                     "indeed.com/myjobs",
                     "indeed.com/?",
                     "indeed.com/account",
-                    "/settings/account",
+                    "indeed.com/settings/account",
                 ]
                 if any(pattern in current_url for pattern in success_patterns):
                     # Confirm sign-in button is gone

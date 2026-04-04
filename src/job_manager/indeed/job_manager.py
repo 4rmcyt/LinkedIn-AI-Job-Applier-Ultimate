@@ -167,8 +167,7 @@ class IndeedJobApplier:
 
     async def _scroll_left_panel(self) -> None:
         """Scroll the full page to trigger lazy-loading of job cards"""
-        await self.page.evaluate(
-            """
+        await self.page.evaluate("""
             () => new Promise((resolve) => {
                 const distance = document.body.scrollHeight;
                 const durationMs = 2000;
@@ -181,8 +180,7 @@ class IndeedJobApplier:
                 }
                 requestAnimationFrame(step);
             })
-            """
-        )
+            """)
         await async_pause(1, 2)
         await self.page.evaluate("() => window.scrollTo(0, 0)")
 
@@ -278,6 +276,10 @@ class IndeedJobApplier:
             location_el = await find_element_safely(card, INDEED_LOCATION_SELECTOR, timeout=3000)
             location = (await location_el.text_content() or "") if location_el else ""
 
+            logger.debug(
+                f"Extracting job card: title={title!r}, company={company!r}, url={job_url!r}"
+            )
+
             # Check for easy apply badge on card first
             easy_apply_badge = await find_element_safely(
                 card, INDEED_EASY_APPLY_BADGE, timeout=1000
@@ -303,7 +305,11 @@ class IndeedJobApplier:
             return job
 
         except Exception as e:
-            logger.warning(f"Failed to extract job from card: {e}")
+            logger.warning(
+                f"Failed to extract job from card: title={title!r}, company={company!r}, url={job_url!r} — {e}"
+                if "title" in dir()
+                else f"Failed to extract job from card (title not yet parsed): {e}"
+            )
             await debug_capture(self.page, "extract_job_error")
             return None
 
