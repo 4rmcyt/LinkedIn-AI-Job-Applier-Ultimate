@@ -11,7 +11,7 @@ class NoInfoException(Exception):
     pass
 
 
-class EasyApplier(ABC):
+class BaseEasyApplier(ABC):
     def __init__(self) -> None:
         super().__init__()
 

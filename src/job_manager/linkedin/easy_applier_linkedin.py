@@ -11,7 +11,7 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
 from config.logger_config import logger
-from src.job_manager.easy_applier import EasyApplier
+from src.job_manager.easy_applier import BaseEasyApplier
 from src.job_manager.resume_anonymizer import ResumeAnonymizer
 from src.llm.llm_manager import GPTAnswerer
 from src.pydantic_models.job_models import Job, Question
@@ -28,7 +28,7 @@ class NoInfoException(Exception):
     pass
 
 
-class LinkedInEasyApplier(EasyApplier):
+class LinkedInEasyApplier(BaseEasyApplier):
     def __init__(
         self,
         page: Page,

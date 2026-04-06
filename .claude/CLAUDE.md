@@ -37,7 +37,7 @@ uv run pytest tests/
 | File | LinkedIn | Indeed |
 |---|---|---|
 | `authenticator.py` | Session-file based; detects feed content | No session file; detects sign-in button absence |
-| `job_manager.py` | `JobApplier` | `IndeedJobApplier` |
+| `job_manager.py` | `LinkedInJobManager` | `IndeedJobManager` |
 | `search_customizer.py` | Navigates LinkedIn UI to set filters | Builds parameterized URLs directly |
 | `easy_applier.py` | Complex forms; PDF generation; question caching | Simpler modal-based flow; no PDF generation |
 

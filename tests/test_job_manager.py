@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
-from src.job_manager.linkedin.job_manager import JobApplier
+from src.job_manager.linkedin.job_manager_linkedin import LinkedInJobManager
 from src.pydantic_models.job_models import Job, JobManagerCache
 
 # yaml is intentionally not imported to avoid real file I/O in tests
@@ -57,7 +57,7 @@ def mock_file_system():
 
 @pytest.fixture
 def job_applier(mock_page, mock_resume_anonymizer, mock_search_component):
-    """Create a JobApplier instance for testing with mocked file operations"""
+    """Create a LinkedInJobManager instance for testing with mocked file operations"""
     with (
         patch("src.job_manager.job_manager.OUTPUT_DIR", "/mock/output"),
         patch("src.job_manager.job_manager.LAST_RUN_FILE", Path("/mock/output/last_run.yaml")),
@@ -65,7 +65,7 @@ def job_applier(mock_page, mock_resume_anonymizer, mock_search_component):
         patch("yaml.safe_load", return_value={}),
         patch("yaml.dump", return_value=""),
     ):
-        applier = JobApplier(
+        applier = LinkedInJobManager(
             page=mock_page,
             linkedin_email="test@example.com",
             resume_anonymizer=mock_resume_anonymizer,
@@ -75,13 +75,13 @@ def job_applier(mock_page, mock_resume_anonymizer, mock_search_component):
 
 
 class TestJobApplierInitialization:
-    """Test JobApplier initialization"""
+    """Test LinkedInJobManager initialization"""
 
     def test_init_sets_basic_attributes(
         self, mock_page, mock_resume_anonymizer, mock_search_component
     ):
         """Test that __init__ sets all basic attributes correctly"""
-        applier = JobApplier(
+        applier = LinkedInJobManager(
             page=mock_page,
             linkedin_email="test@example.com",
             resume_anonymizer=mock_resume_anonymizer,
@@ -584,7 +584,7 @@ class TestDefineOutputFile:
 
     def test_define_output_file(self):
         """Test defining output file path"""
-        result = JobApplier._define_output_file("test.yaml")
+        result = LinkedInJobManager._define_output_file("test.yaml")
 
         # Just verify it returns a path containing the filename
         assert "test.yaml" in str(result)

@@ -24,11 +24,11 @@ from config.logger_config import logger
 
 if JOB_SITE == "indeed":
     from src.job_manager.indeed.authenticator import IndeedAuthenticator as Authenticator
-    from src.job_manager.indeed.job_manager import IndeedJobApplier as JobApplier
+    from src.job_manager.indeed.job_manager_indeed import IndeedJobManager as LinkedInJobManager
     from src.job_manager.indeed.search_customizer import IndeedSearchCustomizer as SearchCustomizer
 else:
     from src.job_manager.linkedin.authenticator import LinkedInAuthenticator as Authenticator
-    from src.job_manager.linkedin.job_manager import JobApplier
+    from src.job_manager.linkedin.job_manager_linkedin import LinkedInJobManager
     from src.job_manager.linkedin.search_customizer import SearchCustomizer
 
 from src.job_manager.bot_facade import BotFacade
@@ -236,7 +236,7 @@ async def create_and_run_bot(
             llm_api_key, BROWSER_STORAGE_STATE, llm_api_url, site_email
         )
 
-        linkedin_email = site_email  # kept for JobApplier constructor compatibility
+        linkedin_email = site_email  # kept for LinkedInJobManager constructor compatibility
 
         if not resume_structured:
             resume_structured = llm_answerer_component.parse_resume(resume_text)
@@ -261,7 +261,9 @@ async def create_and_run_bot(
         search_component = SearchCustomizer(page)
 
         # Set apply component
-        apply_component = JobApplier(page, linkedin_email, resume_anonymizer, search_component)
+        apply_component = LinkedInJobManager(
+            page, linkedin_email, resume_anonymizer, search_component
+        )
 
         # Set bot facade
         bot = BotFacade(resume_anonymizer, search_component, apply_component, llm_agent_component)

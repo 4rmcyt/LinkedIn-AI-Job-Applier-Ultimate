@@ -4,7 +4,7 @@ from typing import Any, List, Tuple
 from playwright.sync_api import Page
 
 from config.logger_config import logger
-from src.job_manager.easy_applier import EasyApplier
+from src.job_manager.easy_applier import BaseEasyApplier
 from src.job_manager.resume_anonymizer import ResumeAnonymizer
 from src.llm.llm_manager import GPTAnswerer
 from src.pydantic_models.job_models import Job, Question
@@ -22,7 +22,7 @@ INDEED_NEXT_BUTTON_SELECTOR = "button[data-testid='continue-button'], button[dat
 INDEED_SUBMIT_BUTTON_SELECTOR = "button[data-testid='ia-submitButton'], button.ia-submitButton"
 
 
-class IndeedEasyApplier(EasyApplier):
+class IndeedEasyApplier(BaseEasyApplier):
     """Handle Indeed 'Easily apply' application forms"""
 
     def __init__(
