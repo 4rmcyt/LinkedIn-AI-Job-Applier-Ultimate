@@ -32,14 +32,22 @@ uv run pytest tests/
 
 ### Job Site Implementations
 
-`src/job_manager/` contains platform-specific subpackages selected at runtime via `JOB_SITE` in `app_config.py`:
+`src/job_manager/` contains abstract base classes and platform-specific subpackages selected at runtime via `JOB_SITE` in `app_config.py`:
+
+**Base classes (shared):**
+- `src/job_manager/job_manager.py` — `BaseJobManager` ABC: output helpers, YAML I/O, blacklist, dedup
+- `src/job_manager/easy_applier.py` — `BaseEasyApplier` ABC: `_process_form_section`, `_save_questions`, `_load_questions`, `NoInfoException`
+
+**Platform-specific implementations:**
 
 | File | LinkedIn | Indeed |
 |---|---|---|
 | `authenticator.py` | Session-file based; detects feed content | No session file; detects sign-in button absence |
-| `job_manager.py` | `LinkedInJobManager` | `IndeedJobManager` |
+| `job_manager.py` | `LinkedInJobManager(BaseJobManager)` | `IndeedJobManager(BaseJobManager)` |
 | `search_customizer.py` | Navigates LinkedIn UI to set filters | Builds parameterized URLs directly |
-| `easy_applier.py` | Complex forms; PDF generation; question caching | Simpler modal-based flow; no PDF generation |
+| `easy_applier.py` | `LinkedInEasyApplier(BaseEasyApplier)`; PDF generation | `IndeedEasyApplier(BaseEasyApplier)`; modal-based flow; no PDF |
+
+Both easy applier implementations cache question answers in `data/output/answers.yaml` and consult the cache before calling the LLM.
 
 `main.py` selects the implementation at startup:
 ```python
@@ -56,15 +64,18 @@ else:  # "linkedin"
 ```
 src/job_manager/
 ├── bot_facade.py         # Unified facade for both platforms
+├── job_manager.py        # BaseJobManager ABC (shared output helpers, YAML I/O)
+├── easy_applier.py       # BaseEasyApplier ABC (form dispatch, question cache)
+├── resume_anonymizer.py  # Strips PII from resume before LLM calls
 ├── linkedin/
 │   ├── authenticator.py  # LinkedIn session management
-│   ├── job_manager.py    # LinkedIn job search orchestrator
-│   ├── easy_applier.py   # LinkedIn Easy Apply automation
+│   ├── job_manager.py    # LinkedInJobManager
+│   ├── easy_applier.py   # LinkedInEasyApplier (PDF generation, complex forms)
 │   └── search_customizer.py # LinkedIn UI-based filter navigation
 └── indeed/
     ├── authenticator.py  # Indeed session management
-    ├── job_manager.py    # Indeed job search orchestrator
-    ├── easy_applier.py   # Indeed Easy Apply modal automation
+    ├── job_manager.py    # IndeedJobManager
+    ├── easy_applier.py   # IndeedEasyApplier (modal-based flow)
     └── search_customizer.py # Indeed URL-based search builder
 
 config/
@@ -88,30 +99,6 @@ logs/
 └── error_log.log         # Logs all error messages
 └── internal_logger.log   # Logs all errors that appear before loguru is imported
 ```
-
-## LLM Integration
-
-```python
-from src.llm.llm_manager import GPTAnswerer
-from config.app_config import LLM_MODEL_TYPE, EASY_APPLY_MODEL
-
-gpt_answerer = GPTAnswerer(api_key=api_key, model_type=LLM_MODEL_TYPE, model=EASY_APPLY_MODEL)
-gpt_answerer.set_resume(structured_resume, resume_text)
-```
-
-- All prompts in [src/llm/prompts.py](src/llm/prompts.py) — never inline prompts elsewhere
-- Validate all LLM responses before use
-- Track costs via `LLMCall` model → `logs/llm_api_calls.yaml`
-
-## Resume Generation
-
-Test resume generation independently:
-```bash
-uv run python src/resume_builder/resume_manager.py
-```
-Output: `test_generated_resume.pdf` in root directory.
-
-Resume styles: `FAANGPath`, `Cloyola Grey`, `Modern Blue`, `Modern Grey`, `Default`, `Clean Blue`
 
 ## Project rules
 
