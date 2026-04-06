@@ -4,6 +4,7 @@ from typing import Any, List, Tuple
 from playwright.sync_api import Page
 
 from config.logger_config import logger
+from src.job_manager.easy_applier import EasyApplier
 from src.job_manager.resume_anonymizer import ResumeAnonymizer
 from src.llm.llm_manager import GPTAnswerer
 from src.pydantic_models.job_models import Job, Question
@@ -13,19 +14,15 @@ from src.utils.browser_utils import (
     find_elements_safely,
     get_clean_text,
 )
-from src.utils.utils import async_pause, load_yaml_file, save_yaml_file
+from src.utils.utils import async_pause, load_yaml_file
 
 INDEED_APPLY_BUTTON_SELECTOR = "button#indeedApplyButton, button[data-jk], .ia-IndeedApplyButton"
 INDEED_APPLY_MODAL_SELECTOR = "div.ia-BasePage, div[data-testid='ia-container']"
-INDEED_NEXT_BUTTON_SELECTOR = "button[data-testid='continue-button'], button[data-testid^='hp-continue-button'], button[data-testid='ia-continueButton'], .ia-BasePage-component button:has-text('Continue')"
+INDEED_NEXT_BUTTON_SELECTOR = "button[data-testid='continue-button'], button[data-testid^='hp-continue-button'], button[data-testid='ia-continueButton'], .ia-BasePage-component button:has-text('Continue'), button:has-text('Review your application'), button:has-text('Continue')"
 INDEED_SUBMIT_BUTTON_SELECTOR = "button[data-testid='ia-submitButton'], button.ia-submitButton"
 
 
-class NoInfoException(Exception):
-    pass
-
-
-class IndeedEasyApplier:
+class IndeedEasyApplier(EasyApplier):
     """Handle Indeed 'Easily apply' application forms"""
 
     def __init__(
@@ -61,14 +58,15 @@ class IndeedEasyApplier:
     # Public interface
     # ------------------------------------------------------------------
 
-    async def apply_to_job(self, job: Job) -> None:
+    async def apply_to_job(self, job: Job) -> Tuple[str, str]:
         """Entry point - navigate to job page and apply"""
         logger.info(f"Navigating to Indeed job: {job.url}")
         await self.page.goto(job.url, wait_until="domcontentloaded")
         await async_pause(1, 2)
-        await self.job_apply(job)
+        result, cover_letter = await self.job_easy_apply(job)
+        return result, cover_letter
 
-    async def job_apply(self, job: Job) -> Tuple[str, str]:
+    async def job_easy_apply(self, job: Job) -> Tuple[str, str]:
         """
         Attempt to apply to an Indeed job.
         Returns (result, cover_letter_text) where result is 'success' | 'skipped' | 'error'.
@@ -92,18 +90,18 @@ class IndeedEasyApplier:
                 logger.debug("No new tab opened, form is modal on current page")
                 await async_pause(1, 2)
 
+            cover_letter = await self._fill_application_form(job)
             if self.test_mode:
                 logger.info("TEST_MODE: skipping form submission")
                 await self._discard_application()
                 return "skipped", cover_letter
 
-            cover_letter = await self._fill_application_form(job)
             result = await self._submit_application()
             return ("success" if result else "error"), cover_letter
 
         except Exception as e:
             logger.error(f"Error applying to Indeed job {job.job_title}: {e}", exc_info=True)
-            await debug_capture(self.page, "indeed_job_apply_error")
+            await debug_capture(self.page, "indeed_job_easy_apply_error")
             try:
                 await self._discard_application()
             except Exception:
@@ -186,7 +184,7 @@ class IndeedEasyApplier:
                 self.page, "[data-testid='resume-selection-form']", timeout=1000
             ):
                 await self.page.wait_for_load_state("domcontentloaded")
-                await self._select_uploaded_resume()
+                # await self._select_uploaded_resume()
                 return
 
             if await find_element_safely(
@@ -313,10 +311,17 @@ class IndeedEasyApplier:
                     labels.append(await get_clean_text(label_el) if label_el else "")
                 else:
                     labels.append("")
-            options_str = ", ".join(labels)
             if question_text:
                 self.previous_question_texts.append(question_text)
-            answer = await self._get_llm_answer(f"{question_text}. Options: {options_str}", job)
+            answer = self.gpt_answerer.select_one_answer_from_options(
+                question_text, labels, self.previous_question_texts[:-1]
+            )
+            # Exact match first to avoid substring false positives (e.g. "male" in "female")
+            for radio, label in zip(radios, labels):
+                if answer.lower() == label.lower():
+                    await radio.click()
+                    logger.debug(f"Selected radio '{label}'")
+                    return
             for radio, label in zip(radios, labels):
                 if answer.lower() in label.lower():
                     await radio.click()
@@ -334,10 +339,17 @@ class IndeedEasyApplier:
             question_text = await get_clean_text(section)
             options = await select.query_selector_all("option")
             option_texts = [await get_clean_text(o) for o in options]
-            options_str = ", ".join(option_texts)
             if question_text:
                 self.previous_question_texts.append(question_text)
-            answer = await self._get_llm_answer(f"{question_text}. Options: {options_str}", job)
+            answer = self.gpt_answerer.select_one_answer_from_options(
+                question_text, option_texts, self.previous_question_texts[:-1]
+            )
+            # Exact match first to avoid substring false positives
+            for opt_text in option_texts:
+                if answer.lower() == opt_text.lower():
+                    await select.select_option(label=opt_text)
+                    logger.debug(f"Selected dropdown option '{opt_text}'")
+                    return
             for opt_text in option_texts:
                 if answer.lower() in opt_text.lower():
                     await select.select_option(label=opt_text)
@@ -398,28 +410,6 @@ class IndeedEasyApplier:
         except Exception as e:
             logger.warning(f"Could not discard Indeed application: {e}")
             await debug_capture(self.page, "indeed_discard_error")
-
-    def _load_questions(self) -> List[Question]:
-        """Load previously answered questions from YAML cache"""
-        try:
-            if self.answers_file.exists():
-                data = load_yaml_file(str(self.answers_file))
-                if isinstance(data, list):
-                    return [Question(**q) for q in data if q]
-        except Exception as e:
-            logger.warning(f"Could not load answers file: {e}")
-        return []
-
-    def _save_questions(self, question_data: Question) -> None:
-        """Persist a new answered question to the YAML cache"""
-        try:
-            self.questions.append(question_data)
-            save_yaml_file(
-                str(self.answers_file),
-                [q.model_dump() for q in self.questions],
-            )
-        except Exception as e:
-            logger.warning(f"Could not save question: {e}")
 
 
 if __name__ == "__main__":

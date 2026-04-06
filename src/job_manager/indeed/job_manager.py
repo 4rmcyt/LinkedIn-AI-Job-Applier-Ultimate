@@ -14,7 +14,7 @@ from config.constants import (
     SEARCH_CONFIG_FILE,
 )
 from config.logger_config import logger
-from src.job_manager.indeed.easy_applier import IndeedEasyApplier
+from src.job_manager.indeed.easy_applier_indeed import IndeedEasyApplier
 from src.pydantic_models.job_models import Job, JobInfo, JobManagerCache
 from src.telegram.telegram_manager import TelegramReportSender
 from src.utils.browser_utils import (
@@ -167,7 +167,8 @@ class IndeedJobApplier:
 
     async def _scroll_left_panel(self) -> None:
         """Scroll the full page to trigger lazy-loading of job cards"""
-        await self.page.evaluate("""
+        await self.page.evaluate(
+            """
             () => new Promise((resolve) => {
                 const distance = document.body.scrollHeight;
                 const durationMs = 2000;
@@ -180,7 +181,8 @@ class IndeedJobApplier:
                 }
                 requestAnimationFrame(step);
             })
-            """)
+            """
+        )
         await async_pause(1, 2)
         await self.page.evaluate("() => window.scrollTo(0, 0)")
 

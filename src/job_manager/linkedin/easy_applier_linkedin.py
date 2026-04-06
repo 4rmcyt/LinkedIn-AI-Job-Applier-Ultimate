@@ -11,6 +11,7 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
 from config.logger_config import logger
+from src.job_manager.easy_applier import EasyApplier
 from src.job_manager.resume_anonymizer import ResumeAnonymizer
 from src.llm.llm_manager import GPTAnswerer
 from src.pydantic_models.job_models import Job, Question
@@ -20,21 +21,14 @@ from src.utils.browser_utils import (
     find_elements_safely,
     get_clean_text,
 )
-from src.utils.utils import (
-    ConfigError,
-    async_pause,
-    get_first_pdf_file,
-    load_yaml_file,
-    sanitize_text,
-    save_yaml_file,
-)
+from src.utils.utils import async_pause, get_first_pdf_file, load_yaml_file, sanitize_text
 
 
 class NoInfoException(Exception):
     pass
 
 
-class EasyApplier:
+class LinkedInEasyApplier(EasyApplier):
     def __init__(
         self,
         page: Page,
@@ -47,7 +41,7 @@ class EasyApplier:
         cover_letter_dir: Path,
         test_mode: bool,
     ):
-        logger.info("Initializing EasyApplier")
+        logger.info("Initializing LinkedInEasyApplier")
         self.page = page
         self.gpt_answerer = gpt_answerer
         self.resume_anonymizer = resume_anonymizer
@@ -62,7 +56,7 @@ class EasyApplier:
         self.current_job = None
         self.test_mode = test_mode
         self.previous_question_texts = []
-        logger.info("EasyApplier initialized successfully")
+        logger.info("LinkedInEasyApplier initialized successfully")
 
     def set_page(self, page: Page) -> None:
         self.page = page
@@ -103,13 +97,13 @@ class EasyApplier:
             return "Limit", "Easy Apply daily limit reached. Skipping job application."
 
         try:
-            return await self.job_apply(job)
+            return await self.job_easy_apply(job)
         except Exception as e:
             logger.error(f"Failed to apply to job: {job.job_title} at {job.url}, error: {str(e)}")
             await debug_capture(self.page, "apply_to_job_error")
             raise e
 
-    async def job_apply(self, job: Job) -> Tuple[str, str]:
+    async def job_easy_apply(self, job: Job) -> Tuple[str, str]:
         """Main job application logic (async)"""
         try:
             self.current_job = job
@@ -153,28 +147,12 @@ class EasyApplier:
         except Exception:
             tb_str = traceback.format_exc()
             logger.error(f"Failed to apply to job: {job.job_title} at {job.url}, error: {tb_str}")
-            await debug_capture(self.page, "job_apply_error")
+            await debug_capture(self.page, "job_easy_apply_error")
             try:
                 await self._save_job_application_process()
             except Exception as e:
                 logger.error(f"Failed to save job application process: {e}")
             return "Error", f"Failed to apply to job! Original exception:\nTraceback:\n{tb_str}"
-
-    def _load_questions(self) -> List[Question]:
-        logger.info(f"Loading questions from YAML file: {self.answers_file}")
-        try:
-            data = load_yaml_file(self.answers_file)
-            logger.info("Questions loaded successfully from YAML")
-            if not data:
-                return []
-            return [Question(**question) for question in data]
-        except ConfigError:
-            logger.warning("Answers file not found, returning empty list")
-            return []
-        except Exception:
-            tb_str = traceback.format_exc()
-            logger.error(f"Error loading questions data from YAML file: {tb_str}")
-            raise Exception(f"Error loading questions data from YAML file: \nTraceback:\n{tb_str}")
 
     async def _check_easy_apply_limit(self) -> bool:
         """Check if Easy Apply daily limit has been reached (async)
@@ -1766,40 +1744,9 @@ class EasyApplier:
             )
         return True
 
-    def _save_questions(self, question_data: Question) -> None:
-        """Save questions to YAML file"""
-        question_data.question = sanitize_text(question_data.question)
-
-        logger.debug(f"Checking if question data already exists: {question_data}")
-        try:
-            should_be_saved: bool = not self._answer_contians_company_name(question_data.answer)
-            self.all_questions = [
-                q for q in self.all_questions if q.question != question_data.question
-            ]
-            if should_be_saved:
-                logger.debug("New question found, appending to YAML")
-                self.all_questions.append(question_data)
-                save_yaml_file(
-                    self.answers_file, [question.model_dump() for question in self.all_questions]
-                )
-            else:
-                logger.debug("Question already exists, skipping save")
-        except Exception:
-            tb_str = traceback.format_exc()
-            logger.error(f"Error saving questions data to YAML file: {tb_str}")
-            raise Exception(f"Error saving questions data to YAML file: \nTraceback:\n{tb_str}")
-
-    def _answer_contians_company_name(self, answer: str) -> bool:
-        """Check if answer contains company name"""
-        return (
-            isinstance(answer, str)
-            and self.current_job.company_name is not None
-            and self.current_job.company_name in answer
-        )
-
 
 if __name__ == "__main__":
-    """Simple test for EasyApplier functionality"""
+    """Simple test for LinkedInEasyApplier functionality"""
     import asyncio
     from pathlib import Path
 
@@ -1830,8 +1777,8 @@ if __name__ == "__main__":
                 await asyncio.sleep(0.5)
 
     async def test_easy_applier():
-        """Test EasyApplier with a real LinkedIn job posting (async)"""
-        logger.info("Starting EasyApplier test...")
+        """Test LinkedInEasyApplier with a real LinkedIn job posting (async)"""
+        logger.info("Starting LinkedInEasyApplier test...")
 
         # Test job URL
         job_url = "https://linkedin.com/jobs/view/4397017085"
@@ -1881,8 +1828,8 @@ if __name__ == "__main__":
             resume_generator = ResumeGenerator(gpt_answerer, resume_anonymizer)
             resume_generator_manager = ResumeManager(llm_api_key, style_manager, resume_generator)
 
-            # Initialize EasyApplier
-            easy_applier = EasyApplier(
+            # Initialize LinkedInEasyApplier
+            easy_applier = LinkedInEasyApplier(
                 page,
                 gpt_answerer,
                 resume_anonymizer,
@@ -1902,18 +1849,18 @@ if __name__ == "__main__":
             await async_pause(3, 5)
 
             # Test the apply_to_job method
-            logger.info("Testing EasyApplier.apply_to_job method...")
+            logger.info("Testing LinkedInEasyApplier.apply_to_job method...")
             result = await easy_applier.apply_to_job(test_job)
 
             if result[0] == "Success":
-                logger.info("✅ EasyApplier test completed successfully!")
+                logger.info("✅ LinkedInEasyApplier test completed successfully!")
                 return True
             else:
-                logger.error("❌ EasyApplier test failed - result is not Success")
+                logger.error("❌ LinkedInEasyApplier test failed - result is not Success")
                 return False
 
         except Exception as e:
-            logger.error(f"❌ EasyApplier test failed with error: {e}")
+            logger.error(f"❌ LinkedInEasyApplier test failed with error: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
             return False
         finally:
@@ -1931,9 +1878,9 @@ if __name__ == "__main__":
             except Exception:
                 pass
 
-    print("\nTesting full EasyApplier functionality...")
+    print("\nTesting full LinkedInEasyApplier functionality...")
     success = asyncio.run(test_easy_applier())
     if success:
-        print("✅ EasyApplier test passed!")
+        print("✅ LinkedInEasyApplier test passed!")
     else:
-        print("❌ EasyApplier test failed!")
+        print("❌ LinkedInEasyApplier test failed!")

@@ -25,7 +25,7 @@ from config.constants import (
     SEARCH_CONFIG_FILE,
 )
 from config.logger_config import logger
-from src.job_manager.linkedin.easy_applier import EasyApplier
+from src.job_manager.linkedin.easy_applier_linkedin import LinkedInEasyApplier
 from src.pydantic_models.job_models import Job, JobInfo, JobManagerCache
 from src.telegram.telegram_manager import TelegramReportSender
 from src.utils.browser_utils import (
@@ -197,7 +197,7 @@ class JobApplier:
 
     async def start_applying(self) -> None:
         """Send applications to all employers on all pages (async)"""
-        self.easy_applier_component = EasyApplier(
+        self.easy_applier_component = LinkedInEasyApplier(
             self.page,
             self.llm_answerer_component,
             self.resume_anonymizer,
