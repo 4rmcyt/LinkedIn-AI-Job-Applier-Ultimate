@@ -1,6 +1,6 @@
 import traceback
 from abc import ABC, abstractmethod
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 from config.logger_config import logger
 from src.pydantic_models.job_models import Job, Question
@@ -22,6 +22,45 @@ class BaseEasyApplier(ABC):
     @abstractmethod
     async def job_easy_apply(self, job: Job) -> Tuple[str, str]:
         pass
+
+    @abstractmethod
+    async def _handle_terms_of_service(self, section: Any) -> bool:
+        pass
+
+    @abstractmethod
+    async def _find_and_handle_radio_question(self, section: Any) -> bool:
+        pass
+
+    @abstractmethod
+    async def _find_and_handle_checkbox_question(self, section: Any) -> bool:
+        pass
+
+    @abstractmethod
+    async def _find_and_handle_textbox_question(self, section: Any) -> bool:
+        pass
+
+    @abstractmethod
+    async def _find_and_handle_dropdown_question(self, section: Any) -> bool:
+        pass
+
+    async def _process_form_section(self, section: Any) -> None:
+        """Process form section by dispatching to appropriate handler (async)"""
+        logger.debug("Processing form section")
+        if await self._handle_terms_of_service(section):
+            logger.debug("Handled terms of service")
+            return
+        if await self._find_and_handle_radio_question(section):
+            logger.debug("Handled radio question")
+            return
+        if await self._find_and_handle_checkbox_question(section):
+            logger.debug("Handled checkbox question")
+            return
+        if await self._find_and_handle_textbox_question(section):
+            logger.debug("Handled textbox question")
+            return
+        if await self._find_and_handle_dropdown_question(section):
+            logger.debug("Handled dropdown question")
+            return
 
     def _save_questions(self, question_data: Question) -> None:
         """Save questions to YAML file"""

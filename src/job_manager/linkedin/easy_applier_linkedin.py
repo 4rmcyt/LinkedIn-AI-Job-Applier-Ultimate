@@ -11,7 +11,7 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
 from config.logger_config import logger
-from src.job_manager.easy_applier import BaseEasyApplier
+from src.job_manager.easy_applier import BaseEasyApplier, NoInfoException
 from src.job_manager.resume_anonymizer import ResumeAnonymizer
 from src.llm.llm_manager import GPTAnswerer
 from src.pydantic_models.job_models import Job, Question
@@ -22,10 +22,6 @@ from src.utils.browser_utils import (
     get_clean_text,
 )
 from src.utils.utils import async_pause, get_first_pdf_file, load_yaml_file, sanitize_text
-
-
-class NoInfoException(Exception):
-    pass
 
 
 class LinkedInEasyApplier(BaseEasyApplier):
@@ -821,25 +817,6 @@ class LinkedInEasyApplier(BaseEasyApplier):
             await debug_capture(self.page, "cover_letter_upload_error")
             raise Exception(f"Upload failed: \nTraceback:\n{tb_str}")
 
-    async def _process_form_section(self, section: Any) -> None:
-        """Process form section by dispatching to appropriate handler (async)"""
-        logger.debug("Processing form section")
-        if await self._handle_terms_of_service(section):
-            logger.debug("Handled terms of service")
-            return
-        if await self._find_and_handle_radio_question(section):
-            logger.debug("Handled radio question")
-            return
-        if await self._find_and_handle_checkbox_question(section):
-            logger.debug("Handled checkbox question")
-            return
-        if await self._find_and_handle_textbox_question(section):
-            logger.debug("Handled textbox question")
-            return
-        if await self._find_and_handle_dropdown_question(section):
-            logger.debug("Handled dropdown question")
-            return
-
     async def _handle_terms_of_service(self, element: Any) -> bool:
         """Handle terms of service checkbox (async)"""
         try:
@@ -1001,10 +978,14 @@ class LinkedInEasyApplier(BaseEasyApplier):
                     selected_options = self.gpt_answerer.select_many_answers_from_options(
                         question_text, checkbox_options, self.previous_question_texts[:-1]
                     )
-                    question_data = Question(
-                        question_type="checkbox", question=question_text, answer=selected_options
-                    )
-                    self._save_questions(question_data)
+                    if not any(s.lower().startswith("no info") for s in selected_options):
+                        self._save_questions(
+                            Question(
+                                question_type="checkbox",
+                                question=question_text,
+                                answer=selected_options,
+                            )
+                        )
 
                 logger.info(f"LLM selected options: {selected_options}")
 

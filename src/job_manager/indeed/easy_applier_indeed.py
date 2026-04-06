@@ -4,7 +4,7 @@ from typing import Any, List, Tuple
 from playwright.sync_api import Page
 
 from config.logger_config import logger
-from src.job_manager.easy_applier import BaseEasyApplier
+from src.job_manager.easy_applier import BaseEasyApplier, NoInfoException
 from src.job_manager.resume_anonymizer import ResumeAnonymizer
 from src.llm.llm_manager import GPTAnswerer
 from src.pydantic_models.job_models import Job, Question
@@ -14,7 +14,7 @@ from src.utils.browser_utils import (
     find_elements_safely,
     get_clean_text,
 )
-from src.utils.utils import async_pause, load_yaml_file
+from src.utils.utils import async_pause, load_yaml_file, sanitize_text
 
 INDEED_APPLY_BUTTON_SELECTOR = "button#indeedApplyButton, button[data-jk], .ia-IndeedApplyButton"
 INDEED_APPLY_MODAL_SELECTOR = "div.ia-BasePage, div[data-testid='ia-container']"
@@ -46,7 +46,7 @@ class IndeedEasyApplier(BaseEasyApplier):
         self.resume_dir = resume_dir
         self.cover_letter_dir = cover_letter_dir
         self.test_mode = test_mode
-        self.questions: List[Question] = self._load_questions()
+        self.all_questions: List[Question] = self._load_questions()
         self.previous_question_texts: List[str] = []
 
         logger.info("IndeedEasyApplier initialized")
@@ -72,6 +72,7 @@ class IndeedEasyApplier(BaseEasyApplier):
         Returns (result, cover_letter_text) where result is 'success' | 'skipped' | 'error'.
         """
         cover_letter = ""
+        self.current_job = job
         try:
             apply_btn = await self._find_apply_button(job)
             if not apply_btn:
@@ -99,6 +100,12 @@ class IndeedEasyApplier(BaseEasyApplier):
             result = await self._submit_application()
             return ("success" if result else "error"), cover_letter
 
+        except NoInfoException as e:
+            logger.warning(f"Could not apply to {job.job_title} at {job.company_name}. Reason: {e}")
+            return (
+                "Skip",
+                f"Could not apply to {job.job_title} at {job.company_name}. Reason: {e}",
+            )
         except Exception as e:
             logger.error(f"Error applying to Indeed job {job.job_title}: {e}", exc_info=True)
             await debug_capture(self.page, "indeed_job_easy_apply_error")
@@ -198,7 +205,11 @@ class IndeedEasyApplier(BaseEasyApplier):
                 "div.ia-Questions-item, div[data-testid='ia-Questions-item']",
             )
             for section in sections or []:
-                await self._process_form_section(section, job)
+                try:
+                    await self._process_form_section(section)
+                except NoInfoException as e:
+                    logger.warning(f"{e}")
+                    continue
         except Exception as e:
             logger.error(f"Error filling form step: {e}", exc_info=True)
             await debug_capture(self.page, "indeed_fill_form_error")
@@ -262,40 +273,127 @@ class IndeedEasyApplier(BaseEasyApplier):
             logger.error(f"Error filling profile location page: {e}", exc_info=True)
             await debug_capture(self.page, "indeed_profile_location_error")
 
-    async def _process_form_section(self, section: Any, job: Job) -> None:
-        """Fill a single form section based on its detected type"""
+    async def _handle_terms_of_service(self, section: Any) -> bool:
+        return True
+
+    async def _find_and_handle_textbox_question(self, section: Any) -> None:
+        """Fill appropriate textbox using cache or LLM"""
+        text_input = await find_element_safely(
+            section, "input[type='text'], input[type='number'], textarea", timeout=2000
+        )
+        if text_input:
+            question_text = await get_clean_text(section)
+            if question_text:
+                self.previous_question_texts.append(question_text)
+                current_question_sanitized = sanitize_text(question_text)
+                existing_answer = None
+                for item in self.all_questions:
+                    if item.question == current_question_sanitized and item.question_type == "text":
+                        existing_answer = item.answer
+                        break
+                if existing_answer:
+                    answer = existing_answer
+                    logger.debug(f"Using cached answer for '{question_text}': '{answer}'")
+                else:
+                    answer = self.gpt_answerer.answer_question_textual_wide_range(
+                        question_text, self.previous_question_texts[:-1]
+                    )
+                    if answer.lower().startswith("no info"):
+                        raise NoInfoException(f"No info found for question: {question_text}")
+                    self._save_questions(
+                        Question(question_type="text", question=question_text, answer=answer)
+                    )
+                await text_input.fill(answer)
+                logger.debug(f"Filled text field '{question_text}' with '{answer}'")
+            return
+
+    async def _find_and_handle_checkbox_question(self, section: Any) -> None:
+        """Select appropriate checkboxes (multi-select) using LLM"""
+        checkbox = await find_element_safely(section, "input[type='checkbox']", timeout=2000)
+        if not checkbox:
+            return
+
         try:
-            # Text input / textarea
-            text_input = await find_element_safely(
-                section, "input[type='text'], input[type='number'], textarea", timeout=2000
-            )
-            if text_input:
-                question_label = await get_clean_text(section)
-                if question_label:
-                    self.previous_question_texts.append(question_label)
-                    answer = await self._get_llm_answer(question_label, job)
-                    await text_input.fill(answer)
-                    logger.debug(f"Filled text field '{question_label}' with '{answer}'")
+            question_text = await get_clean_text(section)
+            checkboxes = await find_elements_safely(section, "input[type='checkbox']")
+            if not checkboxes:
                 return
 
-            # Radio / checkbox
-            radio = await find_element_safely(section, "input[type='radio']", timeout=2000)
-            if radio:
-                await self._handle_radio_section(section, job)
+            checkbox_data = []
+            option_texts = []
+            for cb in checkboxes:
+                cb_id = await cb.get_attribute("id")
+                label_text = ""
+                if cb_id:
+                    label_el = await find_element_safely(
+                        section, f"label[for='{cb_id}']", timeout=1000
+                    )
+                    if label_el:
+                        label_text = await get_clean_text(label_el)
+                if label_text:
+                    checkbox_data.append((cb, label_text))
+                    option_texts.append(label_text)
+
+            if not option_texts:
                 return
 
-            # Select / dropdown
-            select = await find_element_safely(section, "select", timeout=2000)
-            if select:
-                await self._handle_dropdown_section(section, select, job)
-                return
+            if question_text:
+                self.previous_question_texts.append(question_text)
 
+            current_question_sanitized = sanitize_text(question_text)
+            existing_answer = None
+            for item in self.all_questions:
+                if item.question == current_question_sanitized and item.question_type == "checkbox":
+                    existing_answer = item.answer
+                    break
+
+            if existing_answer:
+                selected_options = (
+                    existing_answer if isinstance(existing_answer, list) else [existing_answer]
+                )
+                logger.debug(f"Using cached checkboxes for '{question_text}': {selected_options}")
+            else:
+                selected_options = self.gpt_answerer.select_many_answers_from_options(
+                    question_text, option_texts, self.previous_question_texts[:-1]
+                )
+                if not any(s.lower().startswith("no info") for s in selected_options):
+                    self._save_questions(
+                        Question(
+                            question_type="checkbox",
+                            question=question_text,
+                            answer=selected_options,
+                        )
+                    )
+            logger.debug(f"Selected checkboxes: {selected_options}")
+
+            for cb, label_text in checkbox_data:
+                if any(
+                    sel.lower() in label_text.lower() or label_text.lower() in sel.lower()
+                    for sel in selected_options
+                    if not sel.lower().startswith("no info")
+                ):
+                    if not await cb.is_checked():
+                        cb_id = await cb.get_attribute("id")
+                        if cb_id:
+                            label_el = await find_element_safely(
+                                section, f"label[for='{cb_id}']", timeout=1000
+                            )
+                            if label_el:
+                                await label_el.click()
+                                logger.debug(f"Checked checkbox via label: '{label_text}'")
+                                continue
+                        await cb.click()
+                        logger.debug(f"Checked checkbox: '{label_text}'")
         except Exception as e:
-            logger.warning(f"Error processing form section: {e}")
-            await debug_capture(self.page, "indeed_form_section_error")
+            logger.warning(f"Error handling checkbox section: {e}")
+            await debug_capture(self.page, "indeed_checkbox_error")
 
-    async def _handle_radio_section(self, section: Any, job: Job) -> None:
+    async def _find_and_handle_radio_question(self, section: Any) -> None:
         """Select appropriate radio option using LLM"""
+        radio = await find_element_safely(section, "input[type='radio']", timeout=2000)
+        if not radio:
+            return
+
         try:
             question_text = await get_clean_text(section)
             radios = await find_elements_safely(section, "input[type='radio']")
@@ -313,9 +411,26 @@ class IndeedEasyApplier(BaseEasyApplier):
                     labels.append("")
             if question_text:
                 self.previous_question_texts.append(question_text)
-            answer = self.gpt_answerer.select_one_answer_from_options(
-                question_text, labels, self.previous_question_texts[:-1]
-            )
+
+            current_question_sanitized = sanitize_text(question_text)
+            existing_answer = None
+            for item in self.all_questions:
+                if current_question_sanitized in item.question and item.question_type == "radio":
+                    existing_answer = item.answer
+                    break
+
+            if existing_answer:
+                answer = existing_answer
+                logger.debug(f"Using cached radio answer for '{question_text}': '{answer}'")
+            else:
+                answer = self.gpt_answerer.select_one_answer_from_options(
+                    question_text, labels, self.previous_question_texts[:-1]
+                )
+                if answer.lower().startswith("no info"):
+                    raise NoInfoException(f"No info found for question: {question_text}")
+                self._save_questions(
+                    Question(question_type="radio", question=question_text, answer=answer)
+                )
             # Exact match first to avoid substring false positives (e.g. "male" in "female")
             for radio, label in zip(radios, labels):
                 if answer.lower() == label.lower():
@@ -333,45 +448,54 @@ class IndeedEasyApplier(BaseEasyApplier):
             logger.warning(f"Error handling radio section: {e}")
             await debug_capture(self.page, "indeed_radio_error")
 
-    async def _handle_dropdown_section(self, section: Any, select: Any, job: Job) -> None:
+    async def _find_and_handle_dropdown_question(self, section: Any) -> None:
         """Select appropriate dropdown option using LLM"""
+        dropdown = await find_element_safely(section, "select", timeout=2000)
+        if not dropdown:
+            return
+
         try:
             question_text = await get_clean_text(section)
-            options = await select.query_selector_all("option")
+            options = await dropdown.query_selector_all("option")
             option_texts = [await get_clean_text(o) for o in options]
             if question_text:
                 self.previous_question_texts.append(question_text)
-            answer = self.gpt_answerer.select_one_answer_from_options(
-                question_text, option_texts, self.previous_question_texts[:-1]
-            )
+
+            current_question_sanitized = sanitize_text(question_text)
+            existing_answer = None
+            for item in self.all_questions:
+                if current_question_sanitized in item.question and item.question_type == "dropdown":
+                    existing_answer = item.answer
+                    break
+
+            if existing_answer:
+                answer = existing_answer
+                logger.debug(f"Using cached dropdown answer for '{question_text}': '{answer}'")
+            else:
+                answer = self.gpt_answerer.select_one_answer_from_options(
+                    question_text, option_texts, self.previous_question_texts[:-1]
+                )
+                if not answer.lower().startswith("no info"):
+                    self._save_questions(
+                        Question(question_type="dropdown", question=question_text, answer=answer)
+                    )
             # Exact match first to avoid substring false positives
             for opt_text in option_texts:
                 if answer.lower() == opt_text.lower():
-                    await select.select_option(label=opt_text)
+                    await dropdown.select_option(label=opt_text)
                     logger.debug(f"Selected dropdown option '{opt_text}'")
                     return
             for opt_text in option_texts:
                 if answer.lower() in opt_text.lower():
-                    await select.select_option(label=opt_text)
+                    await dropdown.select_option(label=opt_text)
                     logger.debug(f"Selected dropdown option '{opt_text}'")
                     return
             # Fallback: skip default/empty option and pick the first real one
             if len(option_texts) > 1:
-                await select.select_option(label=option_texts[1])
+                await dropdown.select_option(label=option_texts[1])
         except Exception as e:
             logger.warning(f"Error handling dropdown section: {e}")
             await debug_capture(self.page, "indeed_dropdown_error")
-
-    async def _get_llm_answer(self, question: str, job: Job) -> str:
-        """Get LLM answer for a form question"""
-        try:
-            if self.gpt_answerer:
-                return self.gpt_answerer.answer_question_textual_wide_range(
-                    question, self.previous_question_texts[:-1]
-                )
-        except Exception as e:
-            logger.warning(f"LLM answer failed for question '{question}': {e}")
-        return ""
 
     async def _submit_application(self) -> bool:
         """Click the final submit button"""
@@ -410,6 +534,10 @@ class IndeedEasyApplier(BaseEasyApplier):
         except Exception as e:
             logger.warning(f"Could not discard Indeed application: {e}")
             await debug_capture(self.page, "indeed_discard_error")
+
+    async def _fill_textbox_question_errors(self) -> None:
+        # TODO: implement this method
+        pass
 
 
 if __name__ == "__main__":
