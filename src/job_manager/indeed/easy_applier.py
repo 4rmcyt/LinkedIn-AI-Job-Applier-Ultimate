@@ -13,7 +13,7 @@ from src.utils.browser_utils import (
     find_elements_safely,
     get_clean_text,
 )
-from src.utils.utils import async_pause, load_yaml_file, sanitize_text, save_yaml_file
+from src.utils.utils import async_pause, load_yaml_file, save_yaml_file
 
 INDEED_APPLY_BUTTON_SELECTOR = "button#indeedApplyButton, button[data-jk], .ia-IndeedApplyButton"
 INDEED_APPLY_MODAL_SELECTOR = "div.ia-BasePage, div[data-testid='ia-container']"
@@ -420,3 +420,144 @@ class IndeedEasyApplier:
             )
         except Exception as e:
             logger.warning(f"Could not save question: {e}")
+
+
+if __name__ == "__main__":
+    """Simple test for IndeedEasyApplier functionality"""
+    import asyncio
+    import traceback
+    from pathlib import Path
+
+    import dotenv
+
+    from config.constants import ANSWERS_FILE, COVER_LETTER_DIR, RESUME_DIR
+    from src.job_manager.resume_anonymizer import ResumeAnonymizer
+    from src.llm.llm_manager import GPTAnswerer
+    from src.pydantic_models.job_models import Job
+    from src.pydantic_models.prompt_models import ResumeStructure
+    from src.utils.browser_utils import create_playwright_browser, save_browser_session
+
+    RESUME_STRUCTURED_FILE = Path(RESUME_DIR) / "structured_resume.yaml"
+    RESUME_TEXT_FILE = Path(RESUME_DIR) / "resume_text.txt"
+    paused = False
+
+    async def check_pause():
+        """Check if execution is paused and wait if needed"""
+        global paused
+        if paused:
+            while paused:
+                await asyncio.sleep(0.5)
+
+    async def test_indeed_easy_applier():
+        """Test IndeedEasyApplier with a real Indeed job posting (async)"""
+        logger.info("Starting IndeedEasyApplier test...")
+
+        # Test job URL
+        job_url = (
+            "https://www.indeed.com/viewjob?jk=55f3b1bf0b69babb&tk=1jlgv4jjvi96p881&from=serp&vjs=3"
+        )
+        # job_url = (
+        #     "https://www.indeed.com/viewjob?jk=5d8d545b93be6f7f&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
+        # )
+        # job_url = (
+        #     "https://www.indeed.com/viewjob?jk=f50b368946d1affe&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
+        # )
+        # job_url = "https://www.indeed.com/viewjob?jk=db5d6bbd822a8a89&from=serp&vjs=3"
+        # job_url = (
+        #     "https://www.indeed.com/viewjob?jk=0cc1bcc48e791a51&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
+        # )
+
+        # Initialize Playwright browser
+        try:
+            browser, context, page = await create_playwright_browser()
+            logger.info("Playwright browser initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize Playwright browser: {e}")
+            return False
+
+        # Create test job object
+        test_job = Job(
+            job_title="Junior Software Developer",
+            company_name="Example Corp",
+            location="Remote",
+            url=job_url,
+            job_description="Entry-level software developer role working on web applications.",
+            apply_method="Easy Apply",
+        )
+
+        try:
+            # Load secrets for LLM
+            secrets = dotenv.dotenv_values(".env")
+            llm_api_key = secrets.get("llm_api_key", "")
+            llm_proxy = secrets.get("llm_proxy", "")
+
+            # Initialize GPT answerer
+            gpt_answerer = GPTAnswerer(llm_api_key, llm_proxy)
+            resume_structured = load_yaml_file(RESUME_STRUCTURED_FILE)
+            resume_structured = ResumeStructure(**resume_structured).model_dump()
+            with open(RESUME_TEXT_FILE, "r") as f:
+                resume_text = f.read()
+
+            # Set resume anonymizer and anonymize the resume information
+            resume_anonymizer = ResumeAnonymizer(resume_structured)
+            resume_anonymizer.anonymize_personal_information()
+            resume_structured = resume_anonymizer.resume_anonymized
+            resume_text = resume_anonymizer.anonymize_text(resume_text)
+
+            gpt_answerer.set_resume(resume_structured, resume_text)
+            gpt_answerer.set_job(test_job, is_test=True)
+
+            # Initialize IndeedEasyApplier
+            easy_applier = IndeedEasyApplier(
+                page,
+                gpt_answerer,
+                resume_anonymizer,
+                None,
+                check_pause,
+                ANSWERS_FILE,
+                RESUME_DIR,
+                COVER_LETTER_DIR,
+                test_mode=True,
+            )
+
+            # Navigate to job page
+            logger.info(f"Navigating to job page: {job_url}")
+            await page.goto(job_url)
+            await async_pause(3, 5)
+
+            # Test the apply_to_job method
+            logger.info("Testing IndeedEasyApplier.apply_to_job method...")
+            result = await easy_applier.apply_to_job(test_job)
+
+            if result[0] == "success":
+                logger.info("✅ IndeedEasyApplier test completed successfully!")
+                return True
+            else:
+                logger.error(f"❌ IndeedEasyApplier test failed - result: {result[0]}")
+                return False
+
+        except Exception as e:
+            logger.error(f"❌ IndeedEasyApplier test failed with error: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return False
+        finally:
+            # Keep browser open for manual inspection
+            logger.info(
+                "Test completed. Browser will remain open for 5 minutes for manual inspection..."
+            )
+            await async_pause(300, 300)
+            try:
+                await save_browser_session(context)
+            except Exception:
+                pass
+            try:
+                await browser.close()
+            except Exception:
+                pass
+
+    print("\nTesting full IndeedEasyApplier functionality...")
+    success = asyncio.run(test_indeed_easy_applier())
+    if success:
+        print("✅ IndeedEasyApplier test passed!")
+    else:
+        print("❌ IndeedEasyApplier test failed!")
