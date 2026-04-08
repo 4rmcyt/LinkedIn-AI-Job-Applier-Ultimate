@@ -1,10 +1,15 @@
+import base64
+import os
 import traceback
 from abc import ABC, abstractmethod
 from typing import Any, List, Tuple
 
+from httpx import HTTPStatusError
+
 from config.logger_config import logger
 from src.pydantic_models.job_models import Job, Question
-from src.utils.utils import ConfigError, load_yaml_file, sanitize_text, save_yaml_file
+from src.utils.browser_utils import debug_capture
+from src.utils.utils import ConfigError, async_pause, load_yaml_file, sanitize_text, save_yaml_file
 
 
 class NoInfoException(Exception):
@@ -43,9 +48,69 @@ class BaseEasyApplier(ABC):
     async def _find_and_handle_dropdown_question(self, section: Any) -> bool:
         pass
 
-    @abstractmethod
-    async def _create_and_upload_resume(self) -> None:
-        pass
+    async def _create_and_upload_resume(self, element: Any, job: Job) -> None:
+        try:
+            os.makedirs(self.generated_resume_dir, exist_ok=True)
+        except Exception as e:
+            logger.error(f"Failed to create directory: {self.generated_resume_dir}. Error: {e}")
+            raise
+
+        while True:
+            try:
+                file_path_pdf = os.path.join(
+                    self.generated_resume_dir, f"CV_{job.company_name}_{job.job_title}.pdf"
+                )
+                logger.debug(f"Generated file path for resume: {file_path_pdf}")
+                resume_pdf_base64 = await self.resume_generator_manager.pdf_base64()
+                with open(file_path_pdf, "xb") as f:
+                    f.write(base64.b64decode(resume_pdf_base64))
+                logger.info(f"Resume successfully generated and saved to: {file_path_pdf}")
+                break
+            except HTTPStatusError as e:
+                if e.response.status_code == 429:
+                    retry_after = e.response.headers.get("retry-after")
+                    retry_after_ms = e.response.headers.get("retry-after-ms")
+                    if retry_after:
+                        wait_time = int(retry_after)
+                    elif retry_after_ms:
+                        wait_time = int(retry_after_ms) / 1000.0
+                    else:
+                        wait_time = 20
+                    logger.warning(f"Rate limit exceeded, waiting {wait_time}s before retrying...")
+                    await async_pause(wait_time, wait_time + 1)
+                else:
+                    logger.error(f"HTTP error: {e}")
+                    raise
+            except Exception as e:
+                logger.error(f"Failed to generate resume: {e}")
+                if "RateLimitError" in str(e):
+                    logger.warning("Rate limit error encountered, retrying...")
+                    await async_pause(20, 40)
+                else:
+                    raise
+
+        file_size = os.path.getsize(file_path_pdf)
+        max_file_size = 2 * 1024 * 1024  # 2 MB
+        if file_size > max_file_size:
+            logger.error(f"Resume file size exceeds 2 MB: {file_size} bytes")
+            raise ValueError("Resume file size exceeds the maximum limit of 2 MB.")
+
+        file_extension = os.path.splitext(file_path_pdf)[1].lower()
+        if file_extension not in {".pdf", ".doc", ".docx"}:
+            logger.error(f"Invalid resume file format: {file_extension}")
+            raise ValueError(
+                "Resume file format is not allowed. Only PDF, DOC, and DOCX formats are supported."
+            )
+
+        try:
+            await element.set_input_files(os.path.abspath(file_path_pdf))
+            await async_pause(1, 2)
+            logger.debug(f"Resume created and uploaded successfully: {file_path_pdf}")
+        except Exception:
+            tb_str = traceback.format_exc()
+            logger.error(f"Resume upload failed: {tb_str}")
+            await debug_capture(self.page, "resume_upload_error")
+            raise Exception(f"Upload failed: \nTraceback:\n{tb_str}")
 
     async def _process_form_section(self, section: Any) -> None:
         """Process form section by dispatching to appropriate handler (async)"""

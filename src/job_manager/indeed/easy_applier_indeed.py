@@ -1,11 +1,9 @@
-import base64
 import os
 import re
 import traceback
 from pathlib import Path
 from typing import Any, List, Tuple
 
-from httpx import HTTPStatusError
 from playwright.sync_api import Page
 
 from config.logger_config import logger
@@ -222,16 +220,34 @@ class IndeedEasyApplier(BaseEasyApplier):
             await debug_capture(self.page, "indeed_fill_form_error")
 
     async def _handle_resume_selection(self, job: Job) -> None:
-        """Select 'Upload a resume' radio and upload the generated/ready-made resume"""
+        """Prefer Indeed Resume if available; otherwise upload ready-made or generated resume"""
         try:
-            upload_radio = await find_element_safely(
+            indeed_resume_radio = await find_element_safely(
+                self.page,
+                "input[data-testid='resume-selection-structured-resume-radio-card-input']",
+                timeout=3000,
+            )
+            if indeed_resume_radio:
+                if not await indeed_resume_radio.is_checked():
+                    await indeed_resume_radio.click()
+                    await async_pause(0.5, 1)
+                logger.info("Using Indeed Resume")
+                return
+
+            upload_radio_input = await find_element_safely(
                 self.page,
                 "input[data-testid='resume-selection-file-resume-upload-radio-card-input']",
                 timeout=3000,
             )
-            if upload_radio:
-                if not await upload_radio.is_checked():
-                    await upload_radio.click()
+            if upload_radio_input and not await upload_radio_input.is_checked():
+                # The radio input is visually hidden; click the visible label instead
+                upload_label = await find_element_safely(
+                    self.page,
+                    "label[data-testid='resume-selection-file-resume-upload-radio-card-label']",
+                    timeout=3000,
+                )
+                if upload_label:
+                    await upload_label.click()
                     await async_pause(0.5, 1)
                     logger.info("Selected 'Upload a resume' radio option")
 
@@ -256,52 +272,6 @@ class IndeedEasyApplier(BaseEasyApplier):
         except Exception as e:
             logger.error(f"Error handling resume selection page: {e}", exc_info=True)
             await debug_capture(self.page, "indeed_resume_selection_error")
-
-    async def _create_and_upload_resume(self, element: Any, job: Job) -> None:
-        """Generate a tailored resume PDF and upload it to the file input"""
-        logger.info("Generating and uploading resume for Indeed application")
-        try:
-            os.makedirs(self.generated_resume_dir, exist_ok=True)
-        except Exception as e:
-            logger.error(f"Failed to create directory: {self.generated_resume_dir}. Error: {e}")
-            raise
-
-        file_path_pdf = os.path.join(
-            self.generated_resume_dir, f"CV_{job.company_name}_{job.job_title}.pdf"
-        )
-
-        while True:
-            try:
-                resume_pdf_base64 = await self.resume_generator_manager.pdf_base64()
-                with open(file_path_pdf, "xb") as f:
-                    f.write(base64.b64decode(resume_pdf_base64))
-                logger.info(f"Resume generated and saved to: {file_path_pdf}")
-                break
-            except HTTPStatusError as e:
-                if e.response.status_code == 429:
-                    retry_after = e.response.headers.get("retry-after")
-                    wait_time = int(retry_after) if retry_after else 20
-                    logger.warning(f"Rate limit exceeded, retrying in {wait_time}s...")
-                    await async_pause(wait_time, wait_time + 1)
-                else:
-                    raise
-            except Exception as e:
-                if "RateLimitError" in str(e):
-                    logger.warning("Rate limit error, retrying...")
-                    await async_pause(20, 40)
-                else:
-                    logger.error(f"Failed to generate resume: {e}", exc_info=True)
-                    raise
-
-        try:
-            await element.set_input_files(os.path.abspath(file_path_pdf))
-            await async_pause(1, 2)
-            logger.info(f"Resume uploaded successfully: {file_path_pdf}")
-        except Exception:
-            tb_str = traceback.format_exc()
-            logger.error(f"Resume upload failed: {tb_str}")
-            await debug_capture(self.page, "indeed_resume_upload_error")
-            raise Exception(f"Upload failed:\n{tb_str}")
 
     async def _fill_profile_location_page(self) -> None:
         """Fill the 'Review your location details' profile page using resume data"""
@@ -602,6 +572,20 @@ class IndeedEasyApplier(BaseEasyApplier):
                 logger.error("Submit button not found")
                 await debug_capture(self.page, "indeed_submit_button_not_found")
                 return False
+
+            captcha = await find_element_safely(self.page, "[data-testid='captcha']", timeout=2000)
+            if captcha:
+                logger.warning("Captcha detected before submission — pausing for manual solve")
+                while True:
+                    if not await find_element_safely(
+                        self.page, "[data-testid='captcha']", timeout=1000
+                    ):
+                        break
+                    response = await self.page.locator("#g-recaptcha-response").input_value()
+                    if response:
+                        break
+                    await async_pause(3, 3)
+
             await submit_btn.click()
             await async_pause(2, 4)
             logger.info("Application submitted on Indeed")
@@ -655,6 +639,9 @@ if __name__ == "__main__":
     from src.llm.llm_manager import GPTAnswerer
     from src.pydantic_models.job_models import Job
     from src.pydantic_models.prompt_models import ResumeStructure
+    from src.resume_builder.resume_generator import ResumeGenerator
+    from src.resume_builder.resume_manager import ResumeManager
+    from src.resume_builder.style_manager import StyleManager
     from src.utils.browser_utils import create_playwright_browser, save_browser_session
 
     RESUME_STRUCTURED_FILE = Path(RESUME_DIR) / "structured_resume.yaml"
@@ -673,12 +660,12 @@ if __name__ == "__main__":
         logger.info("Starting IndeedEasyApplier test...")
 
         # Test job URL
-        job_url = (
-            "https://www.indeed.com/viewjob?jk=55f3b1bf0b69babb&tk=1jlgv4jjvi96p881&from=serp&vjs=3"
-        )
         # job_url = (
-        #     "https://www.indeed.com/viewjob?jk=5d8d545b93be6f7f&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
+        #     "https://www.indeed.com/viewjob?jk=55f3b1bf0b69babb&tk=1jlgv4jjvi96p881&from=serp&vjs=3"
         # )
+        job_url = (
+            "https://www.indeed.com/viewjob?jk=5d8d545b93be6f7f&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
+        )
         # job_url = (
         #     "https://www.indeed.com/viewjob?jk=f50b368946d1affe&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
         # )
@@ -727,18 +714,25 @@ if __name__ == "__main__":
             gpt_answerer.set_resume(resume_structured, resume_text)
             gpt_answerer.set_job(test_job, is_test=True)
 
+            # Initialize resume generator manager
+            style_manager = StyleManager()
+            resume_generator = ResumeGenerator(gpt_answerer, resume_anonymizer)
+            resume_generator_manager = ResumeManager(llm_api_key, style_manager, resume_generator)
+
             # Initialize IndeedEasyApplier
             easy_applier = IndeedEasyApplier(
                 page,
                 gpt_answerer,
                 resume_anonymizer,
-                None,
+                resume_generator_manager,
                 check_pause,
                 ANSWERS_FILE,
                 RESUME_DIR,
                 COVER_LETTER_DIR,
                 test_mode=True,
             )
+            if not easy_applier.ready_made_resume_path.is_file():
+                resume_generator_manager.choose_style()
 
             # Navigate to job page
             # logger.info(f"Navigating to job page: {job_url}")
