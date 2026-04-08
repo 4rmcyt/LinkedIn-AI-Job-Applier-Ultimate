@@ -22,7 +22,7 @@ from src.utils.utils import async_pause, get_first_pdf_file, load_yaml_file, san
 INDEED_APPLY_BUTTON_SELECTOR = "button#indeedApplyButton, button[data-jk], .ia-IndeedApplyButton"
 INDEED_APPLY_MODAL_SELECTOR = "div.ia-BasePage, div[data-testid='ia-container']"
 INDEED_NEXT_BUTTON_SELECTOR = "button[data-testid='continue-button'], button[data-testid^='hp-continue-button'], button[data-testid='ia-continueButton'], .ia-BasePage-component button:has-text('Continue'), button:has-text('Review your application'), button:has-text('Continue')"
-INDEED_SUBMIT_BUTTON_SELECTOR = "button[data-testid='ia-submitButton'], button.ia-submitButton"
+INDEED_SUBMIT_BUTTON_SELECTOR = "button[data-testid='ia-submitButton'], button.ia-submitButton, button[data-testid='submit-application-button']"
 
 
 class IndeedEasyApplier(BaseEasyApplier):
@@ -150,9 +150,24 @@ class IndeedEasyApplier(BaseEasyApplier):
             if self.pause_checker:
                 await self.pause_checker()
 
+            # Pause for captcha if present before trying to advance
+            captcha = await find_element_safely(self.page, "[data-testid='captcha']", timeout=1000)
+            if captcha:
+                logger.warning("Captcha detected on form step — pausing for manual solve")
+                while True:
+                    if not await find_element_safely(
+                        self.page, "[data-testid='captcha']", timeout=1000
+                    ):
+                        break
+                    response = await self.page.locator("#g-recaptcha-response").input_value()
+                    if response:
+                        break
+                    await async_pause(3, 3)
+                logger.info("Captcha resolved, continuing")
+
             # Check if we reached the final submit page
             submit_btn = await find_element_safely(
-                self.page, INDEED_SUBMIT_BUTTON_SELECTOR, timeout=3000
+                self.page, INDEED_SUBMIT_BUTTON_SELECTOR, timeout=15000
             )
             if submit_btn:
                 logger.info("Reached submit page")
@@ -169,7 +184,10 @@ class IndeedEasyApplier(BaseEasyApplier):
                 break
 
             await next_btn.click()
-            await async_pause(1, 2)
+            try:
+                await self.page.wait_for_load_state("networkidle", timeout=15000)
+            except Exception:
+                await async_pause(2, 3)
 
         return cover_letter
 
