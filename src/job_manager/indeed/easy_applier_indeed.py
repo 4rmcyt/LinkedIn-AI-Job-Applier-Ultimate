@@ -1,6 +1,11 @@
+import base64
+import os
+import re
+import traceback
 from pathlib import Path
 from typing import Any, List, Tuple
 
+from httpx import HTTPStatusError
 from playwright.sync_api import Page
 
 from config.logger_config import logger
@@ -14,7 +19,7 @@ from src.utils.browser_utils import (
     find_elements_safely,
     get_clean_text,
 )
-from src.utils.utils import async_pause, load_yaml_file, sanitize_text
+from src.utils.utils import async_pause, get_first_pdf_file, load_yaml_file, sanitize_text
 
 INDEED_APPLY_BUTTON_SELECTOR = "button#indeedApplyButton, button[data-jk], .ia-IndeedApplyButton"
 INDEED_APPLY_MODAL_SELECTOR = "div.ia-BasePage, div[data-testid='ia-container']"
@@ -48,6 +53,8 @@ class IndeedEasyApplier(BaseEasyApplier):
         self.test_mode = test_mode
         self.all_questions: List[Question] = self._load_questions()
         self.previous_question_texts: List[str] = []
+        self.generated_resume_dir = Path(resume_dir) / "generated_resumes"
+        self.ready_made_resume_path = get_first_pdf_file(Path(resume_dir))
 
         logger.info("IndeedEasyApplier initialized")
 
@@ -95,7 +102,7 @@ class IndeedEasyApplier(BaseEasyApplier):
             if self.test_mode:
                 logger.info("TEST_MODE: skipping form submission")
                 await self._discard_application()
-                return "skipped", cover_letter
+                return "success", cover_letter
 
             result = await self._submit_application()
             return ("success" if result else "error"), cover_letter
@@ -121,8 +128,8 @@ class IndeedEasyApplier(BaseEasyApplier):
 
     async def _find_apply_button(self, job: Job) -> Any:
         """Locate the Indeed apply button on the job detail page"""
-        await self.page.goto(job.url, wait_until="domcontentloaded")
-        await async_pause(1, 2)
+        # await self.page.goto(job.url, wait_until="domcontentloaded")
+        # await async_pause(1, 2)
 
         for selector in INDEED_APPLY_BUTTON_SELECTOR.split(", "):
             btn = await find_element_safely(self.page, selector.strip(), timeout=5000)
@@ -191,7 +198,7 @@ class IndeedEasyApplier(BaseEasyApplier):
                 self.page, "[data-testid='resume-selection-form']", timeout=1000
             ):
                 await self.page.wait_for_load_state("domcontentloaded")
-                # await self._select_uploaded_resume()
+                await self._handle_resume_selection(job)
                 return
 
             if await find_element_safely(
@@ -214,23 +221,87 @@ class IndeedEasyApplier(BaseEasyApplier):
             logger.error(f"Error filling form step: {e}", exc_info=True)
             await debug_capture(self.page, "indeed_fill_form_error")
 
-    async def _select_uploaded_resume(self) -> None:
-        """Select the already-uploaded file resume on the Indeed resume selection page"""
+    async def _handle_resume_selection(self, job: Job) -> None:
+        """Select 'Upload a resume' radio and upload the generated/ready-made resume"""
         try:
-            radio = await find_element_safely(
+            upload_radio = await find_element_safely(
                 self.page,
-                "input[data-testid='resume-selection-file-resume-radio-card-input']",
+                "input[data-testid='resume-selection-file-resume-upload-radio-card-input']",
                 timeout=3000,
             )
-            if radio:
-                await radio.dispatch_event("click")
-                logger.info("Selected uploaded resume on resume selection page")
+            if upload_radio:
+                if not await upload_radio.is_checked():
+                    await upload_radio.click()
+                    await async_pause(0.5, 1)
+                    logger.info("Selected 'Upload a resume' radio option")
+
+            file_input = await find_element_safely(
+                self.page,
+                "input[data-testid='resume-selection-file-resume-upload-radio-card-file-input']",
+                timeout=3000,
+            )
+            if not file_input:
+                logger.warning("Resume file input not found on resume selection page")
+                return
+
+            if (
+                self.ready_made_resume_path is not None
+                and self.ready_made_resume_path.resolve().is_file()
+            ):
+                abs_path = os.path.abspath(str(self.ready_made_resume_path.resolve()))
+                await file_input.set_input_files(abs_path)
+                logger.info(f"Uploaded ready-made resume: {abs_path}")
             else:
-                logger.warning("Uploaded resume radio not found on resume selection page")
-                await debug_capture(self.page, "indeed_resume_selection_error")
+                await self._create_and_upload_resume(file_input, job)
         except Exception as e:
-            logger.error(f"Error selecting uploaded resume: {e}", exc_info=True)
+            logger.error(f"Error handling resume selection page: {e}", exc_info=True)
             await debug_capture(self.page, "indeed_resume_selection_error")
+
+    async def _create_and_upload_resume(self, element: Any, job: Job) -> None:
+        """Generate a tailored resume PDF and upload it to the file input"""
+        logger.info("Generating and uploading resume for Indeed application")
+        try:
+            os.makedirs(self.generated_resume_dir, exist_ok=True)
+        except Exception as e:
+            logger.error(f"Failed to create directory: {self.generated_resume_dir}. Error: {e}")
+            raise
+
+        file_path_pdf = os.path.join(
+            self.generated_resume_dir, f"CV_{job.company_name}_{job.job_title}.pdf"
+        )
+
+        while True:
+            try:
+                resume_pdf_base64 = await self.resume_generator_manager.pdf_base64()
+                with open(file_path_pdf, "xb") as f:
+                    f.write(base64.b64decode(resume_pdf_base64))
+                logger.info(f"Resume generated and saved to: {file_path_pdf}")
+                break
+            except HTTPStatusError as e:
+                if e.response.status_code == 429:
+                    retry_after = e.response.headers.get("retry-after")
+                    wait_time = int(retry_after) if retry_after else 20
+                    logger.warning(f"Rate limit exceeded, retrying in {wait_time}s...")
+                    await async_pause(wait_time, wait_time + 1)
+                else:
+                    raise
+            except Exception as e:
+                if "RateLimitError" in str(e):
+                    logger.warning("Rate limit error, retrying...")
+                    await async_pause(20, 40)
+                else:
+                    logger.error(f"Failed to generate resume: {e}", exc_info=True)
+                    raise
+
+        try:
+            await element.set_input_files(os.path.abspath(file_path_pdf))
+            await async_pause(1, 2)
+            logger.info(f"Resume uploaded successfully: {file_path_pdf}")
+        except Exception:
+            tb_str = traceback.format_exc()
+            logger.error(f"Resume upload failed: {tb_str}")
+            await debug_capture(self.page, "indeed_resume_upload_error")
+            raise Exception(f"Upload failed:\n{tb_str}")
 
     async def _fill_profile_location_page(self) -> None:
         """Fill the 'Review your location details' profile page using resume data"""
@@ -274,44 +345,45 @@ class IndeedEasyApplier(BaseEasyApplier):
             await debug_capture(self.page, "indeed_profile_location_error")
 
     async def _handle_terms_of_service(self, section: Any) -> bool:
-        return True
+        return False
 
-    async def _find_and_handle_textbox_question(self, section: Any) -> None:
+    async def _find_and_handle_textbox_question(self, section: Any) -> bool:
         """Fill appropriate textbox using cache or LLM"""
         text_input = await find_element_safely(
             section, "input[type='text'], input[type='number'], textarea", timeout=2000
         )
-        if text_input:
-            question_text = await get_clean_text(section)
-            if question_text:
-                self.previous_question_texts.append(question_text)
-                current_question_sanitized = sanitize_text(question_text)
-                existing_answer = None
-                for item in self.all_questions:
-                    if item.question == current_question_sanitized and item.question_type == "text":
-                        existing_answer = item.answer
-                        break
-                if existing_answer:
-                    answer = existing_answer
-                    logger.debug(f"Using cached answer for '{question_text}': '{answer}'")
-                else:
-                    answer = self.gpt_answerer.answer_question_textual_wide_range(
-                        question_text, self.previous_question_texts[:-1]
-                    )
-                    if answer.lower().startswith("no info"):
-                        raise NoInfoException(f"No info found for question: {question_text}")
-                    self._save_questions(
-                        Question(question_type="text", question=question_text, answer=answer)
-                    )
-                await text_input.fill(answer)
-                logger.debug(f"Filled text field '{question_text}' with '{answer}'")
-            return
+        question_text = await get_clean_text(section)
+        if not text_input or not question_text:
+            return False
 
-    async def _find_and_handle_checkbox_question(self, section: Any) -> None:
+        self.previous_question_texts.append(question_text)
+        current_question_sanitized = sanitize_text(question_text)
+        existing_answer = None
+        for item in self.all_questions:
+            if item.question == current_question_sanitized and item.question_type == "text":
+                existing_answer = item.answer
+                break
+        if existing_answer:
+            answer = existing_answer
+            logger.debug(f"Using cached answer for '{question_text}': '{answer}'")
+        else:
+            answer = self.gpt_answerer.answer_question_textual_wide_range(
+                question_text, self.previous_question_texts[:-1]
+            )
+            if answer.lower().startswith("no info"):
+                raise NoInfoException(f"No info found for question: {question_text}")
+            self._save_questions(
+                Question(question_type="text", question=question_text, answer=answer)
+            )
+        await text_input.fill(answer)
+        logger.debug(f"Filled text field '{question_text}' with '{answer}'")
+        return True
+
+    async def _find_and_handle_checkbox_question(self, section: Any) -> bool:
         """Select appropriate checkboxes (multi-select) using LLM"""
         checkbox = await find_element_safely(section, "input[type='checkbox']", timeout=2000)
         if not checkbox:
-            return
+            return False
 
         try:
             question_text = await get_clean_text(section)
@@ -335,7 +407,14 @@ class IndeedEasyApplier(BaseEasyApplier):
                     option_texts.append(label_text)
 
             if not option_texts:
-                return
+                return False
+
+            # Remove options from question text
+            for option in sorted(option_texts, key=lambda x: len(x), reverse=True):
+                question_text = question_text[::-1].replace(option[::-1], "", 1)[::-1]
+            question_text = re.sub(
+                r"Clear your answer(s)?", "", question_text, flags=re.IGNORECASE
+            ).strip()
 
             if question_text:
                 self.previous_question_texts.append(question_text)
@@ -356,14 +435,13 @@ class IndeedEasyApplier(BaseEasyApplier):
                 selected_options = self.gpt_answerer.select_many_answers_from_options(
                     question_text, option_texts, self.previous_question_texts[:-1]
                 )
-                if not any(s.lower().startswith("no info") for s in selected_options):
-                    self._save_questions(
-                        Question(
-                            question_type="checkbox",
-                            question=question_text,
-                            answer=selected_options,
-                        )
+                self._save_questions(
+                    Question(
+                        question_type="checkbox",
+                        question=question_text,
+                        answer=selected_options,
                     )
+                )
             logger.debug(f"Selected checkboxes: {selected_options}")
 
             for cb, label_text in checkbox_data:
@@ -387,28 +465,38 @@ class IndeedEasyApplier(BaseEasyApplier):
         except Exception as e:
             logger.warning(f"Error handling checkbox section: {e}")
             await debug_capture(self.page, "indeed_checkbox_error")
+            return False
+        return True
 
-    async def _find_and_handle_radio_question(self, section: Any) -> None:
+    async def _find_and_handle_radio_question(self, section: Any) -> bool:
         """Select appropriate radio option using LLM"""
         radio = await find_element_safely(section, "input[type='radio']", timeout=2000)
         if not radio:
-            return
+            return False
 
         try:
             question_text = await get_clean_text(section)
             radios = await find_elements_safely(section, "input[type='radio']")
             if not radios:
-                return
-            labels = []
+                return False
+            option_texts = []
             for radio in radios:
                 label_id = await radio.get_attribute("id")
                 if label_id:
                     label_el = await find_element_safely(
                         section, f"label[for='{label_id}']", timeout=1000
                     )
-                    labels.append(await get_clean_text(label_el) if label_el else "")
+                    option_texts.append(await get_clean_text(label_el) if label_el else "")
                 else:
-                    labels.append("")
+                    option_texts.append("")
+
+            # Remove options from question text
+            for option in sorted(option_texts, key=lambda x: len(x), reverse=True):
+                question_text = question_text[::-1].replace(option[::-1], "", 1)[::-1]
+            question_text = re.sub(
+                r"Clear your answer(s)?", "", question_text, flags=re.IGNORECASE
+            ).strip()
+
             if question_text:
                 self.previous_question_texts.append(question_text)
 
@@ -424,7 +512,7 @@ class IndeedEasyApplier(BaseEasyApplier):
                 logger.debug(f"Using cached radio answer for '{question_text}': '{answer}'")
             else:
                 answer = self.gpt_answerer.select_one_answer_from_options(
-                    question_text, labels, self.previous_question_texts[:-1]
+                    question_text, option_texts, self.previous_question_texts[:-1]
                 )
                 if answer.lower().startswith("no info"):
                     raise NoInfoException(f"No info found for question: {question_text}")
@@ -432,34 +520,39 @@ class IndeedEasyApplier(BaseEasyApplier):
                     Question(question_type="radio", question=question_text, answer=answer)
                 )
             # Exact match first to avoid substring false positives (e.g. "male" in "female")
-            for radio, label in zip(radios, labels):
-                if answer.lower() == label.lower():
+            for radio, option in zip(radios, option_texts):
+                if answer.lower() == option.lower():
                     await radio.click()
-                    logger.debug(f"Selected radio '{label}'")
+                    logger.debug(f"Selected radio '{option}'")
                     return
-            for radio, label in zip(radios, labels):
-                if answer.lower() in label.lower():
+            for radio, option in zip(radios, option_texts):
+                if answer.lower() in option.lower():
                     await radio.click()
-                    logger.debug(f"Selected radio '{label}'")
+                    logger.debug(f"Selected radio '{option}'")
                     return
             # Fallback: click first option
             await radios[0].click()
         except Exception as e:
             logger.warning(f"Error handling radio section: {e}")
             await debug_capture(self.page, "indeed_radio_error")
+            return False
+        return True
 
-    async def _find_and_handle_dropdown_question(self, section: Any) -> None:
+    async def _find_and_handle_dropdown_question(self, section: Any) -> bool:
         """Select appropriate dropdown option using LLM"""
         dropdown = await find_element_safely(section, "select", timeout=2000)
         if not dropdown:
-            return
+            return False
 
         try:
             question_text = await get_clean_text(section)
+            if not question_text:
+                return False
+
             options = await dropdown.query_selector_all("option")
             option_texts = [await get_clean_text(o) for o in options]
-            if question_text:
-                self.previous_question_texts.append(question_text)
+
+            self.previous_question_texts.append(question_text)
 
             current_question_sanitized = sanitize_text(question_text)
             existing_answer = None
@@ -496,6 +589,8 @@ class IndeedEasyApplier(BaseEasyApplier):
         except Exception as e:
             logger.warning(f"Error handling dropdown section: {e}")
             await debug_capture(self.page, "indeed_dropdown_error")
+            return False
+        return True
 
     async def _submit_application(self) -> bool:
         """Click the final submit button"""
@@ -529,6 +624,14 @@ class IndeedEasyApplier(BaseEasyApplier):
                 btn = await find_element_safely(self.page, selector, timeout=3000)
                 if btn:
                     await btn.click()
+                    await async_pause(1, 2)
+                    # Handle "Save application progress" dialog if it appears
+                    dont_save = await find_element_safely(
+                        self.page, "button:has-text('Don\\'t save')", timeout=3000
+                    )
+                    if dont_save:
+                        await dont_save.click()
+                        logger.info("Dismissed save dialog with 'Don't save'")
                     logger.info("Indeed application discarded")
                     return
         except Exception as e:
@@ -543,7 +646,6 @@ class IndeedEasyApplier(BaseEasyApplier):
 if __name__ == "__main__":
     """Simple test for IndeedEasyApplier functionality"""
     import asyncio
-    import traceback
     from pathlib import Path
 
     import dotenv
@@ -639,9 +741,9 @@ if __name__ == "__main__":
             )
 
             # Navigate to job page
-            logger.info(f"Navigating to job page: {job_url}")
-            await page.goto(job_url)
-            await async_pause(3, 5)
+            # logger.info(f"Navigating to job page: {job_url}")
+            # await page.goto(job_url)
+            # await async_pause(3, 5)
 
             # Test the apply_to_job method
             logger.info("Testing IndeedEasyApplier.apply_to_job method...")

@@ -630,7 +630,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
             return True
         return False
 
-    async def _create_and_upload_resume(self, element, job: Job):
+    async def _create_and_upload_resume(self, element, job: Job) -> None:
         logger.info("Starting the process of creating and uploading resume.")
         try:
             if not os.path.exists(self.generated_resume_dir):

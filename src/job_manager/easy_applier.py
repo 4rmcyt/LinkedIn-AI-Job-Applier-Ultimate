@@ -43,17 +43,21 @@ class BaseEasyApplier(ABC):
     async def _find_and_handle_dropdown_question(self, section: Any) -> bool:
         pass
 
+    @abstractmethod
+    async def _create_and_upload_resume(self) -> None:
+        pass
+
     async def _process_form_section(self, section: Any) -> None:
         """Process form section by dispatching to appropriate handler (async)"""
         logger.debug("Processing form section")
         if await self._handle_terms_of_service(section):
             logger.debug("Handled terms of service")
             return
-        if await self._find_and_handle_radio_question(section):
-            logger.debug("Handled radio question")
-            return
         if await self._find_and_handle_checkbox_question(section):
             logger.debug("Handled checkbox question")
+            return
+        if await self._find_and_handle_radio_question(section):
+            logger.debug("Handled radio question")
             return
         if await self._find_and_handle_textbox_question(section):
             logger.debug("Handled textbox question")
