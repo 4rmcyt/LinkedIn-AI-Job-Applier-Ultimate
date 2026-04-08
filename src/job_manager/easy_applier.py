@@ -118,17 +118,17 @@ class BaseEasyApplier(ABC):
         if await self._handle_terms_of_service(section):
             logger.debug("Handled terms of service")
             return
-        if await self._find_and_handle_checkbox_question(section):
-            logger.debug("Handled checkbox question")
-            return
         if await self._find_and_handle_radio_question(section):
             logger.debug("Handled radio question")
             return
-        if await self._find_and_handle_textbox_question(section):
-            logger.debug("Handled textbox question")
+        if await self._find_and_handle_checkbox_question(section):
+            logger.debug("Handled checkbox question")
             return
         if await self._find_and_handle_dropdown_question(section):
             logger.debug("Handled dropdown question")
+            return
+        if await self._find_and_handle_textbox_question(section):
+            logger.debug("Handled textbox question")
             return
 
     def _save_questions(self, question_data: Question) -> None:

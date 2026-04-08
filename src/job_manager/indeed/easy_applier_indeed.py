@@ -66,7 +66,7 @@ class IndeedEasyApplier(BaseEasyApplier):
     async def apply_to_job(self, job: Job) -> Tuple[str, str]:
         """Entry point - navigate to job page and apply"""
         logger.info(f"Navigating to Indeed job: {job.url}")
-        await self.page.goto(job.url, wait_until="domcontentloaded")
+        await self.page.goto(job.url)
         await async_pause(1, 2)
         result, cover_letter = await self.job_easy_apply(job)
         return result, cover_letter
@@ -85,7 +85,7 @@ class IndeedEasyApplier(BaseEasyApplier):
                 return "skipped", cover_letter
 
             try:
-                async with self.page.context.expect_page(timeout=5000) as new_page_info:
+                async with self.page.context.expect_page(timeout=10000) as new_page_info:
                     await apply_btn.click()
                 new_page = await new_page_info.value
                 await new_page.wait_for_load_state("domcontentloaded")
@@ -130,7 +130,7 @@ class IndeedEasyApplier(BaseEasyApplier):
         # await async_pause(1, 2)
 
         for selector in INDEED_APPLY_BUTTON_SELECTOR.split(", "):
-            btn = await find_element_safely(self.page, selector.strip(), timeout=5000)
+            btn = await find_element_safely(self.page, selector.strip(), timeout=10000)
             if btn:
                 logger.info(f"Found apply button: {selector.strip()}")
                 return btn
@@ -150,28 +150,20 @@ class IndeedEasyApplier(BaseEasyApplier):
             if self.pause_checker:
                 await self.pause_checker()
 
-            # Pause for captcha if present before trying to advance
-            captcha = await find_element_safely(self.page, "[data-testid='captcha']", timeout=1000)
-            if captcha:
-                logger.warning("Captcha detected on form step — pausing for manual solve")
-                while True:
-                    if not await find_element_safely(
-                        self.page, "[data-testid='captcha']", timeout=1000
-                    ):
-                        break
-                    response = await self.page.locator("#g-recaptcha-response").input_value()
-                    if response:
-                        break
-                    await async_pause(3, 3)
-                logger.info("Captcha resolved, continuing")
-
-            # Check if we reached the final submit page
-            submit_btn = await find_element_safely(
-                self.page, INDEED_SUBMIT_BUTTON_SELECTOR, timeout=15000
-            )
-            if submit_btn:
-                logger.info("Reached submit page")
-                break
+            # # Pause for captcha if present before trying to advance
+            # captcha = await find_element_safely(self.page, "[data-testid='captcha']", timeout=1000)
+            # if captcha:
+            #     logger.warning("Captcha detected on form step — pausing for manual solve")
+            #     while True:
+            #         if not await find_element_safely(
+            #             self.page, "[data-testid='captcha']", timeout=1000
+            #         ):
+            #             break
+            #         response = await self.page.locator("#g-recaptcha-response").input_value()
+            #         if response:
+            #             break
+            #         await async_pause(3, 3)
+            #     logger.info("Captcha resolved, continuing")
 
             # Fill visible form sections
             await self._fill_up(job)
@@ -188,6 +180,14 @@ class IndeedEasyApplier(BaseEasyApplier):
                 await self.page.wait_for_load_state("networkidle", timeout=15000)
             except Exception:
                 await async_pause(2, 3)
+
+            # # Check if we reached the final submit page
+            # submit_btn = await find_element_safely(
+            #     self.page, INDEED_SUBMIT_BUTTON_SELECTOR, timeout=15000
+            # )
+            # if submit_btn:
+            #     logger.info("Reached submit page")
+            #     break
 
         return cover_letter
 
@@ -537,7 +537,7 @@ class IndeedEasyApplier(BaseEasyApplier):
             if not question_text:
                 return False
 
-            options = await dropdown.query_selector_all("option")
+            options = await find_elements_safely(section, "select option")
             option_texts = [await get_clean_text(o) for o in options]
 
             self.previous_question_texts.append(question_text)
@@ -623,13 +623,13 @@ class IndeedEasyApplier(BaseEasyApplier):
                 "button[data-testid='ia-closeButton']",
             ]
             for selector in close_selectors:
-                btn = await find_element_safely(self.page, selector, timeout=3000)
+                btn = await find_element_safely(self.page, selector, timeout=1000)
                 if btn:
                     await btn.click()
                     await async_pause(1, 2)
                     # Handle "Save application progress" dialog if it appears
                     dont_save = await find_element_safely(
-                        self.page, "button:has-text('Don\\'t save')", timeout=3000
+                        self.page, "button:has-text('Don\\'t save')", timeout=2000
                     )
                     if dont_save:
                         await dont_save.click()
@@ -641,6 +641,7 @@ class IndeedEasyApplier(BaseEasyApplier):
             await debug_capture(self.page, "indeed_discard_error")
 
     async def _fill_textbox_question_errors(self) -> None:
+        # TODO: why so long?
         # TODO: implement this method
         pass
 
@@ -681,12 +682,12 @@ if __name__ == "__main__":
         # job_url = (
         #     "https://www.indeed.com/viewjob?jk=55f3b1bf0b69babb&tk=1jlgv4jjvi96p881&from=serp&vjs=3"
         # )
-        job_url = (
-            "https://www.indeed.com/viewjob?jk=5d8d545b93be6f7f&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
-        )
         # job_url = (
-        #     "https://www.indeed.com/viewjob?jk=f50b368946d1affe&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
+        #     "https://www.indeed.com/viewjob?jk=5d8d545b93be6f7f&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
         # )
+        job_url = (
+            "https://www.indeed.com/viewjob?jk=f50b368946d1affe&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
+        )
         # job_url = "https://www.indeed.com/viewjob?jk=db5d6bbd822a8a89&from=serp&vjs=3"
         # job_url = (
         #     "https://www.indeed.com/viewjob?jk=0cc1bcc48e791a51&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
