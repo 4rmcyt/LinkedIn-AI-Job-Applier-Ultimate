@@ -97,10 +97,10 @@ class IndeedEasyApplier(BaseEasyApplier):
                 await async_pause(1, 2)
 
             cover_letter = await self._fill_application_form(job)
-            if self.test_mode:
-                logger.info("TEST_MODE: skipping form submission")
-                await self._discard_application()
-                return "success", cover_letter
+            # if self.test_mode: # !!!
+            #     logger.info("TEST_MODE: skipping form submission")
+            #     await self._discard_application()
+            #     return "success", cover_letter
 
             result = await self._submit_application()
             return ("success" if result else "error"), cover_letter
@@ -150,7 +150,7 @@ class IndeedEasyApplier(BaseEasyApplier):
             if self.pause_checker:
                 await self.pause_checker()
 
-            # # Pause for captcha if present before trying to advance
+            # Pause for captcha if present before trying to advance
             # captcha = await find_element_safely(self.page, "[data-testid='captcha']", timeout=1000)
             # if captcha:
             #     logger.warning("Captcha detected on form step — pausing for manual solve")
@@ -168,6 +168,14 @@ class IndeedEasyApplier(BaseEasyApplier):
             # Fill visible form sections
             await self._fill_up(job)
 
+            # Check if we're already on the submit page
+            submit_btn = await find_element_safely(
+                self.page, INDEED_SUBMIT_BUTTON_SELECTOR, timeout=500
+            )
+            if submit_btn:
+                logger.info("Reached submit page")
+                break
+
             # Click next — find first *visible* button across the ordered selectors
             next_btn = await self._find_visible_next_button()
             if not next_btn:
@@ -177,17 +185,9 @@ class IndeedEasyApplier(BaseEasyApplier):
 
             await next_btn.click()
             try:
-                await self.page.wait_for_load_state("networkidle", timeout=15000)
+                await self.page.wait_for_load_state("domcontentloaded", timeout=5000)
             except Exception:
-                await async_pause(2, 3)
-
-            # # Check if we reached the final submit page
-            # submit_btn = await find_element_safely(
-            #     self.page, INDEED_SUBMIT_BUTTON_SELECTOR, timeout=15000
-            # )
-            # if submit_btn:
-            #     logger.info("Reached submit page")
-            #     break
+                await async_pause(1, 2)
 
         return cover_letter
 
