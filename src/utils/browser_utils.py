@@ -8,9 +8,14 @@ from typing import Any, List, Optional
 
 from patchright.async_api import Browser, BrowserContext, Page, async_playwright
 
-from config.app_config import DEBUG_MODE, HEADLESS_MODE
+from config.app_config import HEADLESS_MODE
 from config.constants import BROWSER_STORAGE_STATE, DEBUG_DIR
 from config.logger_config import logger
+
+try:  # TODO: add for back compatibility, remove this later
+    from config.app_config import DEBUG_MODE
+except ImportError:
+    DEBUG_MODE = False
 
 
 async def debug_capture(page: Page, label: str) -> None:
@@ -39,9 +44,14 @@ def ensure_playwright_profile() -> str:
     """Ensure Playwright session directory exists"""
     logger.info(f"Ensuring Playwright session directory exists at: {BROWSER_STORAGE_STATE}")
     session_dir = os.path.dirname(BROWSER_STORAGE_STATE)
-    if not os.path.exists(session_dir):
-        os.makedirs(session_dir)
-        logger.debug(f"Created Playwright session directory: {session_dir}")
+    if not os.path.exists(session_dir):  # TODO: add for back compatibility, remove this later
+        session_dir_new = os.path.join(
+            session_dir, "/".join(BROWSER_STORAGE_STATE.split("/")[:-1]) + "/linkedin_state.json"
+        )
+        if not os.path.exists(session_dir_new):
+            os.makedirs(session_dir)
+            logger.debug(f"Created Playwright session directory: {session_dir}")
+            return session_dir_new
     return session_dir
 
 
