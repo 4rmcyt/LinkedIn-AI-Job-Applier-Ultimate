@@ -185,7 +185,6 @@ I am a software engineer with 10 years of experience in Swift, Python, C, C++.
 How many years of experience do you have in Python?
 ##Options
 [1-2, 3-5, 6-10, 10+, No info]
-##Answer
 10+
 ```
 ##Example 2
@@ -196,7 +195,6 @@ I am a software engineer with 10 years of experience in Swift, Python, C, C++.
 Why did you come to development?
 ##Options
 [Write your own answer, Your answer]
-##Answer
 No info
 ```
 ##Resume
@@ -236,7 +234,6 @@ I am a software engineer with 10 years of experience in Swift, Python, C, C++.
 Which programming languages do you know?
 ##Options
 [python, C, rust, swift, ruby, C++, C#, go]
-##Answer
 python; C; swift; C++
 ```
 ##Example 2
@@ -247,7 +244,6 @@ I am a software engineer with 10 years of experience in Swift, Python, C, C++.
 Why did you come to development?
 ##Options
 [Write your own answer, Your answer]
-##Answer
 No info
 ```
 ##Resume
@@ -294,7 +290,6 @@ Follow these strategic guidelines when responding experience related questions:
 I had a degree in computer science. I have worked 4 years with MQTT protocol.
 ##Question
 How many years of experience do you have with IoT?
-##Answer
 4
 ```
 ##Example 2
@@ -303,7 +298,6 @@ How many years of experience do you have with IoT?
 I had a degree in computer science.
 ##Question
 How many years of experience do you have with Bash?
-##Answer
 2
 ```
 ##Example 3
@@ -312,7 +306,6 @@ How many years of experience do you have with Bash?
 I am a software engineer with 5 years of experience in Swift and Python. I have worked on an AI project.
 ##Question
 How many years of experience do you have with AI?
-##Answer
 2
 ```
 ##Resume

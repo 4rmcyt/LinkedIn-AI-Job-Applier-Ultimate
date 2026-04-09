@@ -60,7 +60,10 @@ def job_applier(mock_page, mock_resume_anonymizer, mock_search_component):
     """Create a LinkedInJobManager instance for testing with mocked file operations"""
     with (
         patch("src.job_manager.job_manager.OUTPUT_DIR", "/mock/output"),
-        patch("src.job_manager.job_manager.LAST_RUN_FILE", Path("/mock/output/last_run.yaml")),
+        patch(
+            "src.job_manager.linkedin.job_manager_linkedin.LAST_RUN_FILE",
+            Path("/mock/output/last_run.yaml"),
+        ),
         patch("builtins.open", mock_open()),
         patch("yaml.safe_load", return_value={}),
         patch("yaml.dump", return_value=""),
@@ -204,7 +207,7 @@ class TestCacheManagement:
         mock_file = mock_open()
         with (
             patch("builtins.open", mock_file),
-            patch("src.job_manager.job_manager.save_yaml_file") as mock_save,
+            patch("src.job_manager.linkedin.job_manager_linkedin.save_yaml_file") as mock_save,
         ):
             job_applier._write_the_last_search_time()
 

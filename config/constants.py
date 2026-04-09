@@ -1,7 +1,9 @@
 # Dummy personal data for anonymization (male)
 DUMMY_PERSONAL_INFO_MALE = {
+    "name": "Zorquill Thalaorix",
     "first_name": "Zorquill",
     "last_name": "Thalaorix",
+    "last_name_2": "Thalaris",
     # "birthday": "03.05.1993",
     "phone": "9335753535",
     "email": "zorquill_thalaorix@gmail.com",
@@ -13,8 +15,10 @@ DUMMY_PERSONAL_INFO_MALE = {
 
 # Dummy personal data for anonymization (female)
 DUMMY_PERSONAL_INFO_FEMALE = {
-    "first_name": "Zorquillia Thalaorix",
-    "last_name": "Zorquillia Thalaorix",
+    "name": "Zorquillia Thalaorix",
+    "first_name": "Zorquillia",
+    "last_name": "Thalaorix",
+    "last_name_2": "Thalaris",
     # "birthday": "03.05.1993",
     "phone": "9335753535",
     "email": "zorquillia_thalaorix@gmail.com",

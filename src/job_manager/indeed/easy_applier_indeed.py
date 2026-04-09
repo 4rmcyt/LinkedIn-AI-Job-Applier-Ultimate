@@ -173,6 +173,18 @@ class IndeedEasyApplier(BaseEasyApplier):
                 logger.warning(f"Error waiting for page to load: {e}")
             await async_pause(2, 3)
 
+            # Retry up to 3 times if validation errors remain after clicking next
+            for _ in range(3):
+                fixed = await self._fill_textbox_question_errors()
+                if not fixed:
+                    break
+                logger.info("Fixed textbox validation errors, retrying next button")
+                next_btn = await self._find_visible_next_button()
+                if not next_btn:
+                    break
+                await next_btn.click()
+                await async_pause(2, 3)
+
         return cover_letter
 
     async def _find_visible_next_button(self) -> Any:
@@ -328,7 +340,7 @@ class IndeedEasyApplier(BaseEasyApplier):
             return False
         question_text = await get_clean_text(section)
         try:
-            self.previous_question_texts.append(question_text)  # TODO: add try-except
+            self.previous_question_texts.append(question_text)
             current_question_sanitized = sanitize_text(question_text)
             existing_answer = None
             for item in self.all_questions:
@@ -528,6 +540,13 @@ class IndeedEasyApplier(BaseEasyApplier):
             options = await find_elements_safely(section, "select option")
             option_texts = [await get_clean_text(o) for o in options]
 
+            # Remove options from question text
+            for option in sorted(option_texts, key=lambda x: len(x), reverse=True):
+                question_text = question_text[::-1].replace(option[::-1], "", 1)[::-1]
+            question_text = re.sub(
+                r"Clear your answer(s)?", "", question_text, flags=re.IGNORECASE
+            ).strip()
+
             self.previous_question_texts.append(question_text)
 
             current_question_sanitized = sanitize_text(question_text)
@@ -628,10 +647,84 @@ class IndeedEasyApplier(BaseEasyApplier):
             logger.warning(f"Could not discard Indeed application: {e}")
             await debug_capture(self.page, "indeed_discard_error")
 
-    async def _fill_textbox_question_errors(self) -> None:
-        # TODO: why so long?
-        # TODO: implement this method
-        pass
+    async def _fill_textbox_question_errors(self) -> bool:
+        """Find textbox fields with validation errors and re-fill them using LLM."""
+        results: List[Tuple[Any, str, str]] = []
+
+        # Find all invalid text inputs on the page
+        invalid_inputs = await find_elements_safely(
+            self.page,
+            "input[aria-invalid='true'], textarea[aria-invalid='true']",
+        )
+        if not invalid_inputs:
+            return False
+
+        for input_el in invalid_inputs:
+            try:
+                # Get the error message via aria-describedby → find the error element
+                described_by = await input_el.get_attribute("aria-describedby") or ""
+                error_text = ""
+                for desc_id in described_by.split():
+                    if "error" in desc_id:
+                        error_el = self.page.locator(f"[id='{desc_id}']")
+                        if await error_el.count():
+                            error_text = (await error_el.text_content() or "").strip()
+                            break
+
+                if not error_text:
+                    continue
+
+                # Get the question label text
+                input_id = await input_el.get_attribute("id") or ""
+                question_text = ""
+                if input_id:
+                    label_el = self.page.locator(f"label[for='{input_id}']")
+                    if await label_el.count():
+                        question_text = (await label_el.text_content() or "").strip()
+
+                if not question_text:
+                    # Fallback: aria-label or name attribute
+                    question_text = (
+                        await input_el.get_attribute("aria-label")
+                        or await input_el.get_attribute("name")
+                        or ""
+                    ).strip()
+
+                results.append((input_el, question_text, error_text))
+            except Exception as e:
+                logger.warning(f"Error inspecting invalid input: {e}")
+                continue
+
+        if not results:
+            return False
+
+        for element, question_text, error_text in results:
+            logger.info(f"Fixing textbox error for '{question_text}': {error_text}")
+            try:
+                current_value = await element.input_value()
+                answer = self.gpt_answerer.answer_question_textual_wide_range_with_error(
+                    question_text,
+                    error_text,
+                    current_value,
+                    self.previous_question_texts,
+                )
+                if answer.lower().startswith("no info"):
+                    raise NoInfoException(
+                        f"Can't fix error: {error_text}. No info for question: {question_text}"
+                    )
+                answer = self.resume_anonymizer.deanonymize_text(answer)
+                await element.fill(answer)
+                self._save_questions(
+                    Question(question_type="text", question=question_text, answer=answer)
+                )
+                logger.debug(f"Re-filled '{question_text}' with '{answer}'")
+            except NoInfoException:
+                raise
+            except Exception as e:
+                logger.warning(f"Error fixing textbox field '{question_text}': {e}")
+                await debug_capture(self.page, "indeed_textbox_error_fix_error")
+
+        return True
 
 
 if __name__ == "__main__":
@@ -673,13 +766,13 @@ if __name__ == "__main__":
         # job_url = (
         #     "https://www.indeed.com/viewjob?jk=5d8d545b93be6f7f&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
         # )
-        job_url = (
-            "https://www.indeed.com/viewjob?jk=f50b368946d1affe&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
-        )
-        # job_url = "https://www.indeed.com/viewjob?jk=db5d6bbd822a8a89&from=serp&vjs=3"
         # job_url = (
-        #     "https://www.indeed.com/viewjob?jk=0cc1bcc48e791a51&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
+        #     "https://www.indeed.com/viewjob?jk=f50b368946d1affe&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
         # )
+        # job_url = "https://www.indeed.com/viewjob?jk=db5d6bbd822a8a89&from=serp&vjs=3"
+        job_url = (
+            "https://www.indeed.com/viewjob?jk=0cc1bcc48e791a51&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
+        )
 
         # Initialize Playwright browser
         try:
