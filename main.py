@@ -92,7 +92,7 @@ class ConfigValidator:
 
             missing_keys = [key for key in required_keys if not secrets.get(key)]
             if missing_keys:
-                raise ValueError(f"Missing required keys for {JOB_SITE}: {', '.join(missing_keys)}")
+                raise ValueError(f"Missing required keys: {', '.join(missing_keys)}")
 
             secrets_config = Secrets(**secrets)
             logger.debug(f"{JOB_SITE} secrets validated successfully.")

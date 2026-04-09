@@ -97,10 +97,10 @@ class IndeedEasyApplier(BaseEasyApplier):
                 await async_pause(1, 2)
 
             cover_letter = await self._fill_application_form(job)
-            # if self.test_mode: # !!!
-            #     logger.info("TEST_MODE: skipping form submission")
-            #     await self._discard_application()
-            #     return "success", cover_letter
+            if self.test_mode:
+                logger.info("TEST_MODE: skipping form submission")
+                await self._discard_application()
+                return "success", cover_letter
 
             result = await self._submit_application()
             return ("success" if result else "error"), cover_letter
