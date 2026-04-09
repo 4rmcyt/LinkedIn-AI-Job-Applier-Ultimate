@@ -166,12 +166,12 @@ class IndeedEasyApplier(BaseEasyApplier):
                 break
 
             await next_btn.click()
-            await async_pause(0.5, 1)
+            await async_pause(1, 2)
             try:
                 await self.page.wait_for_load_state("domcontentloaded")
             except Exception as e:
                 logger.warning(f"Error waiting for page to load: {e}")
-            await async_pause(1, 2)
+            await async_pause(2, 3)
 
         return cover_letter
 
@@ -324,9 +324,9 @@ class IndeedEasyApplier(BaseEasyApplier):
         text_input = await find_element_safely(
             section, "input[type='text'], input[type='number'], textarea", timeout=500
         )
-        question_text = await get_clean_text(section)
-        if not text_input or not question_text:
+        if not text_input:
             return False
+        question_text = await get_clean_text(section)
         try:
             self.previous_question_texts.append(question_text)  # TODO: add try-except
             current_question_sanitized = sanitize_text(question_text)
@@ -571,15 +571,7 @@ class IndeedEasyApplier(BaseEasyApplier):
     async def _submit_application(self) -> bool:
         """Click the final submit button"""
         try:
-            submit_btn = await find_element_safely(
-                self.page, INDEED_SUBMIT_BUTTON_SELECTOR, timeout=5000
-            )
-            if not submit_btn:
-                logger.error("Submit button not found")
-                await debug_capture(self.page, "indeed_submit_button_not_found")
-                return False
-
-            captcha = await find_element_safely(self.page, "[data-testid='captcha']", timeout=2000)
+            captcha = await find_element_safely(self.page, "[data-testid='captcha']", timeout=20000)
             if captcha:
                 logger.warning("Captcha detected before submission — pausing for manual solve")
                 while True:
@@ -591,6 +583,14 @@ class IndeedEasyApplier(BaseEasyApplier):
                     if response:
                         break
                     await async_pause(3, 3)
+
+            submit_btn = await find_element_safely(
+                self.page, INDEED_SUBMIT_BUTTON_SELECTOR, timeout=20000
+            )
+            if not submit_btn:
+                logger.error("Submit button not found")
+                await debug_capture(self.page, "indeed_submit_button_not_found")
+                return False
 
             await submit_btn.click()
             await async_pause(2, 4)
