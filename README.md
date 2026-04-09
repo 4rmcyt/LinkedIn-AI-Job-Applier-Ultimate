@@ -15,6 +15,15 @@ I have no time to check this bot every day, so if you face any malfunction or ha
 
 Please ⭐ the repository if you find it useful. This is the only thing that motivates me to continue developing the project.
 
+### ⚠️ Note on Indeed
+
+Indeed support is functional but has important limitations compared to LinkedIn:
+
+- **Most jobs are not Easy Apply.** The vast majority of Indeed listings redirect to external company websites, which the bot cannot reliably handle.
+- **CAPTCHAs are frequent.** Indeed aggressively deploys CAPTCHAs that interrupt automated flows, even with bot-detection bypass techniques.
+
+For these reasons, **LinkedIn is strongly recommended** over Indeed for automated job applications. Indeed support may improve in the future, but currently it is not well-suited for automation.
+
 ### LinkedIn AI Job Applier Chat 👇
 
 [![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white
@@ -49,7 +58,7 @@ This project enhances the original codebase with several powerful new features:
 *   **🔒 Data Anonymization:** Protects your privacy by replacing personal data with mock information before sending it to the LLM provider, ensuring your sensitive information remains secure.
     *   *Note: Auto resume parsing and applying of Non-Easy Apply vacancies don't use anonymization. Additionally, country, city, and birth date are not anonymized to maintain the quality of LLM responses.*
 *   **🎯 Improved Intelligent Resume Generation:** Uses AI to tailor every generated resume to the current vacancy for maximum match, adapting skills, experience, projects and achivements to the job description.
-*   **🎭 Playwright Integration:** Now uses Playwright instead of Selenium for faster, more reliable and secure browser automation with better performance and modern web standards support.
+*   **🎭 Patchright Integration:** Now uses [Patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright) (a patched build of Playwright) instead of Selenium/Playwright for faster, more reliable and undetectable browser automation. Patchright patches Chromium's automation detection signals to bypass Cloudflare and other bot-detection systems.
 *   **🖥️ Headless Mode:** Run the bot in headless mode if you want to use the bot in server environment or while working with your computer. This allows the bot to operate without a visible browser window while maintaining full functionality.
 *   **⏸️ Pause/Resume Control:** Pause the bot at any time by pressing `Ctrl+X` and continue when ready, giving you full control over execution without stopping the entire process.
 *   **📊 Skill Statistics:** Analyzes job descriptions to identify the most in-demand skills, helping you tailor your resume effectively.
@@ -97,18 +106,6 @@ This project enhances the original codebase with several powerful new features:
     ```
 
 2.  **Install dependencies**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-    or
-
-    ```bash
-    uv pip install -r requirements.txt
-    ```
-
-    or
-
     ```bash
     uv sync
     ```
@@ -375,10 +372,6 @@ So we do not recommend you to use this mode until you have enough money for that
 The project includes a suite of tests to ensure its functionality. To run them, first install the development dependencies:
 
 ```bash
-# Using pip
-pip install -r requirements.txt -e ".[dev]"
-
-# Using uv
 uv sync --dev
 ```
 
