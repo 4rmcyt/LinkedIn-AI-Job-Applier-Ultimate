@@ -130,6 +130,7 @@ class BaseEasyApplier(ABC):
         if await self._find_and_handle_textbox_question(section):
             logger.debug("Handled textbox question")
             return
+        logger.debug("Form section not handled")
 
     def _save_questions(self, question_data: Question) -> None:
         """Save questions to YAML file"""

@@ -117,7 +117,7 @@ class IndeedEasyApplier(BaseEasyApplier):
             try:
                 await self._discard_application()
             except Exception:
-                pass
+                logger.error(f"Error discarding application: {e}", exc_info=True)
             return "error", cover_letter
 
     # ------------------------------------------------------------------
@@ -126,9 +126,6 @@ class IndeedEasyApplier(BaseEasyApplier):
 
     async def _find_apply_button(self, job: Job) -> Any:
         """Locate the Indeed apply button on the job detail page"""
-        # await self.page.goto(job.url, wait_until="domcontentloaded")
-        # await async_pause(1, 2)
-
         for selector in INDEED_APPLY_BUTTON_SELECTOR.split(", "):
             btn = await find_element_safely(self.page, selector.strip(), timeout=10000)
             if btn:
@@ -150,27 +147,12 @@ class IndeedEasyApplier(BaseEasyApplier):
             if self.pause_checker:
                 await self.pause_checker()
 
-            # Pause for captcha if present before trying to advance
-            # captcha = await find_element_safely(self.page, "[data-testid='captcha']", timeout=1000)
-            # if captcha:
-            #     logger.warning("Captcha detected on form step — pausing for manual solve")
-            #     while True:
-            #         if not await find_element_safely(
-            #             self.page, "[data-testid='captcha']", timeout=1000
-            #         ):
-            #             break
-            #         response = await self.page.locator("#g-recaptcha-response").input_value()
-            #         if response:
-            #             break
-            #         await async_pause(3, 3)
-            #     logger.info("Captcha resolved, continuing")
-
             # Fill visible form sections
             await self._fill_up(job)
 
             # Check if we're already on the submit page
             submit_btn = await find_element_safely(
-                self.page, INDEED_SUBMIT_BUTTON_SELECTOR, timeout=500
+                self.page, INDEED_SUBMIT_BUTTON_SELECTOR, timeout=1000
             )
             if submit_btn:
                 logger.info("Reached submit page")
@@ -184,10 +166,12 @@ class IndeedEasyApplier(BaseEasyApplier):
                 break
 
             await next_btn.click()
+            await async_pause(0.5, 1)
             try:
-                await self.page.wait_for_load_state("domcontentloaded", timeout=5000)
-            except Exception:
-                await async_pause(1, 2)
+                await self.page.wait_for_load_state("domcontentloaded")
+            except Exception as e:
+                logger.warning(f"Error waiting for page to load: {e}")
+            await async_pause(1, 2)
 
         return cover_letter
 
@@ -243,7 +227,7 @@ class IndeedEasyApplier(BaseEasyApplier):
             indeed_resume_radio = await find_element_safely(
                 self.page,
                 "input[data-testid='resume-selection-structured-resume-radio-card-input']",
-                timeout=3000,
+                timeout=2000,
             )
             if indeed_resume_radio:
                 if not await indeed_resume_radio.is_checked():
@@ -255,14 +239,14 @@ class IndeedEasyApplier(BaseEasyApplier):
             upload_radio_input = await find_element_safely(
                 self.page,
                 "input[data-testid='resume-selection-file-resume-upload-radio-card-input']",
-                timeout=3000,
+                timeout=2000,
             )
             if upload_radio_input and not await upload_radio_input.is_checked():
                 # The radio input is visually hidden; click the visible label instead
                 upload_label = await find_element_safely(
                     self.page,
                     "label[data-testid='resume-selection-file-resume-upload-radio-card-label']",
-                    timeout=3000,
+                    timeout=2000,
                 )
                 if upload_label:
                     await upload_label.click()
@@ -272,7 +256,7 @@ class IndeedEasyApplier(BaseEasyApplier):
             file_input = await find_element_safely(
                 self.page,
                 "input[data-testid='resume-selection-file-resume-upload-radio-card-file-input']",
-                timeout=3000,
+                timeout=2000,
             )
             if not file_input:
                 logger.warning("Resume file input not found on resume selection page")
@@ -306,7 +290,7 @@ class IndeedEasyApplier(BaseEasyApplier):
                 field = await find_element_safely(
                     self.page,
                     "input[data-testid='location-fields-postal-code-input']",
-                    timeout=3000,
+                    timeout=2000,
                 )
                 if field:
                     await field.fill(postal_code)
@@ -314,7 +298,7 @@ class IndeedEasyApplier(BaseEasyApplier):
 
             if city:
                 field = await find_element_safely(
-                    self.page, "input[data-testid='location-fields-locality-input']", timeout=3000
+                    self.page, "input[data-testid='location-fields-locality-input']", timeout=2000
                 )
                 if field:
                     await field.fill(city)
@@ -322,7 +306,7 @@ class IndeedEasyApplier(BaseEasyApplier):
 
             if address:
                 field = await find_element_safely(
-                    self.page, "input[data-testid='location-fields-address-input']", timeout=3000
+                    self.page, "input[data-testid='location-fields-address-input']", timeout=2000
                 )
                 if field:
                     await field.fill(address)
@@ -338,38 +322,42 @@ class IndeedEasyApplier(BaseEasyApplier):
     async def _find_and_handle_textbox_question(self, section: Any) -> bool:
         """Fill appropriate textbox using cache or LLM"""
         text_input = await find_element_safely(
-            section, "input[type='text'], input[type='number'], textarea", timeout=2000
+            section, "input[type='text'], input[type='number'], textarea", timeout=500
         )
         question_text = await get_clean_text(section)
         if not text_input or not question_text:
             return False
-
-        self.previous_question_texts.append(question_text)
-        current_question_sanitized = sanitize_text(question_text)
-        existing_answer = None
-        for item in self.all_questions:
-            if item.question == current_question_sanitized and item.question_type == "text":
-                existing_answer = item.answer
-                break
-        if existing_answer:
-            answer = existing_answer
-            logger.debug(f"Using cached answer for '{question_text}': '{answer}'")
-        else:
-            answer = self.gpt_answerer.answer_question_textual_wide_range(
-                question_text, self.previous_question_texts[:-1]
-            )
-            if answer.lower().startswith("no info"):
-                raise NoInfoException(f"No info found for question: {question_text}")
-            self._save_questions(
-                Question(question_type="text", question=question_text, answer=answer)
-            )
-        await text_input.fill(answer)
-        logger.debug(f"Filled text field '{question_text}' with '{answer}'")
+        try:
+            self.previous_question_texts.append(question_text)  # TODO: add try-except
+            current_question_sanitized = sanitize_text(question_text)
+            existing_answer = None
+            for item in self.all_questions:
+                if item.question == current_question_sanitized and item.question_type == "text":
+                    existing_answer = item.answer
+                    break
+            if existing_answer:
+                answer = existing_answer
+                logger.debug(f"Using cached answer for '{question_text}': '{answer}'")
+            else:
+                answer = self.gpt_answerer.answer_question_textual_wide_range(
+                    question_text, self.previous_question_texts[:-1]
+                )
+                if answer.lower().startswith("no info"):
+                    raise NoInfoException(f"No info found for question: {question_text}")
+                self._save_questions(
+                    Question(question_type="text", question=question_text, answer=answer)
+                )
+            await text_input.fill(answer)
+            logger.debug(f"Filled text field '{question_text}' with '{answer}'")
+        except Exception as e:
+            logger.warning(f"Error handling text field section: {e}")
+            await debug_capture(self.page, "indeed_text_field_error")
+            return False
         return True
 
     async def _find_and_handle_checkbox_question(self, section: Any) -> bool:
         """Select appropriate checkboxes (multi-select) using LLM"""
-        checkbox = await find_element_safely(section, "input[type='checkbox']", timeout=2000)
+        checkbox = await find_element_safely(section, "input[type='checkbox']", timeout=500)
         if not checkbox:
             return False
 
@@ -377,7 +365,7 @@ class IndeedEasyApplier(BaseEasyApplier):
             question_text = await get_clean_text(section)
             checkboxes = await find_elements_safely(section, "input[type='checkbox']")
             if not checkboxes:
-                return
+                return False
 
             checkbox_data = []
             option_texts = []
@@ -458,7 +446,7 @@ class IndeedEasyApplier(BaseEasyApplier):
 
     async def _find_and_handle_radio_question(self, section: Any) -> bool:
         """Select appropriate radio option using LLM"""
-        radio = await find_element_safely(section, "input[type='radio']", timeout=2000)
+        radio = await find_element_safely(section, "input[type='radio']", timeout=500)
         if not radio:
             return False
 
@@ -512,12 +500,12 @@ class IndeedEasyApplier(BaseEasyApplier):
                 if answer.lower() == option.lower():
                     await radio.click()
                     logger.debug(f"Selected radio '{option}'")
-                    return
+                    return True
             for radio, option in zip(radios, option_texts):
                 if answer.lower() in option.lower():
                     await radio.click()
                     logger.debug(f"Selected radio '{option}'")
-                    return
+                    return True
             # Fallback: click first option
             await radios[0].click()
         except Exception as e:
@@ -528,7 +516,7 @@ class IndeedEasyApplier(BaseEasyApplier):
 
     async def _find_and_handle_dropdown_question(self, section: Any) -> bool:
         """Select appropriate dropdown option using LLM"""
-        dropdown = await find_element_safely(section, "select", timeout=2000)
+        dropdown = await find_element_safely(section, "select", timeout=500)
         if not dropdown:
             return False
 
@@ -565,12 +553,12 @@ class IndeedEasyApplier(BaseEasyApplier):
                 if answer.lower() == opt_text.lower():
                     await dropdown.select_option(label=opt_text)
                     logger.debug(f"Selected dropdown option '{opt_text}'")
-                    return
+                    return True
             for opt_text in option_texts:
                 if answer.lower() in opt_text.lower():
                     await dropdown.select_option(label=opt_text)
                     logger.debug(f"Selected dropdown option '{opt_text}'")
-                    return
+                    return True
             # Fallback: skip default/empty option and pick the first real one
             if len(option_texts) > 1:
                 await dropdown.select_option(label=option_texts[1])
