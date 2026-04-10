@@ -16,7 +16,7 @@ from config.constants import ANSWERS_FILE, COVER_LETTER_DIR, RESUME_DIR, SEARCH_
 from config.logger_config import logger
 from src.job_manager.indeed.easy_applier_indeed import IndeedEasyApplier
 from src.job_manager.job_manager import BaseJobManager
-from src.pydantic_models.job_models import Job, JobInfo, JobManagerCache
+from src.pydantic_models.job_models import Job, JobInfo
 from src.telegram.telegram_manager import TelegramReportSender
 from src.utils.browser_utils import (
     debug_capture,
@@ -24,7 +24,7 @@ from src.utils.browser_utils import (
     find_elements_safely,
     safe_click,
 )
-from src.utils.utils import async_pause, load_yaml_file, sanitize_text, save_yaml_file
+from src.utils.utils import async_pause, load_yaml_file, sanitize_text
 
 search_config = load_yaml_file(SEARCH_CONFIG_FILE)
 logger.info(f"Maximum allowed number of applications: {MAX_APPLIES_NUM}")
@@ -415,30 +415,6 @@ class IndeedJobManager(BaseJobManager):
             self.cache.success_applies_num = self.success_applies_num
             self.cache.total_applies_num = self.total_applies_num
             self.cache.update_last_apply()
-            self._write_cache()
+            self._write_the_last_search_time()
         elif result == "error":
             self.error_num += 1
-
-    def _check_the_previous_apply_number(self) -> int:
-        """Return total successful applications from previous runs"""
-        try:
-            data = self._load_data_from_yaml("success.yaml")
-            if isinstance(data, list):
-                return len(data)
-            if isinstance(data, dict):
-                return sum(len(v) for v in data.values() if isinstance(v, list))
-            return 0
-        except Exception:
-            return 0
-
-    def _load_cache(self) -> JobManagerCache:
-        try:
-            data = self._load_data_from_yaml("cache.yaml")
-            if isinstance(data, dict):
-                return JobManagerCache(**data)
-        except Exception:
-            pass
-        return JobManagerCache()
-
-    def _write_cache(self) -> None:
-        save_yaml_file(self._define_output_file("cache.yaml"), self.cache.model_dump())

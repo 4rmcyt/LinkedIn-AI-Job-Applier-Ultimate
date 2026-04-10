@@ -2,10 +2,8 @@ import re
 import time
 import traceback
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-import yaml
 from playwright.sync_api import Page
 
 from config.app_config import (
@@ -16,17 +14,11 @@ from config.app_config import (
     MONKEY_MODE,
     TEST_MODE,
 )
-from config.constants import (
-    ANSWERS_FILE,
-    COVER_LETTER_DIR,
-    OUTPUT_DIR,
-    RESUME_DIR,
-    SEARCH_CONFIG_FILE,
-)
+from config.constants import ANSWERS_FILE, COVER_LETTER_DIR, RESUME_DIR, SEARCH_CONFIG_FILE
 from config.logger_config import logger
 from src.job_manager.job_manager import BaseJobManager
 from src.job_manager.linkedin.easy_applier_linkedin import LinkedInEasyApplier
-from src.pydantic_models.job_models import Job, JobInfo, JobManagerCache
+from src.pydantic_models.job_models import Job, JobInfo
 from src.telegram.telegram_manager import TelegramReportSender
 from src.utils.browser_utils import (
     debug_capture,
@@ -39,12 +31,10 @@ from src.utils.browser_utils import (
     safe_click,
     scroll_slowly,
 )
-from src.utils.utils import async_pause, load_yaml_file, sanitize_text, save_yaml_file, sleep
+from src.utils.utils import async_pause, load_yaml_file, sanitize_text
 
 search_config = load_yaml_file(SEARCH_CONFIG_FILE)
 logger.info(f"Maximum allowed number of applications: {MAX_APPLIES_NUM}")
-
-LAST_RUN_FILE = Path(OUTPUT_DIR) / "last_run.yaml"
 
 
 class LinkedInJobManager(BaseJobManager):
@@ -442,7 +432,7 @@ class LinkedInJobManager(BaseJobManager):
         # wait until this time is over
         time_left = int(minimum_job_time - time.time())
         if time_left > 0:
-            sleep((time_left, time_left + 5))
+            async_pause(time_left, time_left + 5)
         # if we hit the limit on vacancies - stop applying
         if result == "Limit":
             return "Limit"
@@ -519,17 +509,6 @@ class LinkedInJobManager(BaseJobManager):
         ).total_seconds() >= 60 * 60 * 24 or self.previous_apply_number > 0:
             return True
         return False
-
-    def _load_cache(self) -> JobManagerCache:
-        """Load cache from file"""
-        try:
-            with open(LAST_RUN_FILE, "r") as f:
-                cache = yaml.safe_load(f) or {}
-                cache = JobManagerCache(**cache)
-                return cache
-        except Exception:
-            logger.warning("Could not load cache from file")
-            return JobManagerCache()
 
     async def _scroll_to_load_jobs(self):
         """Scroll the job results container to load all job listings (async)"""
@@ -892,29 +871,6 @@ class LinkedInJobManager(BaseJobManager):
                 logger.debug(f"Failed to get the link of the apply button: {e}")
         logger.warning("No apply button found")
         return ""
-
-    def _check_the_previous_apply_number(self) -> bool:
-        """
-        Check if there were applications without a completed search.
-        If yes, return the number of applications
-        """
-        logger.info("Checking the time of the last application")
-        if self.cache.last_apply:
-            last_apply = self.cache.get_last_apply_datetime()
-        else:
-            return 0
-        # If the previous search was not completed, and therefore less than an hour has passed since the last application,
-        # then we consider starting from the previous number of applications
-        if (datetime.now() - last_apply).total_seconds() < 59 * 60:
-            prev_apply_num = self.cache.success_applies_num
-            return prev_apply_num
-        return 0
-
-    def _write_the_last_search_time(self) -> None:
-        """
-        Write the time of the last job search
-        """
-        save_yaml_file(LAST_RUN_FILE, self.cache.model_dump())
 
     def _collect_job_info(
         self, company_job_title: str, company_name: str, job_link: str, reason: str

@@ -1,16 +1,20 @@
 import os
 import traceback
 from abc import ABC, abstractmethod
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import yaml
 
-from config.app_config import COLLECT_INFO_MODE
-from config.constants import OUTPUT_DIR
+from config.app_config import COLLECT_INFO_MODE, JOB_SITE
+from config.constants import OUTPUT_DIR_INDEED, OUTPUT_DIR_LINKEDIN
 from config.logger_config import logger
-from src.pydantic_models.job_models import Job, JobInfo
+from src.pydantic_models.job_models import Job, JobInfo, JobManagerCache
 from src.utils.utils import sanitize_text, save_yaml_file
+
+OUTPUT_DIR = OUTPUT_DIR_LINKEDIN if JOB_SITE == "linkedin" else OUTPUT_DIR_INDEED
+LAST_RUN_FILE = Path(OUTPUT_DIR) / "last_run.yaml"
 
 
 class BaseJobManager(ABC):
@@ -245,3 +249,31 @@ class BaseJobManager(ABC):
                             logger.warning("The vacancy has already been encountered, skipping")
                             return True, "The vacancy has already been encountered"
         return False, ""
+
+    def _check_the_previous_apply_number(self) -> int:
+        """
+        Check if there were applications without a completed search.
+        If yes, return the number of applications
+        """
+        logger.info("Checking the time of the last application")
+        if self.cache.last_apply:
+            last_apply = self.cache.get_last_apply_datetime()
+        else:
+            return 0
+        if (datetime.now() - last_apply).total_seconds() < 59 * 60:
+            return self.cache.success_applies_num
+        return 0
+
+    def _load_cache(self) -> JobManagerCache:
+        """Load cache from file"""
+        try:
+            with open(LAST_RUN_FILE, "r") as f:
+                cache = yaml.safe_load(f) or {}
+                return JobManagerCache(**cache)
+        except Exception:
+            logger.warning("Could not load cache from file")
+            return JobManagerCache()
+
+    def _write_the_last_search_time(self) -> None:
+        """Write the time of the last job search"""
+        save_yaml_file(LAST_RUN_FILE, self.cache.model_dump())

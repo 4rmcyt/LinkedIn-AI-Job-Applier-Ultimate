@@ -320,8 +320,10 @@ def main() -> None:
         try:
             # create output folder if it doesn't exist
             data = Path("data")
-            output_folder = data / "output"
-            output_folder.mkdir(exist_ok=True)
+            linkedin_output_folder = data / "output" / "linkedin"
+            linkedin_output_folder.mkdir(exist_ok=True)
+            indeed_output_folder = data / "output" / "indeed"
+            indeed_output_folder.mkdir(exist_ok=True)
 
             # validate config files
             config_validator = ConfigValidator()
