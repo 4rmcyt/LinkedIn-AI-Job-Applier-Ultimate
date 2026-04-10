@@ -3,7 +3,13 @@ from typing import Any, Dict, List, Tuple
 
 from playwright.sync_api import Page
 
-from config.app_config import MAX_APPLIES_NUM, TEST_MODE
+from config.app_config import (
+    COLLECT_INFO_MODE,
+    EASY_APPLY_ONLY_MODE,
+    MAX_APPLIES_NUM,
+    MONKEY_MODE,
+    TEST_MODE,
+)
 from config.constants import ANSWERS_FILE, COVER_LETTER_DIR, RESUME_DIR, SEARCH_CONFIG_FILE
 from config.logger_config import logger
 from src.job_manager.indeed.easy_applier_indeed import IndeedEasyApplier
@@ -197,13 +203,51 @@ class IndeedJobManager(BaseJobManager):
                 logger.info(f"Skipping blacklisted job: {job.job_title} at {job.company_name}")
                 return "skipped"
 
-            if job.apply_method != "easy_apply":
+            if job.apply_method != "easy_apply" and EASY_APPLY_ONLY_MODE:
                 logger.info(f"Skipping external apply job: {job.job_title} at {job.company_name}")
                 return "skipped"
 
-            result, cover_letter = await self.easy_apply(job)
-            await self._handle_apply_result(result, job, cover_letter)
-            return result
+            new_page = await self.page.context.new_page()
+            try:
+                await new_page.goto(job.url, wait_until="domcontentloaded")
+                await async_pause(1, 2)
+                job.job_description = await self._extract_job_description_from_page(new_page)
+
+                if MONKEY_MODE or COLLECT_INFO_MODE:
+                    job_is_interesting = True
+                    score, reasoning = 0, "Monkey mode"
+                else:
+                    interest_result = self.llm_answerer_component.job_is_interesting(
+                        job.model_dump()
+                    )
+                    if interest_result is None:
+                        await self._handle_apply_result("error", job, "")
+                        return "error"
+                    job_is_interesting, score, reasoning = interest_result
+
+                if not job_is_interesting:
+                    logger.info(
+                        f"Skipping uninteresting job: {job.job_title} at {job.company_name}"
+                    )
+                    return "skipped"
+
+                if int(score) > 0:
+                    self._save_interesting_job(job, score, reasoning)
+                self.llm_answerer_component.set_job(job.model_dump())
+
+                if not EASY_APPLY_ONLY_MODE and job.apply_method == "external":
+                    if TEST_MODE:
+                        result, cover_letter = "skipped", ""
+                    else:
+                        result, cover_letter = await self.llm_agent_component.apply_to_job(job.url)
+                else:
+                    result, cover_letter = await self.easy_apply(job, new_page)
+
+                await self._handle_apply_result(result, job, cover_letter)
+                return result
+            finally:
+                await new_page.close()
+                await self.page.bring_to_front()
 
         except Exception as e:
             logger.error(f"Error in apply_job: {e}", exc_info=True)
@@ -211,27 +255,20 @@ class IndeedJobManager(BaseJobManager):
             self.error_num += 1
             return "error"
 
-    async def easy_apply(self, job: Job) -> Tuple[str, str]:
+    async def easy_apply(self, job: Job, page: Any = None) -> Tuple[str, str]:
         """Delegate application to IndeedEasyApplier"""
-        new_page = await self.page.context.new_page()
-        try:
-            await new_page.goto(job.url, wait_until="domcontentloaded")
-            await async_pause(1, 2)
-            easy_applier = IndeedEasyApplier(
-                page=new_page,
-                gpt_answerer=self.llm_answerer_component,
-                resume_anonymizer=self.resume_anonymizer,
-                resume_generator_manager=self.resume_generator_manager,
-                pause_checker=self.pause_checker,
-                answers_file=Path(ANSWERS_FILE),
-                resume_dir=Path(RESUME_DIR),
-                cover_letter_dir=Path(COVER_LETTER_DIR),
-                test_mode=TEST_MODE,
-            )
-            return await easy_applier.job_apply(job)
-        finally:
-            await new_page.close()
-            await self.page.bring_to_front()
+        easy_applier = IndeedEasyApplier(
+            page=page,
+            gpt_answerer=self.llm_answerer_component,
+            resume_anonymizer=self.resume_anonymizer,
+            resume_generator_manager=self.resume_generator_manager,
+            pause_checker=self.pause_checker,
+            answers_file=Path(ANSWERS_FILE),
+            resume_dir=Path(RESUME_DIR),
+            cover_letter_dir=Path(COVER_LETTER_DIR),
+            test_mode=TEST_MODE,
+        )
+        return await easy_applier.job_apply(job)
 
     async def send_report(self, result: str) -> None:
         """Send Telegram report"""
@@ -305,6 +342,26 @@ class IndeedJobManager(BaseJobManager):
             )
             await debug_capture(self.page, "extract_job_error")
             return None
+
+    async def _extract_job_description_from_page(self, page: Any) -> str:
+        """Extract job description text from an Indeed job detail page"""
+        selectors = [
+            "#jobDescriptionText",
+            "[data-testid='jobsearch-jobDescriptionText']",
+            ".jobsearch-jobDescriptionText",
+            "#job-description",
+        ]
+        for selector in selectors:
+            try:
+                el = await find_element_safely(page, selector, timeout=3000)
+                if el:
+                    text = await el.text_content()
+                    if text:
+                        return text.strip()
+            except Exception:
+                continue
+        logger.debug("Could not extract job description from Indeed page")
+        return ""
 
     async def _dismiss_overlays(self) -> None:
         """Dismiss Indeed overlay portals that intercept clicks"""
