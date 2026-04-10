@@ -9,8 +9,6 @@ from threading import Lock
 
 import dotenv
 
-# TODO: add non-easy apply for Indeed
-
 # Try to import pynput for keyboard control (optional, not available in Docker)
 try:
     from pynput import keyboard as pynput_kb

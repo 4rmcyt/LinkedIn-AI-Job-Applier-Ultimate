@@ -1,0 +1,20 @@
+4. Resume improvement recommendations
+LinkedIn calls resume_improvement_recommendations() at startup — generates LLM advice, deanonymizes it, and saves to resume_recommendations.txt. Indeed does nothing with self.resume_recommendations.
+
+5. Richer Telegram report
+LinkedIn's send_report sends: email, resume, applies count, jobs_no_info list, skill_stat, resume_recommendations, and resume_anonymizer. Indeed only sends result/applies_num/error_num.
+
+6. _collect_job_info() / jobs_no_info
+LinkedIn tracks jobs skipped due to missing info ("Could not…") for inclusion in the Telegram report. Indeed has jobs_no_info list but never populates it.
+
+7. Critical error threshold
+LinkedIn breaks the loop and exits when error_num == MAX_APPLIES_NUM. Indeed only increments error_num indefinitely.
+
+8. Error counter reset on success
+LinkedIn resets self.error_num = 0 after each successful job iteration. Indeed only ever increments it.
+
+9. Company description extraction
+LinkedIn extracts job.company_description from the job page and passes it to the LLM. Indeed doesn't extract this field.
+
+10. check_the_last_search_time() (24h guard)
+LinkedIn has a guard that prevents re-running within 24h of the last run. Indeed has no equivalent.
