@@ -1,6 +1,6 @@
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, List, Tuple
 
 from playwright.sync_api import Page
 
@@ -16,7 +16,7 @@ from config.constants import ANSWERS_FILE, COVER_LETTER_DIR, RESUME_DIR, SEARCH_
 from config.logger_config import logger
 from src.job_manager.indeed.easy_applier_indeed import IndeedEasyApplier
 from src.job_manager.job_manager import BaseJobManager
-from src.pydantic_models.job_models import Job, JobInfo
+from src.pydantic_models.job_models import Job
 from src.telegram.telegram_manager import TelegramReportSender
 from src.utils.browser_utils import (
     debug_capture,
@@ -70,39 +70,6 @@ class IndeedJobManager(BaseJobManager):
     # ------------------------------------------------------------------
     # Interface methods (same signatures as LinkedIn LinkedInJobManager)
     # ------------------------------------------------------------------
-
-    def set_parameters(self, parameters: Dict[str, Any]):
-        """Setting IndeedJobManager parameters"""
-        logger.info("Setting IndeedJobManager parameters")
-        self.max_applies_num = MAX_APPLIES_NUM
-        self.apply_once_at_company = parameters.get("apply_once_at_company", True)
-        self.job_blacklist = [sanitize_text(j) for j in parameters.get("job_blacklist", [])]
-        self.success_companies = self._load_companies_from_yaml("success.yaml")
-        self.skipped_companies = self._load_companies_from_yaml("skipped.yaml")
-        self.failed_companies = self._load_companies_from_yaml("failed.yaml")
-        self.seen_answers = self._load_data_from_yaml("answers.yaml")
-        self.skill_stat = self._load_data_from_yaml("skill_stat.yaml")
-        self.interesting_jobs = self._load_data_from_yaml("interesting_jobs.yaml")
-        self.interesting_jobs = [JobInfo(**job) for job in self.interesting_jobs]
-        self.cache = self._load_cache()
-        self.applies_num = 0
-        self.previous_apply_number = self._check_the_previous_apply_number()
-        self.success_applies_num = self.previous_apply_number
-        self.total_applies_num = self.cache.total_applies_num
-        logger.info("Parameters successfully set")
-
-    def set_answerer_and_agent(self, llm_answerer_component: Any, llm_agent_component: Any):
-        self.llm_answerer_component = llm_answerer_component
-        self.llm_agent_component = llm_agent_component
-
-    def set_resume(self, resume: Dict[str, Any]) -> None:
-        self.resume = resume
-
-    def set_resume_generator_manager(self, resume_generator_manager: Any):
-        self.resume_generator_manager = resume_generator_manager
-
-    def set_pause_checker(self, pause_checker):
-        self.pause_checker = pause_checker
 
     # ------------------------------------------------------------------
     # Main application loop
@@ -234,9 +201,11 @@ class IndeedJobManager(BaseJobManager):
                     )
                     return "skipped"
 
-                if int(score) > 0:
-                    self._save_interesting_job(job, score, reasoning)
+                job.skills = self._extract_skills_from_vacancy(job)
                 self.llm_answerer_component.set_job(job.model_dump())
+                if int(score) > 0:
+                    self._update_skill_stat(self.job_key_skills)
+                    self._save_interesting_job(job, score, reasoning)
 
                 if not EASY_APPLY_ONLY_MODE and job.apply_method == "external":
                     if TEST_MODE:

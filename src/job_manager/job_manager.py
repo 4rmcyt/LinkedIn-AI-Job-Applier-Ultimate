@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Tuple
 
 import yaml
 
-from config.app_config import COLLECT_INFO_MODE, JOB_SITE
+from config.app_config import COLLECT_INFO_MODE, JOB_SITE, MAX_APPLIES_NUM
 from config.constants import OUTPUT_DIR_INDEED, OUTPUT_DIR_LINKEDIN
 from config.logger_config import logger
 from src.pydantic_models.job_models import Job, JobInfo, JobManagerCache
@@ -18,10 +18,6 @@ LAST_RUN_FILE = Path(OUTPUT_DIR) / "last_run.yaml"
 
 
 class BaseJobManager(ABC):
-    @abstractmethod
-    def set_parameters(self, parameters: Dict[str, Any]):
-        pass
-
     @abstractmethod
     def start_applying(self) -> None:
         pass
@@ -49,6 +45,49 @@ class BaseJobManager(ABC):
             logger.error(f"Error in defining the location of the file: {tb_str}")
             raise
         return output_file
+
+    def set_parameters(self, parameters: Dict[str, Any]):
+        """Setting job manager parameters"""
+        logger.info("Setting job manager parameters")
+        self.max_applies_num = MAX_APPLIES_NUM
+        self.apply_once_at_company = parameters.get("apply_once_at_company", True)
+        self.job_blacklist = [sanitize_text(j) for j in parameters.get("job_blacklist", [])]
+        self.success_companies = self._load_companies_from_yaml("success.yaml")
+        self.skipped_companies = self._load_companies_from_yaml("skipped.yaml")
+        self.failed_companies = self._load_companies_from_yaml("failed.yaml")
+        self.seen_answers = self._load_data_from_yaml("answers.yaml")
+        self.skill_stat = self._load_data_from_yaml("skill_stat.yaml")
+        self.interesting_jobs = self._load_data_from_yaml("interesting_jobs.yaml")
+        self.interesting_jobs = [JobInfo(**job) for job in self.interesting_jobs]
+        self.cache = self._load_cache()
+        self.applies_num = 0
+        self.previous_apply_number = self._check_the_previous_apply_number()
+        self.success_applies_num = self.previous_apply_number
+        self.total_applies_num = self.cache.total_applies_num
+        logger.info("Parameters successfully set")
+
+    def set_answerer_and_agent(self, llm_answerer_component: Any, llm_agent_component: Any):
+        """Set LLM for answering questions and writing cover letters"""
+        self.llm_answerer_component = llm_answerer_component
+        self.llm_agent_component = llm_agent_component
+
+    def set_resume(self, resume: Dict[str, Any]) -> None:
+        """Add resume for analysis"""
+        self.resume = resume
+
+    def set_resume_generator_manager(self, resume_generator_manager: Any):
+        """Set resume generator manager for writing resumes"""
+        self.resume_generator_manager = resume_generator_manager
+
+    def set_pause_checker(self, pause_checker):
+        """Set pause checker function for pausing execution"""
+        self.pause_checker = pause_checker
+
+    def _extract_skills_from_vacancy(self, job: Job) -> List[str]:
+        """Extract skills from vacancy"""
+        skills = self.llm_answerer_component.extract_skills_from_vacancy(job.job_description)
+        self.job_key_skills = skills
+        return str(skills).replace("[", "").replace("]", "").replace("'", "").replace('"', "")
 
     def _update_skill_stat(self, skills) -> None:
         """Update the statistics of the most demanded skills in the vacancy and save it to a file"""

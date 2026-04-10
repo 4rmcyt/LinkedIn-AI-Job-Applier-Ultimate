@@ -65,61 +65,6 @@ class LinkedInJobManager(BaseJobManager):
 
         logger.info("LinkedInJobManager successfully initialized")
 
-    def set_parameters(self, parameters: Dict[str, Any]):
-        """Setting LinkedInJobManager parameters"""
-        logger.info("Setting LinkedInJobManager parameters")
-        # set maximum number of applications
-        self.max_applies_num = MAX_APPLIES_NUM
-        # load additional search settings
-        self.apply_once_at_company = parameters.get("apply_once_at_company", True)
-        # load job blacklist
-        self.job_blacklist = parameters.get("job_blacklist", [])
-        if self.job_blacklist:
-            self.job_blacklist = [sanitize_text(j_b) for j_b in self.job_blacklist]
-        # load companies to which applications were successfully sent
-        self.success_companies = self._load_companies_from_yaml("success.yaml")
-        # load companies to which applications were not sent
-        self.skipped_companies = self._load_companies_from_yaml("skipped.yaml")
-        # load companies to which applications were not sent due to software error
-        self.failed_companies = self._load_companies_from_yaml("failed.yaml")
-        # load list of questions to which answers were already given
-        self.seen_answers = self._load_data_from_yaml("answers.yaml")
-        # load statistics of most demanded skills in vacancies
-        self.skill_stat = self._load_data_from_yaml("skill_stat.yaml")
-        # load list of interesting jobs
-        self.interesting_jobs = self._load_data_from_yaml("interesting_jobs.yaml")
-        self.interesting_jobs = [JobInfo(**job) for job in self.interesting_jobs]
-        # load cache with information about last search
-        self.cache = self._load_cache()
-        self.applies_num = 0
-        self.previous_apply_number = self._check_the_previous_apply_number()
-        self.success_applies_num = self.previous_apply_number
-        self.total_applies_num = self.cache.total_applies_num
-        logger.info("Parameters successfully set")
-
-    def set_answerer_and_agent(self, llm_answerer_component: Any, llm_agent_component: Any):
-        """
-        Set LLM for answering questions and writing cover letters
-        """
-        self.llm_answerer_component = llm_answerer_component
-        self.llm_agent_component = llm_agent_component
-
-    def set_resume(self, resume: Dict[str, Any]) -> None:
-        """Add resume for analysis"""
-        self.resume = resume
-
-    def set_resume_generator_manager(self, resume_generator_manager: Any):
-        """
-        Set resume generator manager for writing resumes
-        """
-        self.resume_generator_manager = resume_generator_manager
-
-    def set_pause_checker(self, pause_checker):
-        """
-        Set pause checker function for pausing execution
-        """
-        self.pause_checker = pause_checker
-
     async def get_vacancies_from_page(self) -> List[Any]:
         """Parse job vacancies from current LinkedIn page (async)"""
         logger.info(f"Parsing job vacancies from LinkedIn page {self.page_num}")
@@ -813,12 +758,6 @@ class LinkedInJobManager(BaseJobManager):
 
         logger.debug("Could not extract company description from job page")
         return None
-
-    def _extract_skills_from_vacancy(self, job: Job) -> List[str]:
-        """Extract skills from vacancy"""
-        skills = self.llm_answerer_component.extract_skills_from_vacancy(job.job_description)
-        self.job_key_skills = skills
-        return str(skills).replace("[", "").replace("]", "").replace("'", "").replace('"', "")
 
     async def _get_job_recruiter(self):
         """Get job recruiter information (async)"""
