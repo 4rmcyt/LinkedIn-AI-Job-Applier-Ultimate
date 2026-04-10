@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -7,6 +8,7 @@ from config.app_config import (
     COLLECT_INFO_MODE,
     EASY_APPLY_ONLY_MODE,
     MAX_APPLIES_NUM,
+    MINIMUM_WAIT_TIME_SEC,
     MONKEY_MODE,
     TEST_MODE,
 )
@@ -22,7 +24,7 @@ from src.utils.browser_utils import (
     find_elements_safely,
     safe_click,
 )
-from src.utils.utils import async_pause, load_yaml_file, sanitize_text
+from src.utils.utils import async_pause, load_yaml_file, sanitize_text, save_yaml_file
 
 search_config = load_yaml_file(SEARCH_CONFIG_FILE)
 logger.info(f"Maximum allowed number of applications: {MAX_APPLIES_NUM}")
@@ -207,6 +209,7 @@ class IndeedJobManager(BaseJobManager):
                 logger.info(f"Skipping external apply job: {job.job_title} at {job.company_name}")
                 return "skipped"
 
+            minimum_job_time = time.time() + MINIMUM_WAIT_TIME_SEC
             new_page = await self.page.context.new_page()
             try:
                 await new_page.goto(job.url, wait_until="domcontentloaded")
@@ -246,6 +249,9 @@ class IndeedJobManager(BaseJobManager):
                 await self._handle_apply_result(result, job, cover_letter)
                 return result
             finally:
+                time_left = int(minimum_job_time - time.time())
+                if time_left > 0:
+                    await async_pause(time_left, time_left + 1)
                 await new_page.close()
                 await self.page.bring_to_front()
 
@@ -405,6 +411,11 @@ class IndeedJobManager(BaseJobManager):
         if result == "success":
             self.applies_num += 1
             self.success_applies_num += 1
+            self.total_applies_num += 1
+            self.cache.success_applies_num = self.success_applies_num
+            self.cache.total_applies_num = self.total_applies_num
+            self.cache.update_last_apply()
+            self._write_cache()
         elif result == "error":
             self.error_num += 1
 
@@ -428,3 +439,6 @@ class IndeedJobManager(BaseJobManager):
         except Exception:
             pass
         return JobManagerCache()
+
+    def _write_cache(self) -> None:
+        save_yaml_file(self._define_output_file("cache.yaml"), self.cache.model_dump())
