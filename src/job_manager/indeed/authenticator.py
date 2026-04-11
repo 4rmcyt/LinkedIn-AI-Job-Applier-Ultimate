@@ -3,41 +3,24 @@ from typing import Union
 from playwright.sync_api import Page
 
 from config.logger_config import logger
+from src.job_manager.authenticator import BaseAuthenticator
 from src.utils.browser_utils import find_element_safely, safe_click, safe_fill
 from src.utils.utils import async_pause
 
 
-class IndeedAuthenticator:
+class IndeedAuthenticator(BaseAuthenticator):
     """Class for Indeed login and session management"""
 
     INDEED_LOGIN_URL = "https://secure.indeed.com/account/login"
     INDEED_HOME_URL = "https://www.indeed.com"
 
     def __init__(self, page: Union[Page, any] = None):
-        self.page = page
-        self.email = None
-        self.password = None
-
+        super().__init__(page)
         logger.info("Indeed authenticator initialized")
 
     def set_parameters(self, email: str, password: str = None) -> None:
         logger.info("Setting Indeed Authenticator parameters")
-        self.email = email
-        self.password = password
-
-    async def start(self) -> bool:
-        """Main method for starting authentication"""
-        logger.info("Starting Indeed login process")
-
-        if await self.is_logged_in():
-            logger.info("User already logged into Indeed using saved session")
-            return True
-
-        logger.info("Saved session is invalid, performing new login")
-        result = await self.handle_login()
-        if result:
-            logger.info("Indeed login successful")
-        return result
+        super().set_parameters(email, password)
 
     async def is_logged_in(self) -> bool:
         """Check if user is logged into Indeed"""

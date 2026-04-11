@@ -4,43 +4,22 @@ from typing import Union
 from playwright.sync_api import Page
 
 from config.logger_config import logger
+from src.job_manager.authenticator import BaseAuthenticator
 from src.utils.browser_utils import find_element_safely, safe_click, safe_fill
 from src.utils.utils import async_pause
 
 
-class LinkedInAuthenticator:
+class LinkedInAuthenticator(BaseAuthenticator):
     """Class for LinkedIn login and session management"""
 
     def __init__(self, page: Union[Page, any] = None):
-        self.page = page
-        self.email = None
-        self.password = None
+        super().__init__(page)
         self.session_file = Path("data/linkedin_session.json")
-
         logger.info("LinkedIn authenticator initialized")
 
     def set_parameters(self, email: str, password: str) -> None:
         logger.info("Setting LinkedIn Authenticator parameters")
-        self.email = email
-        self.password = password
-
-    async def start(self) -> bool:
-        """Main method for starting authentication (async)"""
-        logger.info("Starting LinkedIn login process")
-
-        # Load saved session if available
-        logger.info("Checking if user is logged into LinkedIn...")
-        if await self.is_logged_in():
-            logger.info("User already logged into LinkedIn using saved session")
-            return True
-        else:
-            logger.info("Saved session is invalid, performing new login")
-
-        # Perform new login
-        result = await self.handle_login()
-        if result:
-            logger.info("LinkedIn login successful, session saved")
-        return result
+        super().set_parameters(email, password)
 
     async def is_logged_in(self) -> bool:
         """Check if user is logged into LinkedIn (async)"""
