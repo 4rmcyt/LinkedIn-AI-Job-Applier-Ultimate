@@ -52,9 +52,7 @@ class LinkedInJobManager(BaseJobManager):
         self.llm_agent_component = None
         self.resume_generator_manager = None
         self.pause_checker = None
-        self.jobs_no_info = (
-            []
-        )  # vacancies to which applications were not sent due to missing information
+        self.jobs_no_info = []  # vacancies to which applications were not sent due to missing information
         self.job_key_skills = []  # key skills according to employer's opinion
         self.interesting_jobs = []
         self.page_num = 0
@@ -132,17 +130,6 @@ class LinkedInJobManager(BaseJobManager):
 
     async def start_applying(self) -> None:
         """Send applications to all employers on all pages (async)"""
-        self.easy_applier_component = LinkedInEasyApplier(
-            self.page,
-            self.llm_answerer_component,
-            self.resume_anonymizer,
-            self.resume_generator_manager,
-            self.pause_checker,
-            ANSWERS_FILE,
-            RESUME_DIR,
-            COVER_LETTER_DIR,
-            TEST_MODE,
-        )
         # define the start time of the search
         if self.cache.last_run:
             last_run = self.cache.get_last_run_datetime()
@@ -203,6 +190,18 @@ class LinkedInJobManager(BaseJobManager):
 
     async def apply_job(self, vacancy: Dict[str, Any]) -> str:
         """Send applications to all employers on the page (async)"""
+        self.easy_applier_component = LinkedInEasyApplier(
+            self.page,
+            self.llm_answerer_component,
+            self.resume_anonymizer,
+            self.resume_generator_manager,
+            self.pause_checker,
+            ANSWERS_FILE,
+            RESUME_DIR,
+            COVER_LETTER_DIR,
+            TEST_MODE,
+        )
+
         # Open vacancy in a new window/tab
         self._new_page = await self.page.context.new_page()
         self._original_page = self.page

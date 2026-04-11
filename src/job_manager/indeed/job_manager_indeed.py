@@ -84,6 +84,7 @@ class IndeedJobManager(BaseJobManager):
         search_urls = self.search_component.get_search_urls()
         logger.info(f"Indeed search URLs: {search_urls}")
 
+        result = ""
         for url in search_urls:
             if self.applies_num >= self.max_applies_num:
                 logger.info("Reached maximum number of applications")
@@ -93,6 +94,7 @@ class IndeedJobManager(BaseJobManager):
             await self.page.goto(url, wait_until="domcontentloaded")
             await async_pause(1, 2)
 
+            critical_error = False
             while True:
                 if self.applies_num >= self.max_applies_num:
                     break
@@ -109,13 +111,23 @@ class IndeedJobManager(BaseJobManager):
                         await self.apply_job(vacancy)
                     except Exception as e:
                         logger.error(f"Unexpected error processing vacancy: {e}", exc_info=True)
+                        if self.error_num == MAX_APPLIES_NUM:
+                            logger.error(
+                                f"Critical number of consecutive errors: {MAX_APPLIES_NUM}"
+                            )
+                            result = "Error"
+                            critical_error = True
+                            break
                         self.error_num += 1
 
-                if not await self._go_to_next_page():
+                if critical_error or not await self._go_to_next_page():
                     break
                 self.page_num += 1
 
-        await self.send_report("finished")
+            if critical_error:
+                break
+
+        await self.send_report(result)
         logger.info(
             f"Indeed application process finished. "
             f"Applied: {self.applies_num}, Errors: {self.error_num}"

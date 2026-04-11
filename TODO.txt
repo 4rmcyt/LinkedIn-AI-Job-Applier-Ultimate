@@ -1,6 +1,3 @@
-7. Critical error threshold
-LinkedIn breaks the loop and exits when error_num == MAX_APPLIES_NUM. Indeed only increments error_num indefinitely.
-
 8. Error counter reset on success
 LinkedIn resets self.error_num = 0 after each successful job iteration. Indeed only ever increments it.
 
