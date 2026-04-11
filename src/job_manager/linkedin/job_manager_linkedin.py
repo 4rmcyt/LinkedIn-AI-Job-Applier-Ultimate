@@ -789,18 +789,6 @@ class LinkedInJobManager(BaseJobManager):
         logger.warning("No apply button found")
         return ""
 
-    def _collect_job_info(
-        self, company_job_title: str, company_name: str, job_link: str, reason: str
-    ) -> None:
-        """Add information about the vacancy to the list of vacancies for subsequent sending of a report to the client"""
-        job_info = JobInfo(
-            job_title=company_job_title,
-            company_name=company_name,
-            url=job_link,
-            skip_reason=reason,
-        )
-        self.jobs_no_info.append(job_info.model_dump())
-
     async def _go_to_next_page(self) -> None:
         """Go to the next page using framework-agnostic methods (async)"""
         self.page_num += 1

@@ -215,6 +215,8 @@ class IndeedJobManager(BaseJobManager):
                 else:
                     result, cover_letter = await self.easy_apply(job, new_page)
 
+                if result == "Skip" and cover_letter.startswith("Could not"):
+                    self._collect_job_info(job.job_title, job.company_name, job.url, cover_letter)
                 await self._handle_apply_result(result, job, cover_letter)
                 return result
             finally:

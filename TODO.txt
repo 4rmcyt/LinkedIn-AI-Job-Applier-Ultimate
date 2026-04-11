@@ -1,9 +1,3 @@
-5. Richer Telegram report
-LinkedIn's send_report sends: email, resume, applies count, jobs_no_info list, skill_stat, resume_recommendations, and resume_anonymizer. Indeed only sends result/applies_num/error_num.
-
-6. _collect_job_info() / jobs_no_info
-LinkedIn tracks jobs skipped due to missing info ("Could not…") for inclusion in the Telegram report. Indeed has jobs_no_info list but never populates it.
-
 7. Critical error threshold
 LinkedIn breaks the loop and exits when error_num == MAX_APPLIES_NUM. Indeed only increments error_num indefinitely.
 

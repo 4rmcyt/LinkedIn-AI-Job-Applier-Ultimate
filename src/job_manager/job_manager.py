@@ -313,6 +313,18 @@ class BaseJobManager(ABC):
             logger.warning("Could not load cache from file")
             return JobManagerCache()
 
+    def _collect_job_info(
+        self, company_job_title: str, company_name: str, job_link: str, reason: str
+    ) -> None:
+        """Add a skipped vacancy to jobs_no_info for inclusion in the Telegram report"""
+        job_info = JobInfo(
+            job_title=company_job_title,
+            company_name=company_name,
+            url=job_link,
+            skip_reason=reason,
+        )
+        self.jobs_no_info.append(job_info.model_dump())
+
     def resume_improvement_recommendations(self) -> None:
         """Generate LLM resume improvement advice and save to resume_recommendations.txt"""
         resume_recommendations_file = self._define_output_file("resume_recommendations.txt")
