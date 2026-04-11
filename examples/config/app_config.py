@@ -1,5 +1,8 @@
 """This file contains application settings"""
 
+"""Job site to use. Possible values: 'linkedin', 'indeed'"""
+JOB_SITE = "indeed"
+
 """Maximum number of applications"""
 MAX_APPLIES_NUM = 50
 
