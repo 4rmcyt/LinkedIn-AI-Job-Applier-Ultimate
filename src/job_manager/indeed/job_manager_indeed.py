@@ -1,4 +1,6 @@
 import time
+import traceback
+from datetime import timedelta
 from pathlib import Path
 from typing import Any, List, Tuple
 
@@ -77,61 +79,75 @@ class IndeedJobManager(BaseJobManager):
 
     async def start_applying(self) -> None:
         """Main loop: iterate over all search URLs and apply to jobs"""
-        logger.info("IndeedJobManager starting application process")
-
+        # define the start time of the search
+        if self.cache.last_run:
+            last_run = self.cache.get_last_run_datetime()
+            # if this is not the first launch - increase the time of the last search by 24 hours
+            # and write it as the last search (to avoid the drift of the start time of the program)
+            self.cache.last_run = (last_run + timedelta(hours=24)).isoformat()
+        else:
+            self.cache.update_last_run()
+        result = ""
+        # write recommendations for improving the resume
         self.resume_improvement_recommendations()
 
         search_urls = self.search_component.get_search_urls()
         logger.info(f"Indeed search URLs: {search_urls}")
 
-        result = ""
         for url in search_urls:
-            if self.applies_num >= self.max_applies_num:
-                logger.info("Reached maximum number of applications")
-                break
-
             self.page_num = 0
             await self.page.goto(url, wait_until="domcontentloaded")
             await async_pause(1, 2)
 
-            critical_error = False
-            while True:
-                if self.applies_num >= self.max_applies_num:
-                    break
+            # continue until the maximum number of applications is reached
+            while self.success_applies_num < self.max_applies_num and self.applies_num < 400:
+                # Check if execution is paused
                 if self.pause_checker:
                     await self.pause_checker()
 
+                # go through all pages until they are finished
                 vacancies = await self.get_vacancies_from_page()
-                logger.info(f"Found {len(vacancies)} job cards on page {self.page_num + 1}")
-
-                for vacancy in vacancies:
-                    if self.applies_num >= self.max_applies_num:
-                        break
-                    try:
-                        await self.apply_job(vacancy)
-                    except Exception as e:
-                        logger.error(f"Unexpected error processing vacancy: {e}", exc_info=True)
-                        if self.error_num == MAX_APPLIES_NUM:
-                            logger.error(
-                                f"Critical number of consecutive errors: {MAX_APPLIES_NUM}"
-                            )
-                            result = "Error"
-                            critical_error = True
-                            break
-                        self.error_num += 1
-
-                if critical_error or not await self._go_to_next_page():
+                if len(vacancies) == 0:
+                    if self.page_num == 0:
+                        logger.warning("No vacancies found for the search query")
                     break
-                self.page_num += 1
+                for vacancy in vacancies:
+                    # Check if execution is paused before processing each job
+                    if self.pause_checker:
+                        await self.pause_checker()
 
-            if critical_error:
+                    try:
+                        result = await self.apply_job(vacancy)
+                        if result == "Limit":
+                            logger.warning("Maximum number of applications reached")
+                            break
+                    except Exception:
+                        tb_str = traceback.format_exc()
+                        logger.error(f"Unknown error on the page: {url}\n{tb_str}")
+                        await debug_capture(self.page, "apply_loop_error")
+                        # counter of repeated errors, if too many errors in a row -
+                        # exit the program and send a notification
+                        if self.error_num == MAX_APPLIES_NUM:
+                            logger.error(f"Critical number of consecutive errors {MAX_APPLIES_NUM}")
+                            result = "Error"
+                            break
+                        else:
+                            self.error_num += 1
+                        continue
+                    else:
+                        self.error_num = 0
+                # break the search for vacancies if the limit is reached
+                if result == "Limit" or result == "Error":
+                    break
+                # go to the next page
+                await self._go_to_next_page()
+
+            if result == "Limit" or result == "Error":
                 break
 
+        logger.info(f"Applications sent: {self.success_applies_num}")
+        logger.info("Ending the work.")
         await self.send_report(result)
-        logger.info(
-            f"Indeed application process finished. "
-            f"Applied: {self.applies_num}, Errors: {self.error_num}"
-        )
 
     async def get_vacancies_from_page(self) -> List[Any]:
         """Return all job card elements on the current page"""
@@ -194,6 +210,7 @@ class IndeedJobManager(BaseJobManager):
                 await new_page.goto(job.url, wait_until="domcontentloaded")
                 await async_pause(1, 2)
                 job.job_description = await self._extract_job_description_from_page(new_page)
+                job.company_description = await self._extract_company_description(new_page)
 
                 if MONKEY_MODE or COLLECT_INFO_MODE:
                     job_is_interesting = True
@@ -230,6 +247,12 @@ class IndeedJobManager(BaseJobManager):
                 if result == "Skip" and cover_letter.startswith("Could not"):
                     self._collect_job_info(job.job_title, job.company_name, job.url, cover_letter)
                 await self._handle_apply_result(result, job, cover_letter)
+                if self.success_applies_num >= self.max_applies_num:
+                    logger.info(
+                        f"The maximum number of applications has been reached: "
+                        f"{self.success_applies_num}/{self.max_applies_num}"
+                    )
+                    return "Limit"
                 return result
             finally:
                 time_left = int(minimum_job_time - time.time())
@@ -362,6 +385,29 @@ class IndeedJobManager(BaseJobManager):
         logger.debug("Could not extract job description from Indeed page")
         return ""
 
+    async def _extract_company_description(self, page: Any) -> str:
+        """Extract company description from the 'About the company' section of an Indeed job page"""
+        selectors = [
+            "[data-testid='jobsearch-CompanyInfoContainer']",
+            "#companyInfo",
+            ".jobsearch-CompanyInfoWithoutHeaderImage",
+            ".jobsearch-CompanyInfoContainer",
+        ]
+        for selector in selectors:
+            try:
+                el = await find_element_safely(page, selector, timeout=2000)
+                if el:
+                    text = await el.text_content()
+                    if text:
+                        text = text.strip()
+                        if len(text) > 20:
+                            logger.debug(f"Found company description using selector: {selector}")
+                            return text
+            except Exception:
+                continue
+        logger.debug("Could not extract company description from Indeed page")
+        return ""
+
     async def _dismiss_overlays(self) -> None:
         """Dismiss Indeed overlay portals that intercept clicks"""
         for selector in ["ifl-portal", "div.gnav-hovbc7"]:
@@ -375,13 +421,13 @@ class IndeedJobManager(BaseJobManager):
             except Exception:
                 pass
 
-    async def _go_to_next_page(self) -> bool:
+    async def _go_to_next_page(self) -> None:
         """Click next page button and return True if successful"""
         try:
             next_btn = await find_element_safely(self.page, INDEED_NEXT_PAGE_SELECTOR, timeout=5000)
             if not next_btn:
                 logger.info("No next page button found - reached last page")
-                return False
+                return
             await self._dismiss_overlays()
             clicked = await safe_click(self.page, INDEED_NEXT_PAGE_SELECTOR, timeout=5000)
             if not clicked:
@@ -389,12 +435,10 @@ class IndeedJobManager(BaseJobManager):
                 await next_btn.click(force=True, timeout=5000)
             await self.page.wait_for_load_state("domcontentloaded")
             await async_pause(1, 2)
-            logger.info(f"Moved to page {self.page_num + 2}")
-            return True
+            logger.info(f"Moved to page {self.page_num + 1}")
         except Exception as e:
             logger.warning(f"Could not navigate to next page: {e}")
             await debug_capture(self.page, "next_page_error")
-            return False
 
     async def _handle_apply_result(self, result: str, job: Job, cover_letter: str) -> None:
         """Save job result to the appropriate YAML file"""

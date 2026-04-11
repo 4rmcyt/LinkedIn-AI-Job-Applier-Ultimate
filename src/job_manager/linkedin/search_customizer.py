@@ -343,34 +343,6 @@ class SearchCustomizer:
             logger.error(f"Error setting search parameters: {e}")
             raise
 
-    def is_job_blacklisted(self, job_title: str, company_name: str, job_location: str) -> bool:
-        """Check if job is blacklisted"""
-        try:
-            # Check company blacklist
-            if company_name.lower() in [company.lower() for company in self.company_blacklist]:
-                logger.info(f"Company {company_name} is blacklisted")
-                return True
-
-            # Check title blacklist
-            job_title_lower = job_title.lower()
-            for blacklisted_word in self.title_blacklist:
-                if blacklisted_word.lower() in job_title_lower:
-                    logger.info(f"Job title contains blacklisted word: {blacklisted_word}")
-                    return True
-
-            # Check location blacklist
-            job_location_lower = job_location.lower()
-            for blacklisted_location in self.location_blacklist:
-                if blacklisted_location.lower() in job_location_lower:
-                    logger.info(f"Job location is blacklisted: {blacklisted_location}")
-                    return True
-
-            return False
-
-        except Exception as e:
-            logger.error(f"Error checking blacklist: {e}")
-            return False
-
     async def _set_easy_apply_filter(self):
         """Set Easy Apply filter toggle (async)"""
         if not EASY_APPLY_ONLY_MODE:
@@ -470,21 +442,6 @@ if __name__ == "__main__":
             # Test parameter setting
             search_customizer.set_advanced_search_params(test_config)
             logger.info("✓ Parameters set successfully")
-
-            # Test blacklist functionality
-            test_cases = [
-                ("Software Engineer", "Wayfair", "Germany", True),  # Company blacklisted
-                ("Python Developer", "Google", "Brazil", True),  # Location blacklisted
-                ("word1 Developer", "Microsoft", "Germany", True),  # Title blacklisted
-                ("Data Scientist", "Amazon", "Germany", False),  # Not blacklisted
-            ]
-
-            for title, company, location, expected in test_cases:
-                result = search_customizer.is_job_blacklisted(title, company, location)
-                status = "✓" if result == expected else "✗"
-                logger.info(
-                    f"{status} Blacklist test: {title} at {company} in {location} -> {result}"
-                )
 
             logger.info("✓ All tests completed successfully")
 

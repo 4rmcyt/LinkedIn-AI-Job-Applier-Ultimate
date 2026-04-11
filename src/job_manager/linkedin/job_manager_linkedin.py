@@ -18,7 +18,7 @@ from config.constants import ANSWERS_FILE, COVER_LETTER_DIR, RESUME_DIR, SEARCH_
 from config.logger_config import logger
 from src.job_manager.job_manager import BaseJobManager
 from src.job_manager.linkedin.easy_applier_linkedin import LinkedInEasyApplier
-from src.pydantic_models.job_models import Job, JobInfo
+from src.pydantic_models.job_models import Job
 from src.telegram.telegram_manager import TelegramReportSender
 from src.utils.browser_utils import (
     debug_capture,
