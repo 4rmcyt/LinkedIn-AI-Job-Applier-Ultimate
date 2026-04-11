@@ -2,7 +2,7 @@
 This module is used to customize the search parameters for the LinkedIn jobs search.
 """
 
-from typing import Any, Dict, Union
+from typing import Any, Union
 
 from playwright.sync_api import Page
 
@@ -10,34 +10,15 @@ from config.app_config import EASY_APPLY_ONLY_MODE
 from config.logger_config import logger
 
 # Import Playwright utilities for enhanced functionality
+from src.job_manager.search_customizer import BaseSearchCustomizer
 from src.utils.browser_utils import find_element_safely, safe_click, safe_fill
 from src.utils.utils import async_pause
 
 
-class SearchCustomizer:
+class SearchCustomizer(BaseSearchCustomizer):
     def __init__(self, page: Union[Page, Any]):
-        self.page = page
-        self.search_params = {}
-
+        super().__init__(page)
         logger.info("SearchCustomizer initialized")
-
-    def set_advanced_search_params(self, parameters: Dict[str, Any]) -> None:
-        """Set search parameters"""
-        logger.info("Setting SearchCustomizer parameters")
-        # loading optional parameters
-        self.positions = parameters["positions"]
-        self.remote = parameters.get("remote", False)
-        self.onsite = parameters.get("onsite", False)
-        self.hybrid = parameters.get("hybrid", False)
-        self.experience_level = parameters.get("experience_level", {})
-        self.job_types = parameters.get("job_types", {})
-        self.date_posted = parameters.get("date", {})
-        self.locations = parameters.get("locations", [])
-        self.apply_once_at_company = parameters.get("apply_once_at_company", True)
-        self.company_blacklist = parameters.get("company_blacklist", [])
-        self.title_blacklist = parameters.get("title_blacklist", [])
-        self.location_blacklist = parameters.get("location_blacklist", [])
-        logger.info("SearchCustomizer parameters successfully set")
 
     async def _set_basic_search_terms(self):
         """Set basic search parameters (keywords and location) - async"""
@@ -442,6 +423,21 @@ if __name__ == "__main__":
             # Test parameter setting
             search_customizer.set_advanced_search_params(test_config)
             logger.info("✓ Parameters set successfully")
+
+            # Test blacklist functionality
+            test_cases = [
+                ("Software Engineer", "Wayfair", "Germany", True),  # Company blacklisted
+                ("Python Developer", "Google", "Brazil", True),  # Location blacklisted
+                ("word1 Developer", "Microsoft", "Germany", True),  # Title blacklisted
+                ("Data Scientist", "Amazon", "Germany", False),  # Not blacklisted
+            ]
+
+            for title, company, location, expected in test_cases:
+                result = search_customizer.is_job_blacklisted(title, company, location)
+                status = "✓" if result == expected else "✗"
+                logger.info(
+                    f"{status} Blacklist test: {title} at {company} in {location} -> {result}"
+                )
 
             logger.info("✓ All tests completed successfully")
 

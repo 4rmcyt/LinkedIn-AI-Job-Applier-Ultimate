@@ -1,8 +1,2 @@
-8. Error counter reset on success
-LinkedIn resets self.error_num = 0 after each successful job iteration. Indeed only ever increments it.
-
-9. Company description extraction
-LinkedIn extracts job.company_description from the job page and passes it to the LLM. Indeed doesn't extract this field.
-
 10. check_the_last_search_time() (24h guard)
 LinkedIn has a guard that prevents re-running within 24h of the last run. Indeed has no equivalent.

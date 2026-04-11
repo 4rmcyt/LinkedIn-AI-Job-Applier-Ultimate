@@ -2,12 +2,13 @@
 Module for customizing Indeed job search parameters.
 """
 
-from typing import Any, Dict, Union
+from typing import Any, Union
 from urllib.parse import quote_plus
 
 from playwright.sync_api import Page
 
 from config.logger_config import logger
+from src.job_manager.search_customizer import BaseSearchCustomizer
 from src.utils.utils import async_pause
 
 # Indeed experience level mapping
@@ -47,40 +48,10 @@ _REMOTE_MAP = {
 INDEED_BASE_URL = "https://www.indeed.com/jobs"
 
 
-class IndeedSearchCustomizer:
+class IndeedSearchCustomizer(BaseSearchCustomizer):
     def __init__(self, page: Union[Page, Any]):
-        self.page = page
-        self.positions = []
-        self.locations = []
-        self.remote = False
-        self.onsite = False
-        self.hybrid = False
-        self.experience_level = {}
-        self.job_types = {}
-        self.date_posted = {}
-        self.apply_once_at_company = True
-        self.company_blacklist = []
-        self.title_blacklist = []
-        self.location_blacklist = []
-
+        super().__init__(page)
         logger.info("IndeedSearchCustomizer initialized")
-
-    def set_advanced_search_params(self, parameters: Dict[str, Any]) -> None:
-        """Set search parameters from config"""
-        logger.info("Setting IndeedSearchCustomizer parameters")
-        self.positions = parameters["positions"]
-        self.remote = parameters.get("remote", False)
-        self.onsite = parameters.get("onsite", False)
-        self.hybrid = parameters.get("hybrid", False)
-        self.experience_level = parameters.get("experience_level", {})
-        self.job_types = parameters.get("job_types", {})
-        self.date_posted = parameters.get("date", {})
-        self.locations = parameters.get("locations", [])
-        self.apply_once_at_company = parameters.get("apply_once_at_company", True)
-        self.company_blacklist = parameters.get("company_blacklist", [])
-        self.title_blacklist = parameters.get("title_blacklist", [])
-        self.location_blacklist = parameters.get("location_blacklist", [])
-        logger.info("IndeedSearchCustomizer parameters successfully set")
 
     def _build_search_url(self, position: str, location: str = "") -> str:
         """Build an Indeed search URL for a given position and location"""
@@ -135,28 +106,3 @@ class IndeedSearchCustomizer:
             for location in locations:
                 urls.append(self._build_search_url(position, location))
         return urls
-
-    def is_job_blacklisted(self, job_title: str, company_name: str, job_location: str) -> bool:
-        """Return True if this job should be skipped based on blacklists"""
-        title_lower = job_title.lower()
-        company_lower = company_name.lower()
-        location_lower = job_location.lower()
-
-        for blacklisted in self.title_blacklist:
-            if blacklisted.lower() in title_lower:
-                logger.info(f"Job '{job_title}' skipped - title blacklisted: {blacklisted}")
-                return True
-
-        for blacklisted in self.company_blacklist:
-            if blacklisted.lower() in company_lower:
-                logger.info(f"Job at '{company_name}' skipped - company blacklisted: {blacklisted}")
-                return True
-
-        for blacklisted in self.location_blacklist:
-            if blacklisted.lower() in location_lower:
-                logger.info(
-                    f"Job in '{job_location}' skipped - location blacklisted: {blacklisted}"
-                )
-                return True
-
-        return False
