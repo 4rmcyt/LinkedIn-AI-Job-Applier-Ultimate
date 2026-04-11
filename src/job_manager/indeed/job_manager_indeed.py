@@ -79,6 +79,8 @@ class IndeedJobManager(BaseJobManager):
         """Main loop: iterate over all search URLs and apply to jobs"""
         logger.info("IndeedJobManager starting application process")
 
+        self.resume_improvement_recommendations()
+
         search_urls = self.search_component.get_search_urls()
         logger.info(f"Indeed search URLs: {search_urls}")
 
@@ -133,8 +135,7 @@ class IndeedJobManager(BaseJobManager):
 
     async def _scroll_left_panel(self) -> None:
         """Scroll the full page to trigger lazy-loading of job cards"""
-        await self.page.evaluate(
-            """
+        await self.page.evaluate("""
             () => new Promise((resolve) => {
                 const distance = document.body.scrollHeight;
                 const durationMs = 2000;
@@ -147,8 +148,7 @@ class IndeedJobManager(BaseJobManager):
                 }
                 requestAnimationFrame(step);
             })
-            """
-        )
+            """)
         await async_pause(1, 2)
         await self.page.evaluate("() => window.scrollTo(0, 0)")
 
@@ -246,14 +246,24 @@ class IndeedJobManager(BaseJobManager):
         return await easy_applier.job_apply(job)
 
     async def send_report(self, result: str) -> None:
-        """Send Telegram report"""
+        """Send Telegram report with full details matching LinkedIn report format"""
+        if TEST_MODE or COLLECT_INFO_MODE or result == "Error":
+            return
+        if self.previous_apply_number >= self.success_applies_num:
+            return
         try:
-            reporter = TelegramReportSender()
-            await reporter.send_report(
-                result=result,
-                applies_num=self.applies_num,
-                error_num=self.error_num,
+            logger.info("Sending a report about the work done in Telegram")
+            bot = TelegramReportSender()
+            await bot.send_telegram_report(
+                self.email,
+                self.resume,
+                self.success_applies_num,
+                self.jobs_no_info,
+                self.skill_stat,
+                self.resume_recommendations,
+                self.resume_anonymizer,
             )
+            self._write_the_last_search_time()
         except Exception as e:
             logger.warning(f"Failed to send Telegram report: {e}")
 

@@ -389,28 +389,6 @@ class LinkedInJobManager(BaseJobManager):
             return "Limit"
         return result
 
-    def resume_improvement_recommendations(self) -> None:
-        """
-        Write recommendations for improving the resume
-        """
-        resume_recommendations_file = self._define_output_file("resume_recommendations.txt")
-        try:
-            with open(resume_recommendations_file, "r", encoding="utf-8") as f:
-                resume_recommendations = f.read()
-        except FileNotFoundError:
-            resume_recommendations = ""
-        # if the file with recommendations has not been created yet - write recommendations for improving the resume
-        # and save them to a file
-        if not resume_recommendations:
-            self.resume_recommendations = (
-                self.llm_answerer_component.resume_improvement_recommendations()
-            )
-            self.resume_recommendations = self.resume_anonymizer.deanonymize_text(
-                self.resume_recommendations
-            )
-            with open(resume_recommendations_file, "w", encoding="utf-8") as f:
-                f.write(self.resume_recommendations)
-
     async def send_report(self, result: str) -> None:
         """
         After the resume sending is completed, send a report, which will contain

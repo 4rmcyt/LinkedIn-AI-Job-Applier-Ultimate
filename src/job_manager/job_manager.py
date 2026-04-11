@@ -313,6 +313,24 @@ class BaseJobManager(ABC):
             logger.warning("Could not load cache from file")
             return JobManagerCache()
 
+    def resume_improvement_recommendations(self) -> None:
+        """Generate LLM resume improvement advice and save to resume_recommendations.txt"""
+        resume_recommendations_file = self._define_output_file("resume_recommendations.txt")
+        try:
+            with open(resume_recommendations_file, "r", encoding="utf-8") as f:
+                self.resume_recommendations = f.read()
+        except FileNotFoundError:
+            self.resume_recommendations = ""
+        if not self.resume_recommendations:
+            self.resume_recommendations = (
+                self.llm_answerer_component.resume_improvement_recommendations()
+            )
+            self.resume_recommendations = self.resume_anonymizer.deanonymize_text(
+                self.resume_recommendations
+            )
+            with open(resume_recommendations_file, "w", encoding="utf-8") as f:
+                f.write(self.resume_recommendations)
+
     def _write_the_last_search_time(self) -> None:
         """Write the time of the last job search"""
         save_yaml_file(LAST_RUN_FILE, self.cache.model_dump())

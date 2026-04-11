@@ -1,6 +1,3 @@
-4. Resume improvement recommendations
-LinkedIn calls resume_improvement_recommendations() at startup — generates LLM advice, deanonymizes it, and saves to resume_recommendations.txt. Indeed does nothing with self.resume_recommendations.
-
 5. Richer Telegram report
 LinkedIn's send_report sends: email, resume, applies count, jobs_no_info list, skill_stat, resume_recommendations, and resume_anonymizer. Indeed only sends result/applies_num/error_num.
 
