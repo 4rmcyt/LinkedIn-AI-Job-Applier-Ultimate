@@ -52,7 +52,9 @@ class LinkedInJobManager(BaseJobManager):
         self.llm_agent_component = None
         self.resume_generator_manager = None
         self.pause_checker = None
-        self.jobs_no_info = []  # vacancies to which applications were not sent due to missing information
+        self.jobs_no_info = (
+            []
+        )  # vacancies to which applications were not sent due to missing information
         self.job_key_skills = []  # key skills according to employer's opinion
         self.interesting_jobs = []
         self.page_num = 0
@@ -412,25 +414,6 @@ class LinkedInJobManager(BaseJobManager):
                     self.resume_anonymizer,
                 )
                 self._write_the_last_search_time()
-
-    def check_the_last_search_time(self) -> bool:
-        """
-        Check if the job search was started not earlier than 24 hours after the previous start.
-        Or check if the last application was less than an hour ago
-        This means that the application was forcibly restarted.
-        """
-        logger.info(
-            "Checking if the job search was started not earlier than 24 hours after the previous start"
-        )
-        if self.cache.last_run:
-            last_run = self.cache.get_last_run_datetime()
-        else:
-            return True
-        if (
-            datetime.now() - last_run
-        ).total_seconds() >= 60 * 60 * 24 or self.previous_apply_number > 0:
-            return True
-        return False
 
     async def _scroll_to_load_jobs(self):
         """Scroll the job results container to load all job listings (async)"""

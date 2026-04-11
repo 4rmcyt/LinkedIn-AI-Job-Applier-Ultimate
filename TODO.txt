@@ -1,2 +1,0 @@
-10. check_the_last_search_time() (24h guard)
-LinkedIn has a guard that prevents re-running within 24h of the last run. Indeed has no equivalent.

@@ -61,7 +61,7 @@ def job_applier(mock_page, mock_resume_anonymizer, mock_search_component):
     with (
         patch("src.job_manager.job_manager.OUTPUT_DIR", "/mock/output"),
         patch(
-            "src.job_manager.linkedin.job_manager_linkedin.LAST_RUN_FILE",
+            "src.job_manager.job_manager.LAST_RUN_FILE",
             Path("/mock/output/last_run.yaml"),
         ),
         patch("builtins.open", mock_open()),
@@ -207,7 +207,7 @@ class TestCacheManagement:
         mock_file = mock_open()
         with (
             patch("builtins.open", mock_file),
-            patch("src.job_manager.linkedin.job_manager_linkedin.save_yaml_file") as mock_save,
+            patch("src.job_manager.job_manager.save_yaml_file") as mock_save,
         ):
             job_applier._write_the_last_search_time()
 

@@ -343,6 +343,25 @@ class BaseJobManager(ABC):
             with open(resume_recommendations_file, "w", encoding="utf-8") as f:
                 f.write(self.resume_recommendations)
 
+    def check_the_last_search_time(self) -> bool:
+        """
+        Check if the job search was started not earlier than 24 hours after the previous start.
+        Or check if the last application was less than an hour ago
+        This means that the application was forcibly restarted.
+        """
+        logger.info(
+            "Checking if the job search was started not earlier than 24 hours after the previous start"
+        )
+        if self.cache.last_run:
+            last_run = self.cache.get_last_run_datetime()
+        else:
+            return True
+        if (
+            datetime.now() - last_run
+        ).total_seconds() >= 60 * 60 * 24 or self.previous_apply_number > 0:
+            return True
+        return False
+
     def _write_the_last_search_time(self) -> None:
         """Write the time of the last job search"""
         save_yaml_file(LAST_RUN_FILE, self.cache.model_dump())

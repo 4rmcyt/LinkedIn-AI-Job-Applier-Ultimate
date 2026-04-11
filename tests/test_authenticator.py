@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.job_manager.linkedin_linkedin import LinkedInAuthenticator
+from src.job_manager.linkedin.authenticator_linkedin import LinkedInAuthenticator
 
 
 class TestLinkedInAuthenticatorInit:
@@ -53,7 +53,8 @@ class TestLinkedInAuthenticatorLogin:
 
         # Mock find_element_safely to return a feed element
         with patch(
-            "src.job_manager.linkedin.authenticator.find_element_safely", new_callable=AsyncMock
+            "src.job_manager.linkedin.authenticator_linkedin.find_element_safely",
+            new_callable=AsyncMock,
         ) as mock_find:
             mock_find.return_value = MagicMock()  # Feed element found
 
@@ -83,7 +84,8 @@ class TestLinkedInAuthenticatorLogin:
         mock_page.url = "https://www.linkedin.com/feed/"
 
         with patch(
-            "src.job_manager.linkedin.authenticator.find_element_safely", new_callable=AsyncMock
+            "src.job_manager.linkedin.authenticator_linkedin.find_element_safely",
+            new_callable=AsyncMock,
         ) as mock_find:
             mock_find.return_value = None  # No feed element found
 
@@ -147,10 +149,10 @@ class TestLinkedInAuthenticatorLogin:
 
         with (
             patch(
-                "src.job_manager.linkedin.authenticator.safe_fill", new_callable=AsyncMock
+                "src.job_manager.linkedin.authenticator_linkedin.safe_fill", new_callable=AsyncMock
             ) as mock_fill,
             patch(
-                "src.job_manager.linkedin.authenticator.safe_click", new_callable=AsyncMock
+                "src.job_manager.linkedin.authenticator_linkedin.safe_click", new_callable=AsyncMock
             ) as mock_click,
             patch.object(auth, "check_login_success", new_callable=AsyncMock) as mock_check,
         ):
@@ -181,10 +183,10 @@ class TestLinkedInAuthenticatorLogin:
 
         with (
             patch(
-                "src.job_manager.linkedin.authenticator.safe_fill", new_callable=AsyncMock
+                "src.job_manager.linkedin.authenticator_linkedin.safe_fill", new_callable=AsyncMock
             ) as mock_fill,
             patch(
-                "src.job_manager.linkedin.authenticator.safe_click", new_callable=AsyncMock
+                "src.job_manager.linkedin.authenticator_linkedin.safe_click", new_callable=AsyncMock
             ) as mock_click,
             patch.object(auth, "check_login_success", new_callable=AsyncMock) as mock_check,
         ):
@@ -212,7 +214,7 @@ class TestLinkedInAuthenticatorLogin:
         auth.password = "password123"
 
         with patch(
-            "src.job_manager.linkedin.authenticator.safe_fill", new_callable=AsyncMock
+            "src.job_manager.linkedin.authenticator_linkedin.safe_fill", new_callable=AsyncMock
         ) as mock_fill:
             mock_fill.return_value = False  # Email fill fails
 
@@ -234,7 +236,7 @@ class TestLinkedInAuthenticatorLogin:
         auth.password = "password123"
 
         with patch(
-            "src.job_manager.linkedin.authenticator.safe_fill", new_callable=AsyncMock
+            "src.job_manager.linkedin.authenticator_linkedin.safe_fill", new_callable=AsyncMock
         ) as mock_fill:
             # Email succeeds, password fails
             mock_fill.side_effect = [True, False]
@@ -258,10 +260,10 @@ class TestLinkedInAuthenticatorLogin:
 
         with (
             patch(
-                "src.job_manager.linkedin.authenticator.safe_fill", new_callable=AsyncMock
+                "src.job_manager.linkedin.authenticator_linkedin.safe_fill", new_callable=AsyncMock
             ) as mock_fill,
             patch(
-                "src.job_manager.linkedin.authenticator.safe_click", new_callable=AsyncMock
+                "src.job_manager.linkedin.authenticator_linkedin.safe_click", new_callable=AsyncMock
             ) as mock_click,
         ):
             mock_fill.return_value = True
@@ -370,7 +372,7 @@ class TestCheckLoginSuccess:
         auth = LinkedInAuthenticator(page=mock_page)
 
         # This should timeout but not immediately fail
-        with patch("src.job_manager.linkedin.authenticator.async_pause"):
+        with patch("src.job_manager.linkedin.authenticator_linkedin.async_pause"):
             result = await auth.check_login_success()
 
         assert result is False  # Eventually timeout
@@ -396,7 +398,7 @@ class TestCheckLoginSuccess:
 
         auth = LinkedInAuthenticator(page=mock_page)
 
-        with patch("src.job_manager.linkedin.authenticator.async_pause"):
+        with patch("src.job_manager.linkedin.authenticator_linkedin.async_pause"):
             result = await auth.check_login_success()
 
         assert result is True
@@ -414,7 +416,7 @@ class TestCheckLoginSuccess:
 
         auth = LinkedInAuthenticator(page=mock_page)
 
-        with patch("src.job_manager.linkedin.authenticator.async_pause"):
+        with patch("src.job_manager.linkedin.authenticator_linkedin.async_pause"):
             result = await auth.check_login_success()
 
         assert result is False
@@ -515,13 +517,14 @@ class TestAuthenticatorIntegration:
 
         with (
             patch(
-                "src.job_manager.linkedin.authenticator.find_element_safely", new_callable=AsyncMock
+                "src.job_manager.linkedin.authenticator_linkedin.find_element_safely",
+                new_callable=AsyncMock,
             ) as mock_find,
             patch(
-                "src.job_manager.linkedin.authenticator.safe_fill", new_callable=AsyncMock
+                "src.job_manager.linkedin.authenticator_linkedin.safe_fill", new_callable=AsyncMock
             ) as mock_fill,
             patch(
-                "src.job_manager.linkedin.authenticator.safe_click", new_callable=AsyncMock
+                "src.job_manager.linkedin.authenticator_linkedin.safe_click", new_callable=AsyncMock
             ) as mock_click,
         ):
             # First is_logged_in check returns False (not logged in)
@@ -545,10 +548,11 @@ class TestAuthenticatorIntegration:
 
         with (
             patch(
-                "src.job_manager.linkedin.authenticator.find_element_safely", new_callable=AsyncMock
+                "src.job_manager.linkedin.authenticator_linkedin.find_element_safely",
+                new_callable=AsyncMock,
             ) as mock_find,
             patch(
-                "src.job_manager.linkedin.authenticator.safe_fill", new_callable=AsyncMock
+                "src.job_manager.linkedin.authenticator_linkedin.safe_fill", new_callable=AsyncMock
             ) as mock_fill,
         ):
             mock_find.return_value = MagicMock()  # Feed element found immediately

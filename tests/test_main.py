@@ -915,8 +915,8 @@ class TestMain:
 
             main()
 
-            # Verify output folder creation
-            mock_output.mkdir.assert_called_once_with(exist_ok=True)
+            # Verify output folder creation (data / "output" / "linkedin" and "indeed")
+            mock_output.__truediv__.return_value.mkdir.assert_called_with(exist_ok=True)
 
             # Verify config validation
             mock_validator.validate_secrets.assert_called_once()
@@ -1011,8 +1011,8 @@ class TestMain:
 
             main()
 
-            # Verify mkdir was called with exist_ok=True
-            mock_output.mkdir.assert_called_once_with(exist_ok=True)
+            # Verify mkdir was called with exist_ok=True (data / "output" / "linkedin" and "indeed")
+            mock_output.__truediv__.return_value.mkdir.assert_called_with(exist_ok=True)
 
     def test_main_logs_search_config_parameters(self):
         """Test main logs search config parameter count"""
