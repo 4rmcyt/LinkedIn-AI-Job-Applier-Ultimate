@@ -25,11 +25,13 @@ from config.logger_config import logger
 if JOB_SITE == "indeed":
     from src.job_manager.indeed.authenticator import IndeedAuthenticator as Authenticator
     from src.job_manager.indeed.job_manager_indeed import IndeedJobManager as LinkedInJobManager
-    from src.job_manager.indeed.search_customizer import IndeedSearchCustomizer as SearchCustomizer
+    from src.job_manager.indeed.search_customizer_indeed import (
+        IndeedSearchCustomizer as SearchCustomizer,
+    )
 else:
     from src.job_manager.linkedin.authenticator import LinkedInAuthenticator as Authenticator
     from src.job_manager.linkedin.job_manager_linkedin import LinkedInJobManager
-    from src.job_manager.linkedin.search_customizer import SearchCustomizer
+    from src.job_manager.linkedin.search_customizer_linkedin import SearchCustomizer
 
 from src.job_manager.bot_facade import BotFacade
 from src.job_manager.resume_anonymizer import ResumeAnonymizer
