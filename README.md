@@ -99,10 +99,6 @@ This project enhances the original codebase with several powerful new features:
     # Clone the repository
     git clone https://github.com/beatwad/LinkedIn-AI-Job-Applier-Ultimate.git
     cd LinkedIn-AI-Job-Applier-Ultimate
-
-    # Create and activate a virtual environment (can miss this step if using uv)
-    python -m venv venv
-    source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
     ```
 
 2.  **Install dependencies**
@@ -292,11 +288,6 @@ This project enhances the original codebase with several powerful new features:
 ## ▶️ Usage
 
 Once you have completed the installation and configuration steps, you can run the bot:
-
-```bash
-python main.py
-```
-or
 
 ```bash
 uv run python main.py

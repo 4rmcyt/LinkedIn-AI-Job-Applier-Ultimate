@@ -1,5 +1,6 @@
 ## Configuration
 
+
 ### Runtime Flags (`config/app_config.py`)
 - `JOB_SITE` — target platform: `"linkedin"` (default) or `"indeed"`
 - `MAX_APPLIES_NUM` — max applications per run

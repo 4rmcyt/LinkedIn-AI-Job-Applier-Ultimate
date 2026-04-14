@@ -2,7 +2,6 @@
 
 import asyncio
 import os
-import time
 import traceback
 from pathlib import Path
 from threading import Lock
@@ -45,6 +44,16 @@ from src.resume_builder.resume_generator import ResumeGenerator
 from src.resume_builder.resume_manager import ResumeManager
 from src.resume_builder.style_manager import StyleManager
 from src.utils.browser_utils import create_playwright_browser, save_browser_session, stop_tracing
+from src.utils.runtime_control import (
+    BrowserClosedError,
+    GracefulShutdownRequested,
+    attach_browser_close_watchers,
+    countdown_before_restart,
+    register_shutdown_handlers,
+    run_with_runtime_guards,
+    runtime_controller,
+    sleep_with_shutdown,
+)
 from src.utils.utils import (
     get_first_pdf_file,
     load_yaml_file,
@@ -183,8 +192,13 @@ def start_keyboard_listener():
 async def check_pause():
     """Check if execution is paused and wait if needed"""
     global paused
+    # Local runtime patch: allow pause loops to exit promptly on shutdown requests.
+    if runtime_controller.is_shutdown_requested():
+        raise GracefulShutdownRequested("Shutdown requested")
     if paused:
         while paused:
+            if runtime_controller.is_shutdown_requested():
+                raise GracefulShutdownRequested("Shutdown requested")
             await asyncio.sleep(0.5)
 
 
@@ -196,13 +210,18 @@ async def create_and_run_bot(
 ):
     """Start job-site bot (async)"""
     logger.info(f"Initializing {JOB_SITE} bot...")
+    runtime_controller.begin_run()
+    browser = context = page = None
 
     # Initialize browser Playwright based on configuration
     try:
         browser, context, page = await create_playwright_browser()
+        # Local runtime patch: detect manual browser closure and recover cleanly.
+        browser_closed = attach_browser_close_watchers(browser, context, page)
         logger.info("Playwright browser initialized successfully")
 
     except Exception as e:
+        runtime_controller.finish_run()
         logger.error(f"Browser initialization error: {e}")
         raise RuntimeError(f"Failed to initialize browser: {e}")
 
@@ -294,31 +313,39 @@ async def create_and_run_bot(
         bot.set_resume(resume_structured, resume_text, resume_text_anonymized)
         if not READY_MADE_RESUME.resolve().is_file():
             bot.set_resume_generator(resume_generator_manager)
-        await bot.start_apply()
+        # Local runtime patch: race bot execution against shutdown and browser-close events.
+        await run_with_runtime_guards(bot, browser_closed)
 
     finally:
         # Cleanup browser resources
         logger.info("Cleaning up browser resources...")
         try:
-            await save_browser_session(context)
-            await stop_tracing(context)
+            if context is not None:
+                await save_browser_session(context)
+                await stop_tracing(context)
             # Close Playwright browser (browser is None when using persistent context)
             if browser is not None:
                 await browser.close()
-            else:
+            elif context is not None:
                 await context.close()
             logger.info("Playwright browser closed")
 
         except Exception as e:
             logger.warning(f"Error during browser cleanup: {e}")
+        finally:
+            # Local runtime patch: release any pending shutdown handler waits.
+            runtime_controller.finish_run()
 
 
 def main() -> None:
     # Start keyboard listener for pause/resume functionality
+    # Local runtime patch: register graceful shutdown handlers once at startup.
+    register_shutdown_handlers()
     start_keyboard_listener()
 
     while True:
         should_exit = False
+        should_restart = False
         try:
             # create output folder if it doesn't exist
             data = Path("data")
@@ -344,12 +371,26 @@ def main() -> None:
 
             asyncio.run(create_and_run_bot(search_config, secrets, resume_text, resume_structured))
             logger.info(f"{JOB_SITE.capitalize()} bot completed successfully")
+            if not RESTART_EVERY_DAY:
+                should_exit = True
 
         except ConfigError as ce:
             logger.error(f"Configuration error: {str(ce)}")
         except FileNotFoundError as fnf:
             tb_str = traceback.format_exc()
             logger.error(f"File not found: {str(fnf)}\n{tb_str}")
+        # Local runtime patch: custom runtime exceptions stay grouped here for easy rebasing.
+        except BrowserClosedError as bce:
+            logger.warning(str(bce))
+            should_restart = countdown_before_restart()
+            should_exit = not should_restart
+        except GracefulShutdownRequested:
+            logger.info("Graceful shutdown requested. Exiting after cleanup.")
+            should_exit = True
+        except KeyboardInterrupt:
+            runtime_controller.request_shutdown("keyboard interrupt")
+            logger.info("Interrupted by user. Exiting after cleanup.")
+            should_exit = True
         except RuntimeError as re:
             tb_str = traceback.format_exc()
             logger.error(f"Runtime error: {str(re)}\n{tb_str}")
@@ -358,10 +399,16 @@ def main() -> None:
             logger.error(f"Unknown error: {str(e)}\n{tb_str}")
         finally:
             logger.info("Program completed")
-            # Wait 1 hour total before next run
-            if RESTART_EVERY_DAY:
+            if should_restart:
+                logger.info("Restarting after browser closure")
+            elif should_exit:
+                logger.info("Exiting program")
+            elif RESTART_EVERY_DAY:
                 logger.info("Waiting 1 hour before next run")
-                time.sleep(3600)
+                # Local runtime patch: make the daily wait interruptible.
+                if not asyncio.run(sleep_with_shutdown(3600)):
+                    logger.info("Shutdown requested during wait interval")
+                    should_exit = True
             else:
                 logger.info("Exiting program")
                 should_exit = True
