@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 
 import pytest
 
@@ -244,6 +244,80 @@ class TestTimeChecking:
         result = job_applier.check_the_last_search_time()
 
         assert result is False
+
+
+class TestVacancyParsing:
+    """Test LinkedIn vacancy parsing"""
+
+    @pytest.mark.asyncio
+    async def test_extract_job_url_from_relative_href(self, job_applier):
+        """Test extracting a job URL from a relative link"""
+        job_element = AsyncMock()
+        job_element.get_attribute.return_value = None
+
+        with patch(
+            "src.job_manager.job_manager.get_element_attribute_safely", new_callable=AsyncMock
+        ) as mock_get_attribute:
+            mock_get_attribute.return_value = "/jobs/view/12345/"
+
+            job_url = await job_applier._extract_job_url(job_element)
+
+            assert job_url == "https://www.linkedin.com/jobs/view/12345/"
+
+    @pytest.mark.asyncio
+    async def test_extract_job_url_from_data_job_id(self, job_applier):
+        """Test extracting a job URL from a job id attribute"""
+        job_element = AsyncMock()
+
+        async def get_attribute_side_effect(name):
+            return "12345" if name == "data-occludable-job-id" else None
+
+        job_element.get_attribute.side_effect = get_attribute_side_effect
+
+        with patch(
+            "src.job_manager.job_manager.get_element_attribute_safely", new_callable=AsyncMock
+        ) as mock_get_attribute:
+            mock_get_attribute.return_value = None
+
+            job_url = await job_applier._extract_job_url(job_element)
+
+            assert job_url == "https://www.linkedin.com/jobs/view/12345"
+            mock_get_attribute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_vacancies_from_page_skips_bad_selector_matches(self, job_applier):
+        """Test vacancy parsing continues past selectors without job URLs"""
+        first_selector_elements = [AsyncMock(), AsyncMock()]
+        for element in first_selector_elements:
+            element.get_attribute.return_value = None
+
+        valid_element = AsyncMock()
+
+        async def valid_get_attribute(name):
+            if name == "href":
+                return None
+            if name == "data-occludable-job-id":
+                return "67890"
+            return None
+
+        valid_element.get_attribute.side_effect = valid_get_attribute
+
+        with (
+            patch.object(job_applier, "_scroll_to_load_jobs", new_callable=AsyncMock),
+            patch(
+                "src.job_manager.job_manager.find_elements_safely", new_callable=AsyncMock
+            ) as mock_find_elements,
+        ):
+            mock_find_elements.side_effect = [
+                first_selector_elements,
+                [valid_element],
+            ]
+
+            vacancies = await job_applier.get_vacancies_from_page()
+
+            assert vacancies == [
+                {"url": "https://www.linkedin.com/jobs/view/67890", "id": "67890"}
+            ]
 
     def test_check_previous_apply_number_no_previous(self, job_applier):
         """Test when there's no previous application"""

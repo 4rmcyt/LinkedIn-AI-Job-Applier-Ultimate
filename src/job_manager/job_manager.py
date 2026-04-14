@@ -140,13 +140,15 @@ class JobApplier:
 
             # Find all job listing elements on the current page using multiple selectors
             job_selectors = [
-                "//*[starts-with(@class, 'flex-grow-1')]",
+                "li[data-occludable-job-id]",
                 "div[data-job-id]",
                 ".jobs-search-results__list-item",
+                ".job-card-container--clickable",
                 ".job-card-container",
                 ".base-card",
                 ".job-card-list__entity-lockup",
                 ".scaffold-layout__list-item",
+                "//*[starts-with(@class, 'flex-grow-1') and .//a[contains(@href, '/jobs/view/')]]",
             ]
 
             job_elements = []
@@ -154,6 +156,18 @@ class JobApplier:
                 by = "xpath" if selector.startswith("//") else "css selector"
                 elements = await find_elements_safely(self.page, selector, by)
                 if elements:
+                    valid_sample_found = False
+                    for element in elements[:3]:
+                        if await self._extract_job_url(element):
+                            valid_sample_found = True
+                            break
+
+                    if not valid_sample_found:
+                        logger.debug(
+                            f"Selector matched {len(elements)} elements but no job URLs were found: {selector}"
+                        )
+                        continue
+
                     job_elements = elements
                     logger.debug(f"Found {len(elements)} job elements using selector: {selector}")
                     break
@@ -591,6 +605,30 @@ class JobApplier:
     async def _extract_job_url(self, job_element) -> str:
         """Extract job URL from job element using multiple selector strategies (async)"""
         logger.debug("Extracting job URL from element")
+
+        async def _get_attribute(attribute: str) -> str | None:
+            try:
+                value = await job_element.get_attribute(attribute)
+                return value if isinstance(value, str) else None
+            except Exception:
+                return None
+
+        def _normalize_job_url(url: str) -> str:
+            if url.startswith("/"):
+                return f"https://www.linkedin.com{url}"
+            if url.startswith("https://linkedin.com"):
+                return url.replace("https://linkedin.com", "https://www.linkedin.com", 1)
+            return url
+
+        direct_href = await _get_attribute("href")
+        if direct_href and "/jobs/view/" in direct_href:
+            return _normalize_job_url(direct_href)
+
+        for attribute in ("data-occludable-job-id", "data-job-id"):
+            job_id = await _get_attribute(attribute)
+            if job_id and job_id.isdigit():
+                return f"https://www.linkedin.com/jobs/view/{job_id}"
+
         # Try different selectors for job links
         link_selectors = [
             "a[href*='/jobs/view/']",
@@ -604,9 +642,7 @@ class JobApplier:
             try:
                 href = await get_element_attribute_safely(job_element, selector, "href")
                 if href and "/jobs/view/" in href:
-                    if not href.startswith("https://linkedin.com"):
-                        href = "https://linkedin.com" + href
-                    return href
+                    return _normalize_job_url(href)
             except Exception:
                 continue
 
