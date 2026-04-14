@@ -78,14 +78,30 @@ class TestLinkedInAuthenticatorLogin:
 
     @pytest.mark.asyncio
     async def test_is_logged_in_no_feed_content(self):
-        """Test is_logged_in when feed content is not found"""
+        """Test is_logged_in when authenticated shell is detected"""
         mock_page = AsyncMock()
         mock_page.url = "https://www.linkedin.com/feed/"
 
         with patch(
             "src.job_manager.authenticator.find_element_safely", new_callable=AsyncMock
         ) as mock_find:
-            mock_find.return_value = None  # No feed element found
+            mock_find.side_effect = [MagicMock()]  # Authenticated nav found immediately
+
+            auth = LinkedInAuthenticator(page=mock_page)
+            result = await auth.is_logged_in()
+
+            assert result is True
+
+    @pytest.mark.asyncio
+    async def test_is_logged_in_unknown_page_without_markers(self):
+        """Test is_logged_in when no authenticated markers are found"""
+        mock_page = AsyncMock()
+        mock_page.url = "https://www.linkedin.com/authwall"
+
+        with patch(
+            "src.job_manager.authenticator.find_element_safely", new_callable=AsyncMock
+        ) as mock_find:
+            mock_find.return_value = None
 
             auth = LinkedInAuthenticator(page=mock_page)
             result = await auth.is_logged_in()
@@ -146,10 +162,12 @@ class TestLinkedInAuthenticatorLogin:
         auth.password = "password123"
 
         with (
+            patch.object(auth, "_is_authenticated_page", new_callable=AsyncMock) as mock_auth_page,
             patch("src.job_manager.authenticator.safe_fill", new_callable=AsyncMock) as mock_fill,
             patch("src.job_manager.authenticator.safe_click", new_callable=AsyncMock) as mock_click,
             patch.object(auth, "check_login_success", new_callable=AsyncMock) as mock_check,
         ):
+            mock_auth_page.return_value = False
             mock_fill.return_value = True
             mock_click.return_value = True
             mock_check.return_value = True
@@ -176,10 +194,12 @@ class TestLinkedInAuthenticatorLogin:
         auth.password = "password123"
 
         with (
+            patch.object(auth, "_is_authenticated_page", new_callable=AsyncMock) as mock_auth_page,
             patch("src.job_manager.authenticator.safe_fill", new_callable=AsyncMock) as mock_fill,
             patch("src.job_manager.authenticator.safe_click", new_callable=AsyncMock) as mock_click,
             patch.object(auth, "check_login_success", new_callable=AsyncMock) as mock_check,
         ):
+            mock_auth_page.return_value = False
             mock_fill.return_value = True
             mock_click.return_value = True
             mock_check.return_value = True
@@ -203,7 +223,11 @@ class TestLinkedInAuthenticatorLogin:
         auth.email = "test@example.com"
         auth.password = "password123"
 
-        with patch("src.job_manager.authenticator.safe_fill", new_callable=AsyncMock) as mock_fill:
+        with (
+            patch.object(auth, "_is_authenticated_page", new_callable=AsyncMock) as mock_auth_page,
+            patch("src.job_manager.authenticator.safe_fill", new_callable=AsyncMock) as mock_fill,
+        ):
+            mock_auth_page.return_value = False
             mock_fill.return_value = False  # Email fill fails
 
             result = await auth.enter_credentials()
@@ -223,7 +247,11 @@ class TestLinkedInAuthenticatorLogin:
         auth.email = "test@example.com"
         auth.password = "password123"
 
-        with patch("src.job_manager.authenticator.safe_fill", new_callable=AsyncMock) as mock_fill:
+        with (
+            patch.object(auth, "_is_authenticated_page", new_callable=AsyncMock) as mock_auth_page,
+            patch("src.job_manager.authenticator.safe_fill", new_callable=AsyncMock) as mock_fill,
+        ):
+            mock_auth_page.return_value = False
             # Email succeeds, password fails
             mock_fill.side_effect = [True, False]
 
@@ -245,15 +273,35 @@ class TestLinkedInAuthenticatorLogin:
         auth.password = "password123"
 
         with (
+            patch.object(auth, "_is_authenticated_page", new_callable=AsyncMock) as mock_auth_page,
             patch("src.job_manager.authenticator.safe_fill", new_callable=AsyncMock) as mock_fill,
             patch("src.job_manager.authenticator.safe_click", new_callable=AsyncMock) as mock_click,
         ):
+            mock_auth_page.return_value = False
             mock_fill.return_value = True
             mock_click.return_value = False  # All login button clicks fail
 
             result = await auth.enter_credentials()
 
             assert result is False
+
+    @pytest.mark.asyncio
+    async def test_enter_credentials_returns_success_when_already_authenticated(self):
+        """Test enter_credentials short-circuits when session is already authenticated"""
+        mock_page = AsyncMock()
+
+        auth = LinkedInAuthenticator(page=mock_page)
+
+        with (
+            patch.object(auth, "_is_authenticated_page", new_callable=AsyncMock) as mock_auth_page,
+            patch("src.job_manager.authenticator.safe_fill", new_callable=AsyncMock) as mock_fill,
+        ):
+            mock_auth_page.return_value = True
+
+            result = await auth.enter_credentials()
+
+            assert result is True
+            mock_fill.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_enter_credentials_exception(self):
@@ -354,7 +402,7 @@ class TestCheckLoginSuccess:
         auth = LinkedInAuthenticator(page=mock_page)
 
         # This should timeout but not immediately fail
-        with patch("src.job_manager.authenticator.pause"):
+        with patch("src.job_manager.authenticator.async_pause", new_callable=AsyncMock):
             result = await auth.check_login_success()
 
         assert result is False  # Eventually timeout
@@ -380,7 +428,7 @@ class TestCheckLoginSuccess:
 
         auth = LinkedInAuthenticator(page=mock_page)
 
-        with patch("src.job_manager.authenticator.pause"):
+        with patch("src.job_manager.authenticator.async_pause", new_callable=AsyncMock):
             result = await auth.check_login_success()
 
         assert result is True
@@ -398,7 +446,7 @@ class TestCheckLoginSuccess:
 
         auth = LinkedInAuthenticator(page=mock_page)
 
-        with patch("src.job_manager.authenticator.pause"):
+        with patch("src.job_manager.authenticator.async_pause", new_callable=AsyncMock):
             result = await auth.check_login_success()
 
         assert result is False

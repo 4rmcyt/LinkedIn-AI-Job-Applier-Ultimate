@@ -8,6 +8,33 @@ from src.utils.browser_utils import find_element_safely, safe_click, safe_fill
 from src.utils.utils import async_pause
 
 
+AUTHENTICATED_URL_PATTERNS = (
+    "/feed/",
+    "/in/",
+    "/mynetwork/",
+    "/notifications/",
+    "/messaging/",
+    "/jobs/collections/",
+)
+
+AUTHENTICATED_UI_SELECTORS = (
+    "nav.global-nav",
+    ".global-nav",
+    ".scaffold-layout__global-nav",
+    ".feed-identity-module",
+    "[data-test-global-nav-link='jobs']",
+    "button[aria-label*='Me']",
+)
+
+LOGIN_FORM_SELECTORS = (
+    "#username",
+    "#password",
+    "input[name='session_key']",
+    "input[name='session_password']",
+    "form.login__form",
+)
+
+
 class LinkedInAuthenticator:
     """Class for LinkedIn login and session management"""
 
@@ -42,6 +69,30 @@ class LinkedInAuthenticator:
             logger.info("LinkedIn login successful, session saved")
         return result
 
+    def _is_authenticated_url(self, url: str) -> bool:
+        return url == "https://www.linkedin.com/" or any(
+            pattern in url for pattern in AUTHENTICATED_URL_PATTERNS
+        )
+
+    async def _has_any_selector(self, selectors: tuple[str, ...], timeout: int) -> bool:
+        for selector in selectors:
+            if await find_element_safely(self.page, selector, timeout=timeout):
+                logger.debug(f"Detected page marker using selector: {selector}")
+                return True
+        return False
+
+    async def _is_authenticated_page(self, timeout: int = 5000) -> bool:
+        current_url = self.page.url
+        if "/login" in current_url or "/uas/login" in current_url:
+            return False
+
+        if await self._has_any_selector(AUTHENTICATED_UI_SELECTORS, timeout=timeout):
+            return True
+
+        return self._is_authenticated_url(current_url) and not await self._has_any_selector(
+            LOGIN_FORM_SELECTORS, timeout=1000
+        )
+
     async def is_logged_in(self) -> bool:
         """Check if user is logged into LinkedIn (async)"""
         try:
@@ -54,12 +105,8 @@ class LinkedInAuthenticator:
                 logger.warning("Redirected to login page, user not authorized")
                 return False
 
-            # Additional check - look for feed content
-            feed_element = await find_element_safely(
-                self.page, ".feed-shared-update-v2", timeout=30000
-            )
-            if feed_element:
-                logger.info("Feed content found, user is logged in")
+            if await self._is_authenticated_page(timeout=5000):
+                logger.info("Authenticated LinkedIn page detected, user is logged in")
                 return True
 
             logger.warning("Could not determine authorization status, assuming not logged in")
@@ -87,6 +134,10 @@ class LinkedInAuthenticator:
         logger.info("Entering user credentials in LinkedIn...")
 
         try:
+            if await self._is_authenticated_page(timeout=2000):
+                logger.info("LinkedIn session is already authenticated on current page")
+                return True
+
             # Try to find saved session
             profile_locator = self.page.locator(".member__profile")
             if await profile_locator.count() > 0:
@@ -150,6 +201,7 @@ class LinkedInAuthenticator:
                     "/mynetwork/",
                     "/notifications/",
                     "/messaging/",
+                    "/jobs/collections/",
                 ]
 
                 # Check if we reached a success page
