@@ -222,24 +222,43 @@ class EasyApplier:
             # Check for Easy Apply limit before searching for button
             if await self._check_easy_apply_limit():
                 logger.warning("Easy Apply daily limit detected while searching for button")
-                return None
+                return "Limit"
 
             easy_apply_selectors = [
-                '//a[contains(., "Apply")]',
+                ("button[aria-label*='Easy Apply']", "css selector"),
+                (
+                    "//button[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'easy apply')]",
+                    "xpath",
+                ),
+                (
+                    "//a[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'easy apply')]",
+                    "xpath",
+                ),
+                (
+                    "//*[contains(@class, 'jobs-apply-button')]//*[self::button or self::a][contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'easy apply')]",
+                    "xpath",
+                ),
             ]
 
-            for selector in easy_apply_selectors:
-                easy_apply_buttons = await find_elements_safely(self.page, selector, "xpath")
+            for selector, selector_type in easy_apply_selectors:
+                easy_apply_buttons = await find_elements_safely(self.page, selector, selector_type)
 
-            for button in easy_apply_buttons:
-                try:
-                    if not (await button.is_visible() and await button.is_enabled()):
-                        logger.debug("Apply button is not visible or enabled")
-                        continue
-                    await button.first.click(timeout=1000)
-                    return True
-                except Exception as e:
-                    logger.debug(f"Failed to click easy apply button: {e}")
+                for button in easy_apply_buttons:
+                    try:
+                        if not (await button.is_visible() and await button.is_enabled()):
+                            logger.debug("Easy Apply button is not visible or enabled")
+                            continue
+
+                        await button.click(timeout=1000)
+
+                        if await self._wait_for_easy_apply_dialog():
+                            return True
+
+                        logger.debug(
+                            f"Clicked candidate Easy Apply trigger but no modal appeared: {selector}"
+                        )
+                    except Exception as e:
+                        logger.debug(f"Failed to click easy apply button: {e}")
 
             await self.check_for_premium_redirect(job)
 
@@ -255,16 +274,47 @@ class EasyApplier:
         )
         return False
 
+    async def _wait_for_easy_apply_dialog(self, timeout: int = 5000) -> bool:
+        """Wait for Easy Apply dialog or continuation prompt to appear."""
+        try:
+            await self.page.wait_for_selector("[role='dialog']", state="visible", timeout=timeout)
+            return True
+        except Exception:
+            pass
+
+        dialog_selectors = [
+            (".jobs-easy-apply-modal__content", "css selector"),
+            ("[role='dialog'] .artdeco-modal__content", "css selector"),
+            ("[role='dialog']", "css selector"),
+            (
+                "//button[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'continue applying')]",
+                "xpath",
+            ),
+        ]
+
+        for selector, selector_type in dialog_selectors:
+            if await find_element_safely(self.page, selector, selector_type, timeout=timeout):
+                return True
+
+        return False
+
     async def _click_continue_applying_button(self) -> None:
         """Click continue applying button if present (async)"""
         logger.debug("Searching for 'Continue Applying' button")
-        continue_applying_button = await find_element_safely(
-            self.page,
-            '//button[contains(@class, "artdeco-button--primary") and contains(., "Continue applying")]',
-            "xpath",
-        )
-        if continue_applying_button:
-            await continue_applying_button.click(timeout=1000)
+        continue_selectors = [
+            "button[aria-label*='Continue applying']",
+            "//button[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'continue applying')]",
+        ]
+
+        for selector in continue_selectors:
+            selector_type = "css selector" if selector.startswith("button") else "xpath"
+            continue_applying_button = await find_element_safely(
+                self.page, selector, selector_type, timeout=1500
+            )
+            if continue_applying_button:
+                await continue_applying_button.click(timeout=1000)
+                await self._wait_for_easy_apply_dialog(timeout=3000)
+                return
 
     async def _fill_application_form(self, job: Job):
         """Fill out application form with loop for multi-step forms (async)"""
@@ -284,20 +334,41 @@ class EasyApplier:
     async def _find_next_or_submit_button(self) -> Any:
         """Find 'Next' or 'Submit' or 'Review' button (async)"""
         logger.info("Finding 'Next' or 'Submit' or 'Review' button")
-        # Find all elements with class="artdeco-button__text" and filter by specific text
-        elements = await find_elements_safely(self.page, ".artdeco-button__text", "css")
-        target_texts = ["next", "review", "submit application"]
+        dialog_root = await find_element_safely(
+            self.page, "[role='dialog']", "css selector", timeout=2000
+        )
+        button_locators = []
 
-        # Filter elements by text content
+        if dialog_root is not None:
+            button_locators = await dialog_root.locator("button").all()
+
+        if not button_locators:
+            button_locators = await self.page.locator("button").all()
+
+        target_texts = ["next", "review", "review application", "submit application"]
+
         next_button = None
         button_text = None
 
-        for element in elements:
-            text = await get_clean_text(element)
-            if text.lower() in target_texts:
+        for element in button_locators:
+            try:
+                text = (await get_clean_text(element) or "").strip().lower()
+            except Exception:
+                continue
+
+            if text in target_texts:
                 next_button = element
-                button_text = text.lower()
+                button_text = text
                 break
+
+        if next_button is None:
+            text_elements = await find_elements_safely(self.page, ".artdeco-button__text", "css")
+            for element in text_elements:
+                text = await get_clean_text(element)
+                if text.lower() in target_texts:
+                    next_button = element
+                    button_text = text.lower()
+                    break
 
         return next_button, button_text
 
@@ -415,7 +486,9 @@ class EasyApplier:
             try:
                 # Wait up to 10 seconds for the modal to appear
                 await self.page.wait_for_selector(
-                    ".jobs-easy-apply-modal__content", state="visible", timeout=10000
+                    "[role='dialog'], .jobs-easy-apply-modal__content, .artdeco-modal__content",
+                    state="visible",
+                    timeout=10000,
                 )
                 logger.debug("Modal selector found via wait_for_selector")
             except Exception as e:
@@ -424,7 +497,10 @@ class EasyApplier:
             # Try multiple selectors to find the modal content
             modal_selectors = [
                 ".jobs-easy-apply-modal__content",  # CSS selector
+                "[role='dialog'] .jobs-easy-apply-modal__content",
+                "[role='dialog'] .artdeco-modal__content",
                 ".artdeco-modal__content",  # Fallback CSS
+                "[role='dialog']",
                 "//*[contains(@class, 'jobs-easy-apply-modal__content')]",  # XPath
             ]
 
