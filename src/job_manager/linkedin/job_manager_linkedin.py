@@ -1,7 +1,8 @@
 import re
 import time
 import traceback
-from datetime import datetime, timedelta
+from datetime import timedelta
+from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from playwright.sync_api import Page
@@ -14,7 +15,7 @@ from config.app_config import (
     MONKEY_MODE,
     TEST_MODE,
 )
-from config.constants import ANSWERS_FILE, COVER_LETTER_DIR, RESUME_DIR, SEARCH_CONFIG_FILE
+from config.constants import COVER_LETTER_DIR, OUTPUT_DIR_LINKEDIN, RESUME_DIR, SEARCH_CONFIG_FILE
 from config.logger_config import logger
 from src.job_manager.job_manager import BaseJobManager
 from src.job_manager.linkedin.easy_applier_linkedin import LinkedInEasyApplier
@@ -52,9 +53,7 @@ class LinkedInJobManager(BaseJobManager):
         self.llm_agent_component = None
         self.resume_generator_manager = None
         self.pause_checker = None
-        self.jobs_no_info = (
-            []
-        )  # vacancies to which applications were not sent due to missing information
+        self.jobs_no_info = []  # vacancies to which applications were not sent due to missing information
         self.job_key_skills = []  # key skills according to employer's opinion
         self.interesting_jobs = []
         self.page_num = 0
@@ -198,7 +197,7 @@ class LinkedInJobManager(BaseJobManager):
             self.resume_anonymizer,
             self.resume_generator_manager,
             self.pause_checker,
-            ANSWERS_FILE,
+            Path(OUTPUT_DIR_LINKEDIN) / "answers.yaml",
             RESUME_DIR,
             COVER_LETTER_DIR,
             TEST_MODE,

@@ -1013,8 +1013,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
                 question_text = ""
 
             # Extract options text from radio buttons and their labels
-            options = await section.locator(",".join(radio_selectors)).evaluate_all(
-                """els => {
+            options = await section.locator(",".join(radio_selectors)).evaluate_all("""els => {
                     const seen = new Set();
                     return els.reduce((acc, e) => {
                         if (e.id && !seen.has(e.id)) {
@@ -1025,8 +1024,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
                         }
                         return acc;
                     }, []);
-                }"""
-            )
+                }""")
             options = list(dict.fromkeys(options))
 
             if not options:
@@ -1645,7 +1643,7 @@ if __name__ == "__main__":
     import dotenv
 
     from config.app_config import TEST_MODE
-    from config.constants import ANSWERS_FILE, COVER_LETTER_DIR, RESUME_DIR
+    from config.constants import COVER_LETTER_DIR, OUTPUT_DIR_LINKEDIN, RESUME_DIR
     from src.job_manager.resume_anonymizer import ResumeAnonymizer
     from src.llm.llm_manager import GPTAnswerer
     from src.pydantic_models.job_models import Job
@@ -1727,7 +1725,7 @@ if __name__ == "__main__":
                 resume_anonymizer,
                 resume_generator_manager,
                 check_pause,
-                ANSWERS_FILE,
+                Path(OUTPUT_DIR_LINKEDIN) / "answers.yaml",
                 RESUME_DIR,
                 COVER_LETTER_DIR,
                 TEST_MODE,

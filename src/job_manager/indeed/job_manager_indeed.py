@@ -14,7 +14,7 @@ from config.app_config import (
     MONKEY_MODE,
     TEST_MODE,
 )
-from config.constants import ANSWERS_FILE, COVER_LETTER_DIR, RESUME_DIR, SEARCH_CONFIG_FILE
+from config.constants import COVER_LETTER_DIR, OUTPUT_DIR_INDEED, RESUME_DIR, SEARCH_CONFIG_FILE
 from config.logger_config import logger
 from src.job_manager.indeed.easy_applier_indeed import IndeedEasyApplier
 from src.job_manager.job_manager import BaseJobManager
@@ -275,7 +275,7 @@ class IndeedJobManager(BaseJobManager):
             resume_anonymizer=self.resume_anonymizer,
             resume_generator_manager=self.resume_generator_manager,
             pause_checker=self.pause_checker,
-            answers_file=Path(ANSWERS_FILE),
+            answers_file=Path(OUTPUT_DIR_INDEED) / "answers.yaml",
             resume_dir=Path(RESUME_DIR),
             cover_letter_dir=Path(COVER_LETTER_DIR),
             test_mode=TEST_MODE,
