@@ -25,6 +25,7 @@ from config.constants import (
     SEARCH_CONFIG_FILE,
 )
 from config.logger_config import logger
+from src.dashboard.runtime import StopRequested, capture_page_screenshot, emit_event
 from src.job_manager.easy_applier import EasyApplier
 from src.pydantic_models.job_models import Job, JobInfo, JobManagerCache
 from src.telegram.telegram_manager import TelegramReportSender
@@ -70,6 +71,7 @@ class JobApplier:
         self.resume_vac_page_num = -1  # number of pages with vacancies similar to resume
         self.error_num = 0
         self.total_applies_num = 0
+        self.total_discovered_jobs = 0
         self.resume_recommendations = ""
 
         logger.info("JobApplier successfully initialized")
@@ -199,6 +201,14 @@ class JobApplier:
             logger.info(
                 f"Successfully parsed {len(vacancies)} job vacancies from page {self.page_num}"
             )
+            self.total_discovered_jobs += len(vacancies)
+            emit_event(
+                "jobs_discovered",
+                f"Discovered {len(vacancies)} jobs on page {self.page_num + 1}",
+                count=len(vacancies),
+                total_discovered=self.total_discovered_jobs,
+                page_num=self.page_num + 1,
+            )
 
         except Exception as e:
             logger.error(f"Error parsing job vacancies from page {self.page_num}: {e}")
@@ -209,6 +219,7 @@ class JobApplier:
 
     async def start_applying(self) -> None:
         """Send applications to all employers on all pages (async)"""
+        emit_event("page_changed", "Starting first search page", page_num=self.page_num + 1)
         self.easy_applier_component = EasyApplier(
             self.page,
             self.llm_answerer_component,
@@ -254,6 +265,8 @@ class JobApplier:
                     if result == "Limit":
                         logger.warning("Maximum number of applications reached")
                         break
+                except StopRequested:
+                    raise
                 except Exception:
                     tb_str = traceback.format_exc()
                     logger.error(f"Unknown error on the page: {url}\n{tb_str}")
@@ -289,11 +302,20 @@ class JobApplier:
 
         # Navigate to job page
         try:
+            emit_event("job_opened", "Opening job page", url=vacancy["url"], stage="opening")
             await self.page.goto(vacancy["url"])
             logger.info(f"Navigated to job URL: {vacancy['url']}")
+            await capture_page_screenshot(self.page, "job-opened")
             pause(3, 4)
         except Exception as e:
             logger.error(f"Failed to navigate to job URL: {vacancy['url']}, error: {e}")
+            emit_event(
+                "job_result",
+                "Failed to open job page",
+                result="Error",
+                reason=str(e),
+                url=vacancy.get("url"),
+            )
             await self._new_page.close()
             pause()
             self.page = self._original_page
@@ -306,6 +328,15 @@ class JobApplier:
         company_name = job.company_name
         company_job_title = job.job_title
         logger.info(f"Found a vacancy {company_job_title}")
+        emit_event(
+            "job_loaded",
+            f"Loaded job {company_job_title}",
+            job_title=company_job_title,
+            company_name=company_name,
+            url=vacancy.get("url"),
+            stage="loaded",
+        )
+        await capture_page_screenshot(self.page, "job-loaded")
         # if the vacancy has not been seen yet and the company is not in the blacklist
         # - start the process of applying to the vacancy
         if not job.is_valid_for_application():
@@ -338,11 +369,35 @@ class JobApplier:
                     score = 0
                     reasoning = "Monkey mode"
                 else:
-                    (
-                        job_is_interesting,
-                        score,
-                        reasoning,
-                    ) = self.llm_answerer_component.job_is_interesting(job.model_dump())
+                    emit_event(
+                        "job_evaluation_started",
+                        f"Evaluating {company_job_title}",
+                        job_title=company_job_title,
+                        company_name=company_name,
+                        url=vacancy.get("url"),
+                        stage="evaluating",
+                    )
+                    evaluation_result = self.llm_answerer_component.job_is_interesting(
+                        job.model_dump()
+                    )
+                    if evaluation_result is None:
+                        job_is_interesting, score, reasoning = None, 0, "Error calling LLM."
+                    else:
+                        (
+                            job_is_interesting,
+                            score,
+                            reasoning,
+                        ) = evaluation_result
+                emit_event(
+                    "job_evaluated",
+                    f"Evaluated {company_job_title}",
+                    job_title=company_job_title,
+                    company_name=company_name,
+                    url=vacancy.get("url"),
+                    interesting=job_is_interesting is True,
+                    score=int(score) if str(score).isdigit() else None,
+                    reasoning=reasoning,
+                )
                 if job_is_interesting:
                     # extract skills from the vacancy
                     job.skills = self._extract_skills_from_vacancy(job)
@@ -355,6 +410,14 @@ class JobApplier:
                         self._save_interesting_job(job, score, reasoning)
                 # apply to the vacancy only if it's interesting
                 if job_is_interesting:
+                    emit_event(
+                        "job_application_started",
+                        f"Starting application for {company_job_title}",
+                        job_title=company_job_title,
+                        company_name=company_name,
+                        url=vacancy.get("url"),
+                        stage="applying",
+                    )
                     if EASY_APPLY_ONLY_MODE is False:
                         apply_url = await self._check_apply_button()
                         if apply_url:
@@ -417,6 +480,8 @@ class JobApplier:
                     )
                     return apply_result
             pause()
+        except StopRequested:
+            raise
         except Exception as e:
             tb_str = traceback.format_exc()
             logger.error(
@@ -449,6 +514,15 @@ class JobApplier:
             logger.info(f"Total number of successful applications: {self.total_applies_num}")
         if result != "Limit":
             self._save_company(job, apply_result, vacancy)
+            emit_event(
+                "job_result",
+                f"Job finished with status {result}",
+                result=result,
+                reason=apply_result[1],
+                job_title=job.job_title,
+                company_name=job.company_name,
+                url=vacancy.get("url"),
+            )
         # if the page was processed faster than the minimum time -
         # wait until this time is over
         time_left = int(minimum_job_time - time.time())
@@ -1247,6 +1321,7 @@ class JobApplier:
 
         pause(2, 3)
         self.page_num = target_page
+        emit_event("page_changed", f"Moved to page {self.page_num + 1}", page_num=self.page_num + 1)
         return True
 
 

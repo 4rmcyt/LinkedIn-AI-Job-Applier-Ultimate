@@ -11,6 +11,7 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
 from config.logger_config import logger
+from src.dashboard.runtime import StopRequested, capture_page_screenshot, emit_event
 from src.job_manager.resume_anonymizer import ResumeAnonymizer
 from src.llm.llm_manager import GPTAnswerer
 from src.pydantic_models.job_models import Job, Question
@@ -91,6 +92,13 @@ class EasyApplier:
         :return: None
         """
         logger.info(f"Applying to job: {job.job_title} at {job.company_name}")
+        emit_event(
+            "easy_apply_started",
+            f"Easy Apply started for {job.job_title}",
+            job_title=job.job_title,
+            company_name=job.company_name,
+            url=job.url,
+        )
 
         # Check for Easy Apply daily limit before attempting to apply
         if await self._check_easy_apply_limit():
@@ -99,6 +107,8 @@ class EasyApplier:
 
         try:
             return await self.job_apply(job)
+        except StopRequested:
+            raise
         except Exception as e:
             logger.error(f"Failed to apply to job: {job.job_title} at {job.url}, error: {str(e)}")
             raise e
@@ -133,9 +143,17 @@ class EasyApplier:
                     logger.debug("Redirected to premium page, trying again")
 
             logger.info("Filling out application form")
+            await capture_page_screenshot(self.page, "easy-apply-opened")
             pause(2, 3)
             await self._fill_application_form(job)
             logger.info(f"Successfully applied to job: {job.job_title}")
+            emit_event(
+                "easy_apply_completed",
+                f"Easy Apply completed for {job.job_title}",
+                job_title=job.job_title,
+                company_name=job.company_name,
+                url=job.url,
+            )
             return "Success", ""
 
         except NoInfoException as e:
@@ -144,6 +162,8 @@ class EasyApplier:
                 "Skip",
                 f"Could not apply to {job.job_title} at {job.company_name}. Reason: {e}",
             )
+        except StopRequested:
+            raise
         except Exception:
             tb_str = traceback.format_exc()
             logger.error(f"Failed to apply to job: {job.job_title} at {job.url}, error: {tb_str}")
@@ -151,6 +171,7 @@ class EasyApplier:
                 await self._save_job_application_process()
             except Exception as e:
                 logger.error(f"Failed to save job application process: {e}")
+            await capture_page_screenshot(self.page, "easy-apply-error")
             return "Error", f"Failed to apply to job! Original exception:\nTraceback:\n{tb_str}"
 
     def _load_questions(self) -> List[Question]:
@@ -314,15 +335,35 @@ class EasyApplier:
             if continue_applying_button:
                 await continue_applying_button.click(timeout=1000)
                 await self._wait_for_easy_apply_dialog(timeout=3000)
+                emit_event(
+                    "job_progress",
+                    "Continue applying dialog acknowledged",
+                    job_title=self.current_job.job_title if self.current_job else None,
+                    company_name=self.current_job.company_name if self.current_job else None,
+                    url=self.current_job.url if self.current_job else None,
+                    stage="continue_applying",
+                )
                 return
 
     async def _fill_application_form(self, job: Job):
         """Fill out application form with loop for multi-step forms (async)"""
         logger.info(f"Filling out application form for job: {job.job_title}")
+        step_index = 0
         while True:
+            step_index += 1
             self.previous_question_texts = []
+            emit_event(
+                "job_progress",
+                f"Filling application step {step_index}",
+                job_title=job.job_title,
+                company_name=job.company_name,
+                url=job.url,
+                stage="filling_form",
+                step_index=step_index,
+            )
             # Fill out application form
             await self._fill_up(job)
+            await capture_page_screenshot(self.page, "easy-apply-step")
             # Check if execution is paused
             if self.pause_checker:
                 await self.pause_checker()
@@ -381,6 +422,15 @@ class EasyApplier:
             logger.error("No 'Next' or 'Submit' button found on the page")
             raise Exception("Could not find 'Next' or 'Submit' button to proceed with application")
 
+        emit_event(
+            "job_progress",
+            f"Application action: {button_text}",
+            job_title=self.current_job.job_title if self.current_job else None,
+            company_name=self.current_job.company_name if self.current_job else None,
+            url=self.current_job.url if self.current_job else None,
+            stage=button_text.replace(" ", "_"),
+        )
+
         if "submit application" in button_text:
             logger.debug("Submit button found, submitting application")
             await self._unfollow_company()
@@ -418,6 +468,15 @@ class EasyApplier:
             error_texts = await self._find_all_form_errors()
             if len(error_texts) > 0:
                 logger.info(f"Found {len(error_texts)} errors")
+                emit_event(
+                    "job_progress",
+                    f"Fixing {len(error_texts)} application errors",
+                    job_title=self.current_job.job_title if self.current_job else None,
+                    company_name=self.current_job.company_name if self.current_job else None,
+                    url=self.current_job.url if self.current_job else None,
+                    stage="fixing_errors",
+                    errors=error_texts,
+                )
                 await self._fill_textbox_question_errors()
                 pause(1, 2)
                 next_button, _ = await self._find_next_or_submit_button()

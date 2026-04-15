@@ -21,6 +21,7 @@ except (ImportError, Exception) as e:
 from config.app_config import RESTART_EVERY_DAY
 from config.constants import BROWSER_STORAGE_STATE, RESUME_DIR, SEARCH_CONFIG_FILE
 from config.logger_config import logger
+from src.dashboard.runtime import StopRequested, emit_event, get_control_state
 from src.job_manager.authenticator import LinkedInAuthenticator
 
 # Commented out hh.ru specific imports - will be used later
@@ -56,6 +57,7 @@ READY_MADE_RESUME = get_first_pdf_file(Path(RESUME_DIR))
 paused = False
 pause_lock = Lock()
 ctrl_pressed = False
+last_dashboard_pause_state = False
 
 
 class ConfigError(Exception):
@@ -138,8 +140,10 @@ def on_press(key):
                 paused = not paused
                 if paused:
                     logger.warning("⏸️  PAUSED - Press Ctrl+X to continue")
+                    emit_event("pause_state_changed", "Keyboard pause requested", paused=True)
                 else:
                     logger.info("▶️  RESUMED")
+                    emit_event("pause_state_changed", "Keyboard resume requested", paused=False)
     except AttributeError:
         pass
 
@@ -172,10 +176,31 @@ def start_keyboard_listener():
 
 async def check_pause():
     """Check if execution is paused and wait if needed"""
-    global paused
-    if paused:
-        while paused:
-            await asyncio.sleep(0.5)
+    global last_dashboard_pause_state, paused
+
+    control = get_control_state()
+    effective_paused = paused or control.get("pause_requested", False)
+
+    if control.get("stop_requested"):
+        raise StopRequested("Dashboard requested stop")
+
+    if effective_paused != last_dashboard_pause_state:
+        emit_event(
+            "pause_state_changed",
+            f"Execution {'paused' if effective_paused else 'resumed'}",
+            paused=effective_paused,
+            source="dashboard" if control.get("pause_requested") and not paused else "keyboard",
+        )
+        last_dashboard_pause_state = effective_paused
+
+    while paused or get_control_state().get("pause_requested", False):
+        if get_control_state().get("stop_requested"):
+            raise StopRequested("Dashboard requested stop")
+        await asyncio.sleep(0.5)
+
+    if last_dashboard_pause_state:
+        emit_event("pause_state_changed", "Execution resumed", paused=False)
+        last_dashboard_pause_state = False
 
 
 async def create_and_run_bot(
@@ -186,14 +211,22 @@ async def create_and_run_bot(
 ):
     """Start LinkedIn bot (async)"""
     logger.info("Initializing LinkedIn bot...")
+    emit_event(
+        "run_started",
+        "LinkedIn bot run started",
+        positions=search_config.get("positions", []),
+        locations=search_config.get("locations", []),
+    )
 
     # Initialize browser Playwright based on configuration
     try:
         browser, context, page = await create_playwright_browser()
         logger.info("Playwright browser initialized successfully")
+        emit_event("browser_initialized", "Playwright browser initialized")
 
     except Exception as e:
         logger.error(f"Browser initialization error: {e}")
+        emit_event("run_failed", "Browser initialization failed", error=str(e))
         raise RuntimeError(f"Failed to initialize browser: {e}")
 
     try:
@@ -209,8 +242,10 @@ async def create_and_run_bot(
             await save_browser_session(context)
             logger.info("Successfully logged into LinkedIn!")
             logger.info("LinkedIn bot ready to work")
+            emit_event("login_success", "LinkedIn login succeeded")
         else:
             logger.error("Failed to log into LinkedIn")
+            emit_event("run_failed", "LinkedIn login failed")
             return False
 
         # Set GPT answerer
@@ -257,6 +292,9 @@ async def create_and_run_bot(
             logger.warning(
                 "Last search was less than a day ago, finishing work. If you want to restart the search, delete the file data/output/last_run.yaml file"
             )
+            emit_event(
+                "run_stopped", "Run skipped because the daily restart window is still active"
+            )
             return True
 
         # Validate structured resume and prompt user if needed
@@ -264,6 +302,7 @@ async def create_and_run_bot(
             resume_structured, RESUME_STRUCTURED_FILE, RESUME_TEXT_FILE
         ):
             logger.info("User chose to exit and complete resume information")
+            emit_event("run_stopped", "Run stopped because resume validation was not accepted")
             return False
 
         await bot.set_search_parameters(search_config)
@@ -272,6 +311,7 @@ async def create_and_run_bot(
         if not READY_MADE_RESUME.resolve().is_file():
             bot.set_resume_generator(resume_generator_manager)
         await bot.start_apply()
+        emit_event("run_completed", "LinkedIn bot run completed successfully")
 
     finally:
         # Cleanup browser resources
@@ -281,6 +321,7 @@ async def create_and_run_bot(
             # Close Playwright browser
             await browser.close()
             logger.info("Playwright browser closed")
+            emit_event("browser_closed", "Playwright browser closed")
 
         except Exception as e:
             logger.warning(f"Error during browser cleanup: {e}")
@@ -317,21 +358,30 @@ def main() -> None:
             asyncio.run(create_and_run_bot(search_config, secrets, resume_text, resume_structured))
             logger.info("LinkedIn bot completed successfully")
 
+        except StopRequested as stop_requested:
+            logger.warning(str(stop_requested))
+            emit_event("run_stopped", "Run stopped gracefully by dashboard")
+            should_exit = True
+
         except ConfigError as ce:
             logger.error(f"Configuration error: {str(ce)}")
+            emit_event("run_failed", "Configuration error", error=str(ce))
         except FileNotFoundError as fnf:
             tb_str = traceback.format_exc()
             logger.error(f"File not found: {str(fnf)}\n{tb_str}")
+            emit_event("run_failed", "Required file was not found", error=str(fnf))
         except RuntimeError as re:
             tb_str = traceback.format_exc()
             logger.error(f"Runtime error: {str(re)}\n{tb_str}")
+            emit_event("run_failed", "Runtime error", error=str(re))
         except Exception as e:
             tb_str = traceback.format_exc()
             logger.error(f"Unknown error: {str(e)}\n{tb_str}")
+            emit_event("run_failed", "Unhandled exception", error=str(e))
         finally:
             logger.info("Program completed")
             # Wait 1 hour total before next run
-            if RESTART_EVERY_DAY:
+            if RESTART_EVERY_DAY and not should_exit:
                 logger.info("Waiting 1 hour before next run")
                 time.sleep(3600)
             else:

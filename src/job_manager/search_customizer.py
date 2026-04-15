@@ -8,6 +8,7 @@ from playwright.sync_api import Page
 
 from config.app_config import EASY_APPLY_ONLY_MODE
 from config.logger_config import logger
+from src.dashboard.runtime import emit_event
 
 # Import Playwright utilities for enhanced functionality
 from src.utils.browser_utils import find_element_safely, safe_click, safe_fill
@@ -129,6 +130,7 @@ class SearchCustomizer:
         try:
             date_mapping = {
                 "24_hours": "Past 24 hours",
+                "day_24_hours": "Past 24 hours",
                 "week": "Past week",
                 "month": "Past month",
                 "all_time": "Any time",
@@ -312,6 +314,12 @@ class SearchCustomizer:
     async def set_search_params(self):
         """Set search parameters on LinkedIn (async)"""
         logger.info("Starting LinkedIn search parameters setup")
+        emit_event(
+            "search_started",
+            "Starting LinkedIn search configuration",
+            positions=self.positions,
+            locations=self.locations,
+        )
 
         try:
             # Navigate to LinkedIn jobs search
@@ -338,6 +346,12 @@ class SearchCustomizer:
                 logger.warning("Could not open advanced filters, using basic search only")
 
             logger.info("Search parameters successfully set")
+            emit_event(
+                "search_configured",
+                "LinkedIn search filters configured",
+                positions=self.positions,
+                locations=self.locations,
+            )
 
         except Exception as e:
             logger.error(f"Error setting search parameters: {e}")

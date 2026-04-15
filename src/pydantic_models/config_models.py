@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator, model_validator
 
 
 class ExperienceLevel(BaseModel):
@@ -26,7 +26,10 @@ class DatePosted(BaseModel):
     all_time: bool = False
     month: bool = False
     week: bool = False
-    day_24_hours: bool = False
+    day_24_hours: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("day_24_hours", "24_hours"),
+    )
 
     @model_validator(mode="after")
     def validate_only_one_true(self):
