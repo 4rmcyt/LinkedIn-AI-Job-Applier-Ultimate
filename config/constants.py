@@ -29,7 +29,6 @@ DUMMY_PERSONAL_INFO_FEMALE = {
 }
 
 # Paths to log files and settings
-# TODO: move all output files to linkedin or indeed folders
 SEARCH_CONFIG_FILE = "config/search_config.yaml"
 OUTPUT_DIR_LINKEDIN = "data/output/linkedin"
 OUTPUT_DIR_INDEED = "data/output/indeed"

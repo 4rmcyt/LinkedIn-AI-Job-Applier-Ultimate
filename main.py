@@ -6,6 +6,15 @@ import traceback
 from pathlib import Path
 from threading import Lock
 
+# TODO: how to select resume for Indeed?
+# TODO: find good search settings for Indeed
+# TODO: MONKEY_MODE = False for Indeed
+# TODO: COLLECT_INFO_MODE = True for Indeed
+# TODO: EASY_APPLY_ONLY_MODE = False for Indeed
+# TODO: Make sure that LinkedIn still works
+# TODO: EASY_APPLY_ONLY_MODE = False for LinkedIn
+# TODO: Create tests for Indeed
+
 import dotenv
 
 # Try to import pynput for keyboard control (optional, not available in Docker)
