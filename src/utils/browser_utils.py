@@ -329,6 +329,42 @@ async def async_pause(low: float = 0.5, high: float = 1) -> None:
     await asyncio.sleep(pause_time)
 
 
+async def get_current_page_testid(page: Page, testids: list[str]) -> Optional[str]:
+    """Return the first matching data-testid from the given list that is present on the page.
+
+    Useful before clicking a multi-step form's Continue button so that
+    ``wait_for_page_transition`` knows which element to watch for detachment.
+    Returns None when none of the known testids are found (e.g. a generic question page).
+    """
+    for testid in testids:
+        el = await find_element_safely(page, f"[data-testid='{testid}']", timeout=500)
+        if el:
+            return testid
+    return None
+
+
+async def wait_for_page_transition(
+    page: Page, old_testid: Optional[str], timeout: float = 10.0
+) -> None:
+    """Wait until the named page element detaches, confirming a multi-step form advanced.
+
+    Pass the testid returned by ``get_current_page_testid`` before clicking Continue.
+    When *old_testid* is None (generic page with no known testid anchor) this is a no-op;
+    the caller's fixed pause is sufficient.
+    """
+    if not old_testid:
+        return
+    try:
+        await page.wait_for_selector(
+            f"[data-testid='{old_testid}']",
+            state="detached",
+            timeout=int(timeout * 1000),
+        )
+        logger.debug(f"Page transitioned away from '{old_testid}'")
+    except Exception:
+        logger.debug(f"Timed out waiting for '{old_testid}' to detach; proceeding anyway")
+
+
 async def find_element_safely(
     page: Page, selector: str, by: str = "css selector", timeout: Optional[int] = None
 ):
@@ -453,15 +489,13 @@ async def is_scrollable(element) -> bool:
             return False
 
         # Use JavaScript to get scroll properties directly from DOM
-        is_scrollable_result = await locator.evaluate(
-            """
+        is_scrollable_result = await locator.evaluate("""
             (element) => {
                 const verticalScrollable = element.scrollHeight > element.clientHeight;
                 const horizontalScrollable = element.scrollWidth > element.clientWidth;
                 return verticalScrollable || horizontalScrollable;
             }
-        """
-        )
+        """)
 
         return bool(is_scrollable_result)
 
@@ -559,11 +593,9 @@ async def HTML_to_PDF(FilePath):
         await page.goto(file_url, wait_until="networkidle")
 
         # Wait for fonts to load
-        await page.evaluate(
-            """
+        await page.evaluate("""
             () => document.fonts.ready
-        """
-        )
+        """)
 
         # Additional wait to ensure all styles are applied
         await asyncio.sleep(1)

@@ -16,6 +16,8 @@ from src.utils.browser_utils import (
     find_element_safely,
     find_elements_safely,
     get_clean_text,
+    get_current_page_testid,
+    wait_for_page_transition,
 )
 from src.utils.utils import async_pause, get_first_pdf_file, load_yaml_file, sanitize_text
 
@@ -165,13 +167,18 @@ class IndeedEasyApplier(BaseEasyApplier):
                 await debug_capture(self.page, "indeed_no_next_button")
                 break
 
+            current_page_testid = await get_current_page_testid(
+                self.page,
+                ["resume-selection-form", "profile-location-page", "relevant-experience-page"],
+            )
             await next_btn.click()
             await async_pause(1, 2)
+            await wait_for_page_transition(self.page, current_page_testid)
             try:
                 await self.page.wait_for_load_state("domcontentloaded")
             except Exception as e:
                 logger.warning(f"Error waiting for page to load: {e}")
-            await async_pause(2, 3)
+            await async_pause(1, 2)
 
             # Retry up to 3 times if validation errors remain after clicking next
             for _ in range(3):
@@ -219,6 +226,12 @@ class IndeedEasyApplier(BaseEasyApplier):
                 await self._fill_profile_location_page()
                 return
 
+            if await find_element_safely(
+                self.page, "[data-testid='relevant-experience-page']", timeout=1000
+            ):
+                await self._fill_relevant_experience_page()
+                return
+
             sections = await find_elements_safely(
                 self.page,
                 "div.ia-Questions-item, div[data-testid='ia-Questions-item']",
@@ -243,7 +256,16 @@ class IndeedEasyApplier(BaseEasyApplier):
             )
             if indeed_resume_radio:
                 if not await indeed_resume_radio.is_checked():
-                    await indeed_resume_radio.click()
+                    # The radio input is visually hidden; click the visible label instead
+                    indeed_resume_label = await find_element_safely(
+                        self.page,
+                        "label[data-testid='resume-selection-structured-resume-radio-card-label']",
+                        timeout=2000,
+                    )
+                    if indeed_resume_label:
+                        await indeed_resume_label.click()
+                    else:
+                        await indeed_resume_radio.click(force=True)
                     await async_pause(0.5, 1)
                 logger.info("Using Indeed Resume")
                 return
@@ -327,6 +349,116 @@ class IndeedEasyApplier(BaseEasyApplier):
         except Exception as e:
             logger.error(f"Error filling profile location page: {e}", exc_info=True)
             await debug_capture(self.page, "indeed_profile_location_error")
+
+    async def _fill_relevant_experience_page(self) -> None:
+        """Fill the 'relevant experience' page — handles two variants:
+        1. Radio card selection: 'Highlight a job that shows relevant experience'
+        2. Text inputs: 'Enter a job that shows relevant experience'
+        """
+        try:
+            # Variant 1: radio card selection
+            radio_group = await find_element_safely(
+                self.page, "[data-testid='RadioCardGroup']", timeout=2000
+            )
+            if radio_group:
+                await self._handle_relevant_experience_radio_cards()
+                return
+
+            # Variant 2: free-text job title / company inputs
+            experience_details = []
+            if self.gpt_answerer and hasattr(self.gpt_answerer, "resume_structured"):
+                experience_details = self.gpt_answerer.resume_structured.get(
+                    "experience_details", []
+                )
+
+            position = ""
+            company = ""
+            if experience_details:
+                most_recent = experience_details[0]
+                position = str(most_recent.get("position", "") or "")
+                company = str(most_recent.get("company", "") or "")
+
+            title_input = await find_element_safely(
+                self.page, "input[data-testid='job-title-input']", timeout=2000
+            )
+            if title_input and position:
+                current_value = await title_input.input_value()
+                if not current_value:
+                    await title_input.fill(position)
+                    logger.debug(f"Filled relevant experience job title: {position}")
+                else:
+                    logger.debug(f"Relevant experience job title already filled: {current_value}")
+
+            company_input = await find_element_safely(
+                self.page, "input[data-testid='company-name-input']", timeout=2000
+            )
+            if company_input and company:
+                current_value = await company_input.input_value()
+                if not current_value:
+                    await company_input.fill(company)
+                    logger.debug(f"Filled relevant experience company: {company}")
+                else:
+                    logger.debug(f"Relevant experience company already filled: {current_value}")
+
+        except Exception as e:
+            logger.error(f"Error filling relevant experience page: {e}", exc_info=True)
+            await debug_capture(self.page, "indeed_relevant_experience_error")
+
+    async def _handle_relevant_experience_radio_cards(self) -> None:
+        """Select the most relevant work experience radio card.
+
+        Prefers the first WorkExperienceCard (most recent job from the resume).
+        Falls back to 'Apply without relevant job' if no work experience cards exist.
+        """
+        try:
+            work_cards = await find_elements_safely(
+                self.page,
+                "input[data-testid='WorkExperienceCard-input']",
+            )
+            if work_cards:
+                first_card = work_cards[0]
+                if not await first_card.is_checked():
+                    # Radio inputs are visually hidden — click the corresponding label
+                    card_id = await first_card.get_attribute("id")
+                    if card_id:
+                        label = await find_element_safely(
+                            self.page, f"label[for='{card_id}']", timeout=2000
+                        )
+                        if label:
+                            await label.click()
+                        else:
+                            await first_card.click(force=True)
+                    else:
+                        await first_card.click(force=True)
+                    await async_pause(0.5, 1)
+
+                # Log which card was selected
+                card_container = await find_elements_safely(
+                    self.page,
+                    "[data-testid='WorkExperienceCard']",
+                )
+                if card_container:
+                    title_el = await find_element_safely(
+                        card_container[0],
+                        "[data-testid='WorkExperienceCardHeader-title']",
+                        timeout=500,
+                    )
+                    subtitle_el = await find_element_safely(
+                        card_container[0],
+                        "[data-testid='WorkExperienceCardHeader-subtitle']",
+                        timeout=500,
+                    )
+                    title = await get_clean_text(title_el) if title_el else ""
+                    subtitle = await get_clean_text(subtitle_el) if subtitle_el else ""
+                    logger.info(f"Selected relevant experience card: '{title}' at '{subtitle}'")
+            else:
+                logger.info(
+                    "No WorkExperienceCard options found; "
+                    "'Apply without relevant job' remains selected"
+                )
+        except Exception as e:
+            logger.error(f"Error handling relevant experience radio cards: {e}", exc_info=True)
+            await debug_capture(self.page, "indeed_relevant_experience_radio_error")
 
     async def _handle_terms_of_service(self, section: Any) -> bool:
         return False
@@ -734,6 +866,10 @@ if __name__ == "__main__":
 
     import dotenv
 
+    import config.app_config as app_config
+
+    app_config.DEBUG_MODE = True
+
     from config.constants import COVER_LETTER_DIR, OUTPUT_DIR_INDEED, RESUME_DIR
     from src.job_manager.resume_anonymizer import ResumeAnonymizer
     from src.llm.llm_manager import GPTAnswerer
@@ -760,9 +896,9 @@ if __name__ == "__main__":
         logger.info("Starting IndeedEasyApplier test...")
 
         # Test job URL
-        # job_url = (
-        #     "https://www.indeed.com/viewjob?jk=55f3b1bf0b69babb&tk=1jlgv4jjvi96p881&from=serp&vjs=3"
-        # )
+        job_url = (
+            "https://www.indeed.com/viewjob?jk=55f3b1bf0b69babb&tk=1jlgv4jjvi96p881&from=serp&vjs=3"
+        )
         # job_url = (
         #     "https://www.indeed.com/viewjob?jk=5d8d545b93be6f7f&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
         # )
@@ -770,9 +906,9 @@ if __name__ == "__main__":
         #     "https://www.indeed.com/viewjob?jk=f50b368946d1affe&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
         # )
         # job_url = "https://www.indeed.com/viewjob?jk=db5d6bbd822a8a89&from=serp&vjs=3"
-        job_url = (
-            "https://www.indeed.com/viewjob?jk=0cc1bcc48e791a51&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
-        )
+        # job_url = (
+        #     "https://www.indeed.com/viewjob?jk=0cc1bcc48e791a51&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
+        # )
 
         # Initialize Playwright browser
         try:

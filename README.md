@@ -265,7 +265,12 @@ This project enhances the original codebase with several powerful new features:
     *   **Manual Structure:** fill out file `structured_resume.yaml` manually for precise control. Why use this option instead of first? Because if you select the first option, all data from your resume text will be sent to the LLM to create the structured_resume file — for some people who care about their privacy this would be unacceptable. I want to point out that Automatic Parsing and Non-Easy Apply vacancies applying are the only two functions of this bot that send not anonymized user's personal information to LLM. All other bot functions anonymize personal information before sending it to LLM.
     Examples of `resume_text.txt` and `structured_resume.yaml` files can be found in `examples/data/resumes` folder
 
-6. **Resume generation:**
+6. **On-site profile/resume (LinkedIn and Indeed):**
+    Before running the bot, make sure your profile on the job site is as complete as possible:
+    *   **LinkedIn:** Go to your LinkedIn profile and fill in all sections — work experience, education, skills, certifications, contact info, etc. Also upload your resume in the **Easy Apply settings** (LinkedIn → Job Preferences → Easy Apply Resume). LinkedIn pre-fills application forms from your profile and saved resume, so the more complete they are, the fewer questions the bot needs to answer via LLM — saving you tokens and money.
+    *   **Indeed:** Go to your Indeed profile and fill in all sections — work history, education, skills, licenses, desired salary, etc. Indeed uses your on-site profile to auto-fill Easy Apply forms, so a thorough profile means fewer questions the bot has to send to the LLM.
+
+7. **Resume generation:**
     You have two options:
     *   **Automatic Creation (recommended):** Don't put your ready-made resume in `data/resumes/` and app will create a new resume for every job it applies to. Using this mode, the bot can create resumes tailored to each specific vacancy. Generated resume will be stored in `data/resumes/generated_resumes/` folder. Some of resume sections are the same for each vacancy (e.g. header), so bot generates these sections once and then stores them in `data/resumes/templates/<section_name>.html`. Netx time bot will load these sections from corresponding file instead of generation. If you think that some of these sections were generated incorrectly - just delete corresponding files so LLM will re-generate them.
     *   **Ready Made Resume (recommended):** Take your ready-made resume in PDF format and put it into `data/resumes/` The bot will use this resume for applying jobs. If you have multiple PDF files in `data/resumes/` folder - bot will use the first one found.

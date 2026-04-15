@@ -155,7 +155,22 @@ class IndeedJobManager(BaseJobManager):
             await self.page.wait_for_selector(INDEED_JOB_CARD_SELECTOR, timeout=15000)
             await self._scroll_left_panel()
             cards = await find_elements_safely(self.page, INDEED_JOB_CARD_SELECTOR)
-            return cards or []
+            if not cards:
+                return []
+            # Indeed's slider DOM can render multiple div.job_seen_beacon elements for
+            # the same job (compact card + pre-fetched detail view). Deduplicate by
+            # data-jk so each job is only processed once.
+            seen_jks: set = set()
+            unique_cards = []
+            for card in cards:
+                title_el = await find_element_safely(card, INDEED_JOB_TITLE_SELECTOR, timeout=500)
+                jk = (await title_el.get_attribute("data-jk") or "") if title_el else ""
+                if jk:
+                    if jk in seen_jks:
+                        continue
+                    seen_jks.add(jk)
+                unique_cards.append(card)
+            return unique_cards
         except Exception as e:
             logger.warning(f"Could not find job cards: {e}")
             await debug_capture(self.page, "vacancies_not_found")
@@ -280,7 +295,7 @@ class IndeedJobManager(BaseJobManager):
             cover_letter_dir=Path(COVER_LETTER_DIR),
             test_mode=TEST_MODE,
         )
-        return await easy_applier.job_apply(job)
+        return await easy_applier.apply_to_job(job)
 
     async def send_report(self, result: str) -> None:
         """Send Telegram report with full details matching LinkedIn report format"""
@@ -315,12 +330,20 @@ class IndeedJobManager(BaseJobManager):
             if not title_el:
                 return None
             title = await title_el.text_content() or ""
-            job_url_path = await title_el.get_attribute("href") or ""
-            job_url = (
-                job_url_path
-                if job_url_path.startswith("http")
-                else f"https://www.indeed.com{job_url_path}"
-            )
+            jk = await title_el.get_attribute("data-jk") or ""
+            if jk == "789abcdef0123456":
+                return None
+            if jk:
+                # Use the canonical viewjob URL so the same job always maps to the
+                # same URL regardless of which slider item or tracking URL was found.
+                job_url = f"https://www.indeed.com/viewjob?jk={jk}"
+            else:
+                job_url_path = await title_el.get_attribute("href") or ""
+                job_url = (
+                    job_url_path
+                    if job_url_path.startswith("http")
+                    else f"https://www.indeed.com{job_url_path}"
+                )
 
             company_el = await find_element_safely(card, INDEED_COMPANY_SELECTOR, timeout=3000)
             company = (await company_el.text_content() or "") if company_el else ""
@@ -339,8 +362,11 @@ class IndeedJobManager(BaseJobManager):
             if easy_apply_badge:
                 apply_method = "easy_apply"
             else:
-                # Click the card to open detail panel and check for apply button
-                await title_el.click()
+                # Click the card to open detail panel and check for apply button.
+                # After a previous card is opened the DOM shifts and Playwright's
+                # visibility checks fail. Use JS directly to bypass them.
+                await card.evaluate("el => el.scrollIntoView({block: 'center'})")
+                await title_el.evaluate("el => el.click()")
                 await async_pause(0.5, 1)
                 apply_button = await find_element_safely(
                     self.page, INDEED_APPLY_BUTTON, timeout=3000

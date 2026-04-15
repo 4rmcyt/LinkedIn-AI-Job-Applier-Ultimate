@@ -23,7 +23,7 @@ If this mode is activated - apply to all vacancies indiscriminately,
 otherwise ask LLM to select only those vacancies that suit you
 by interests or by tech stack
 """
-MONKEY_MODE = True
+MONKEY_MODE = False
 
 """
 In this mode app doesn't apply to the jobs, only creates resumes, cover letters and gathers skill statistics
@@ -50,6 +50,19 @@ If this mode is activated, app will check if the last search was less than a day
 This is useful if you want bot to automatically restart the search every 24 hours when LinkedIn resets the search limits.
 """
 RESTART_EVERY_DAY = False
+"""
+Resume style to use for generated resumes.
+If set - skips the interactive style selection prompt.
+If None - prompts user to select a style interactively.
+Possible values:
+    - "FAANGPath"
+    - "Cloyola Grey"
+    - "Modern Blue"
+    - "Modern Grey"
+    - "Default"
+    - "Clean Blue"
+"""
+RESUME_STYLE = None
 
 """
 If LLM evaluated the 'interest' level of the job not below this threshold - the job is considered interesting for application.
@@ -90,14 +103,17 @@ Possible values:
     - "ollama"
     - "gemini"
     - "huggingface"
+    - "openrouter"
 """
 LLM_MODEL_TYPE = "openrouter"
 # LLM_MODEL_TYPE = "openai"
 
 # LLM models
 EASY_APPLY_MODEL = "google/gemini-3.1-flash-lite-preview"
+# EASY_APPLY_MODEL = "google/gemini-3-flash-preview"
 # EASY_APPLY_MODEL = "gpt-5-mini"
 APPLY_AGENT_MODEL = "google/gemini-3.1-flash-lite-preview"
+# APPLY_AGENT_MODEL = "google/gemini-3-flash-preview"
 # APPLY_AGENT_MODEL = "gpt-5-mini"
 
 """
@@ -106,17 +122,3 @@ the higher it is, the more creative the model, but hallucinations may occur
 the lower it is, the more strictly the model follows the prompt and invents less
 """
 TEMPERATURE = 0.4
-
-"""
-Resume style to use for generated resumes.
-If set - skips the interactive style selection prompt.
-If None - prompts user to select a style interactively.
-Possible values:
-    - "FAANGPath"
-    - "Cloyola Grey"
-    - "Modern Blue"
-    - "Modern Grey"
-    - "Default"
-    - "Clean Blue"
-"""
-RESUME_STYLE = None
