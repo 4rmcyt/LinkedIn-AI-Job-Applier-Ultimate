@@ -7,6 +7,7 @@ from typing import Any, List, Tuple
 from httpx import HTTPStatusError
 
 from config.logger_config import logger
+from src.dashboard.runtime import StopRequested, capture_page_screenshot, emit_event
 from src.pydantic_models.job_models import Job, Question
 from src.utils.browser_utils import debug_capture
 from src.utils.utils import ConfigError, async_pause, load_yaml_file, sanitize_text, save_yaml_file

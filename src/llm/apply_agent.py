@@ -9,6 +9,7 @@ from browser_use.tools.views import UploadFileAction
 from config.app_config import APPLY_AGENT_MODEL, HEADLESS_MODE, LLM_MODEL_TYPE
 from config.constants import LOG_DIR, RESUME_DIR, CUSTOM_COST_PER_TOKEN, cost_per_token
 from config.logger_config import logger
+from src.dashboard.runtime import emit_event
 from src.pydantic_models.log_models import LLMCall
 from src.utils.utils import append_yaml_file, get_first_pdf_file
 
@@ -79,6 +80,7 @@ class ApplyAgent:
     async def apply(self, job_url: str) -> None:
         """Apply to the job using AI Agent"""
         resume_pdf_path = str(get_first_pdf_file(Path(RESUME_DIR)))
+        emit_event("agent_apply_started", "External apply agent started", url=job_url)
 
         tools = Tools()
 
@@ -136,6 +138,7 @@ class ApplyAgent:
         await self.agent.run()
 
         self._log_token_usage(task)
+        emit_event("agent_apply_completed", "External apply agent completed", url=job_url)
 
     def _log_token_usage(self, task: str) -> None:
         """Log AI Agent token usage and calculate the total cost"""
@@ -187,6 +190,9 @@ class ApplyAgent:
             return ("Success", "")
         except Exception as e:
             logger.error(f"Error applying to job: {e}")
+            emit_event(
+                "agent_apply_failed", "External apply agent failed", url=job_url, error=str(e)
+            )
             return ("Error", str(e))
 
 

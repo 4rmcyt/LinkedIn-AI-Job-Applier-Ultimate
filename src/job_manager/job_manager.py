@@ -10,6 +10,7 @@ import yaml
 from config.app_config import COLLECT_INFO_MODE, JOB_SITE, MAX_APPLIES_NUM
 from config.constants import OUTPUT_DIR_INDEED, OUTPUT_DIR_LINKEDIN
 from config.logger_config import logger
+from src.job_manager.easy_applier import EasyApplier
 from src.pydantic_models.job_models import Job, JobInfo, JobManagerCache
 from src.utils.utils import sanitize_text, save_yaml_file
 

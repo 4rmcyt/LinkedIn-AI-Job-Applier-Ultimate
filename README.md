@@ -42,6 +42,8 @@ But if you're planning to use Indeed for searching jobs without auto-applying - 
   - [Installation](#installation)
 - [🔧 Configuration](#-configuration)
 - [▶️ Usage](#️-usage)
+  - [Dashboard](#dashboard)
+  - [Dashboard Routes And APIs](#dashboard-routes-and-apis)
 - [💵 Vacancy application cost](#-vacancy-application-cost)
 - [✅ Running Tests](#-running-tests)
 - [🐞 Troubleshooting](#-troubleshooting)
@@ -66,6 +68,7 @@ This project enhances the original codebase with several powerful new features:
 *   **⏸️ Pause/Resume Control:** Pause the bot at any time by pressing `Ctrl+X` and continue when ready, giving you full control over execution without stopping the entire process.
 *   **📊 Skill Statistics:** Analyzes job descriptions to identify the most in-demand skills, helping you tailor your resume effectively.
 *   **🧠 Intelligent Error Handling:** If LinkedIn's Easy Apply feature encounters errors (e.g., incorrectly filled fields), the bot will attempt to fix them automatically.
+*   **📈 Local Monitoring Dashboard:** Includes a local web dashboard for live monitoring, run history, screenshot review, config editing, bot controls, and JSON export of individual runs.
 *   **🤝 Automated Networking:** Includes a powerful tool to search for and connect with "Open Networkers" (LIONs) automatically, expanding your professional network with people likely to accept your requests.
 *   **☑️ Smart Checkbox Handling:** Automatically detects and answers checkbox questions in LinkedIn Easy Apply forms with intelligent context-aware responses.
 *   **🔗 Contextual Question Processing:** Considers previous answers when responding to follow-up questions like "If yes/no, who/when/where?" for more accurate and relevant responses.
@@ -311,6 +314,69 @@ If 30 seconds pass or you select `y` or all fields in the `structured_resume.yam
 The bot will log its progress in the console and create detailed log files in the `logs/` directory. Upon completion, it will send a report to your configured Telegram chat.
 
 **Pause/Resume:** While the bot is running, and you see that it behaves incorrectly - you can pause it by pressing `Ctrl+X`. Press `Ctrl+X` again to resume. This is useful if you need to temporarily stop the bot without terminating the entire process. **Bot won't stop immediately**, usually couple of seconds may pass after you press Ctrl + X.
+
+### Dashboard
+
+The project now includes a local monitoring dashboard for observing the bot in real time and inspecting past runs.
+
+Start the dashboard with:
+
+```bash
+uv run python dashboard.py
+```
+
+Open it in your browser at:
+
+```text
+http://127.0.0.1:8000
+```
+
+The dashboard supports:
+
+- starting a bot run from the browser
+- pause, resume, and graceful stop controls
+- live counters for discovered, evaluated, interesting, applied, skipped, and failed jobs
+- current-job stage tracking during Easy Apply flows
+- live event timeline powered by server-sent events
+- historical run list with deep links like `/runs/<run_id>`
+- per-run jobs, screenshots, and event history
+- search config editing for `config/search_config.yaml`
+- selected app config editing for `config/app_config.py`
+- exporting a full run as JSON
+
+### Dashboard Routes And APIs
+
+Main pages:
+
+- `/` - live dashboard
+- `/runs/<run_id>` - deep-linked dashboard focused on a specific run
+
+Useful API routes:
+
+- `/api/summary` - top-level dashboard counters and current run state
+- `/api/live` - current live snapshot and recent events
+- `/api/jobs` - global jobs board from persisted output files plus current in-progress job
+- `/api/runs` - run history built from structured dashboard events
+- `/api/runs/<run_id>` - full run detail payload
+- `/api/runs/<run_id>/jobs` - jobs reconstructed for a specific run
+- `/api/runs/<run_id>/events` - events for a specific run
+- `/api/runs/<run_id>/screenshots` - screenshot history for a specific run
+- `/api/runs/<run_id>/export` - downloadable JSON export for a specific run
+- `/api/control/start` - start the bot in the background
+- `/api/control/pause` - request pause
+- `/api/control/resume` - request resume
+- `/api/control/stop` - request graceful stop
+
+Dashboard data is stored under `data/output/dashboard/` and includes:
+
+- `events.jsonl` - structured runtime events used for live monitoring and run reconstruction
+- `snapshot.json` - latest live snapshot for the active or most recent run
+- `control.json` - pause/stop requests written by the dashboard
+- `process.json` - background process metadata
+- `screenshots.json` - metadata index for archived screenshots
+- `screenshots/` - latest screenshot and per-run screenshot history
+
+If you want a more detailed dashboard guide, see `docs/dashboard.md`.
 
 ### Output files (`data/output/`)
 
