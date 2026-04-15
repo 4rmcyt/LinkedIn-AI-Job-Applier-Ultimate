@@ -2,7 +2,6 @@
 
 import asyncio
 import os
-import time
 import traceback
 from pathlib import Path
 from threading import Lock
@@ -37,6 +36,17 @@ from src.resume_builder.resume_generator import ResumeGenerator
 from src.resume_builder.resume_manager import ResumeManager
 from src.resume_builder.style_manager import StyleManager
 from src.utils.browser_utils import create_playwright_browser, save_browser_session
+# Local runtime patch: keep fork-specific shutdown handling isolated to one module.
+from src.utils.runtime_control import (
+    BrowserClosedError,
+    GracefulShutdownRequested,
+    attach_browser_close_watchers,
+    countdown_before_restart,
+    register_shutdown_handlers,
+    run_with_runtime_guards,
+    runtime_controller,
+    sleep_with_shutdown,
+)
 from src.utils.utils import (
     get_first_pdf_file,
     load_yaml_file,
@@ -178,6 +188,9 @@ async def check_pause():
     """Check if execution is paused and wait if needed"""
     global last_dashboard_pause_state, paused
 
+    if runtime_controller.is_shutdown_requested():
+        raise GracefulShutdownRequested("Shutdown requested")
+
     control = get_control_state()
     effective_paused = paused or control.get("pause_requested", False)
 
@@ -194,6 +207,8 @@ async def check_pause():
         last_dashboard_pause_state = effective_paused
 
     while paused or get_control_state().get("pause_requested", False):
+        if runtime_controller.is_shutdown_requested():
+            raise GracefulShutdownRequested("Shutdown requested")
         if get_control_state().get("stop_requested"):
             raise StopRequested("Dashboard requested stop")
         await asyncio.sleep(0.5)
@@ -211,20 +226,26 @@ async def create_and_run_bot(
 ):
     """Start LinkedIn bot (async)"""
     logger.info("Initializing LinkedIn bot...")
+    runtime_controller.begin_run()
     emit_event(
         "run_started",
         "LinkedIn bot run started",
         positions=search_config.get("positions", []),
         locations=search_config.get("locations", []),
     )
+    browser = context = page = None
+    browser_closed = None
 
     # Initialize browser Playwright based on configuration
     try:
         browser, context, page = await create_playwright_browser()
+        # Local runtime patch: detect manual browser closure and recover cleanly.
+        browser_closed = attach_browser_close_watchers(browser, context, page)
         logger.info("Playwright browser initialized successfully")
         emit_event("browser_initialized", "Playwright browser initialized")
 
     except Exception as e:
+        runtime_controller.finish_run()
         logger.error(f"Browser initialization error: {e}")
         emit_event("run_failed", "Browser initialization failed", error=str(e))
         raise RuntimeError(f"Failed to initialize browser: {e}")
@@ -310,29 +331,36 @@ async def create_and_run_bot(
         bot.set_resume(resume_structured, resume_text, resume_text_anonymized)
         if not READY_MADE_RESUME.resolve().is_file():
             bot.set_resume_generator(resume_generator_manager)
-        await bot.start_apply()
+        await run_with_runtime_guards(bot, browser_closed)
         emit_event("run_completed", "LinkedIn bot run completed successfully")
 
     finally:
         # Cleanup browser resources
         logger.info("Cleaning up browser resources...")
         try:
-            await save_browser_session(context)
-            # Close Playwright browser
-            await browser.close()
-            logger.info("Playwright browser closed")
-            emit_event("browser_closed", "Playwright browser closed")
+            if context is not None:
+                await save_browser_session(context)
+            if browser is not None:
+                await browser.close()
+                logger.info("Playwright browser closed")
+                emit_event("browser_closed", "Playwright browser closed")
 
         except Exception as e:
             logger.warning(f"Error during browser cleanup: {e}")
+        finally:
+            # Local runtime patch: release any pending shutdown handler waits.
+            runtime_controller.finish_run()
 
 
 def main() -> None:
     # Start keyboard listener for pause/resume functionality
+    # Local runtime patch: register graceful shutdown handlers once at startup.
+    register_shutdown_handlers()
     start_keyboard_listener()
 
     while True:
         should_exit = False
+        should_restart = False
         try:
             # create output folder if it doesn't exist
             data = Path("data")
@@ -357,6 +385,8 @@ def main() -> None:
             # Run LinkedIn bot (async)
             asyncio.run(create_and_run_bot(search_config, secrets, resume_text, resume_structured))
             logger.info("LinkedIn bot completed successfully")
+            if not RESTART_EVERY_DAY:
+                should_exit = True
 
         except StopRequested as stop_requested:
             logger.warning(str(stop_requested))
@@ -370,6 +400,18 @@ def main() -> None:
             tb_str = traceback.format_exc()
             logger.error(f"File not found: {str(fnf)}\n{tb_str}")
             emit_event("run_failed", "Required file was not found", error=str(fnf))
+        # Local runtime patch: custom runtime exceptions stay grouped here for easy rebasing.
+        except BrowserClosedError as bce:
+            logger.warning(str(bce))
+            should_restart = countdown_before_restart()
+            should_exit = not should_restart
+        except GracefulShutdownRequested:
+            logger.info("Graceful shutdown requested. Exiting after cleanup.")
+            should_exit = True
+        except KeyboardInterrupt:
+            runtime_controller.request_shutdown("keyboard interrupt")
+            logger.info("Interrupted by user. Exiting after cleanup.")
+            should_exit = True
         except RuntimeError as re:
             tb_str = traceback.format_exc()
             logger.error(f"Runtime error: {str(re)}\n{tb_str}")
@@ -380,10 +422,16 @@ def main() -> None:
             emit_event("run_failed", "Unhandled exception", error=str(e))
         finally:
             logger.info("Program completed")
-            # Wait 1 hour total before next run
-            if RESTART_EVERY_DAY and not should_exit:
+            if should_restart:
+                logger.info("Restarting after browser closure")
+            elif should_exit:
+                logger.info("Exiting program")
+            elif RESTART_EVERY_DAY:
                 logger.info("Waiting 1 hour before next run")
-                time.sleep(3600)
+                # Local runtime patch: make the daily wait interruptible.
+                if not asyncio.run(sleep_with_shutdown(3600)):
+                    logger.info("Shutdown requested during wait interval")
+                    should_exit = True
             else:
                 logger.info("Exiting program")
                 should_exit = True

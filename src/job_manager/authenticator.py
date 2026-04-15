@@ -186,6 +186,46 @@ class LinkedInAuthenticator:
             logger.error(f"Error during credential entry: {e}")
             return False
 
+    async def try_continue_with_saved_account(self) -> bool:
+        """Handle the remembered-account chooser shown instead of the classic login form."""
+        domain = self.email.split("@", 1)[1] if self.email and "@" in self.email else ""
+        account_selectors = []
+        if domain:
+            account_selectors.append(f"div[role='button'][tabindex='0']:has-text('{domain}')")
+        account_selectors.extend(
+            [
+                "div[role='button'][tabindex='0']:has-text('@')",
+                "div[role='button'][tabindex='0']:has(img)",
+            ]
+        )
+
+        for selector in account_selectors:
+            locator = self.page.locator(selector).first
+            if await locator.count() == 0:
+                continue
+
+            logger.info(f"Saved account chooser detected via selector: {selector}")
+            try:
+                await locator.wait_for(state="visible", timeout=5000)
+                await locator.click(timeout=5000)
+            except Exception as e:
+                logger.warning(f"Failed to click saved account chooser '{selector}': {e}")
+                continue
+
+            await async_pause(2, 3)
+
+            # If LinkedIn accepted the remembered account, we will leave the login page.
+            if "/login" not in self.page.url and "/uas/login" not in self.page.url:
+                return True
+
+            # Some flows click into an intermediate password prompt.
+            password_locator = self.page.locator("#password")
+            if await password_locator.count() > 0:
+                logger.info("Saved account chooser led to password prompt")
+                return False
+
+        return False
+
     async def check_login_success(self) -> bool:
         """Check login success with improved detection (async)"""
         try:
