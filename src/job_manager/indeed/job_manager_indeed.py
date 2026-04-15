@@ -139,8 +139,9 @@ class IndeedJobManager(BaseJobManager):
                 # break the search for vacancies if the limit is reached
                 if result == "Limit" or result == "Error":
                     break
-                # go to the next page
-                await self._go_to_next_page()
+                # go to the next page; stop if there are no more pages
+                if not await self._go_to_next_page():
+                    break
 
             if result == "Limit" or result == "Error":
                 break
@@ -331,7 +332,7 @@ class IndeedJobManager(BaseJobManager):
                 return None
             title = await title_el.text_content() or ""
             jk = await title_el.get_attribute("data-jk") or ""
-            if jk == "789abcdef0123456":
+            if "".join(sorted(jk)) == "0123456789abcdef":
                 return None
             if jk:
                 # Use the canonical viewjob URL so the same job always maps to the
@@ -369,7 +370,7 @@ class IndeedJobManager(BaseJobManager):
                 await title_el.evaluate("el => el.click()")
                 await async_pause(0.5, 1)
                 apply_button = await find_element_safely(
-                    self.page, INDEED_APPLY_BUTTON, timeout=3000
+                    self.page, INDEED_APPLY_BUTTON, timeout=6000
                 )
                 apply_method = "easy_apply" if apply_button else "external"
 
@@ -447,13 +448,13 @@ class IndeedJobManager(BaseJobManager):
             except Exception:
                 pass
 
-    async def _go_to_next_page(self) -> None:
-        """Click next page button and return True if successful"""
+    async def _go_to_next_page(self) -> bool:
+        """Click next page button. Returns True if navigated, False if last page reached."""
         try:
             next_btn = await find_element_safely(self.page, INDEED_NEXT_PAGE_SELECTOR, timeout=5000)
             if not next_btn:
                 logger.info("No next page button found - reached last page")
-                return
+                return False
             await self._dismiss_overlays()
             clicked = await safe_click(self.page, INDEED_NEXT_PAGE_SELECTOR, timeout=5000)
             if not clicked:
@@ -461,10 +462,13 @@ class IndeedJobManager(BaseJobManager):
                 await next_btn.click(force=True, timeout=5000)
             await self.page.wait_for_load_state("domcontentloaded")
             await async_pause(1, 2)
+            self.page_num += 1
             logger.info(f"Moved to page {self.page_num + 1}")
+            return True
         except Exception as e:
             logger.warning(f"Could not navigate to next page: {e}")
             await debug_capture(self.page, "next_page_error")
+            return False
 
     async def _handle_apply_result(self, result: str, job: Job, cover_letter: str) -> None:
         """Save job result to the appropriate YAML file"""
