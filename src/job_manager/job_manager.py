@@ -1035,7 +1035,15 @@ class JobApplier:
         # Check by company_id and/or by job title
         if company_name:
             if company_name in seen_companies:
-                seen_companies[company_name].append(job_info.model_dump())
+                existing_jobs = seen_companies[company_name]
+                if any(
+                    saved_job.get("url") == vacancy["url"]
+                    or saved_job.get("job_title") == company_job_title
+                    for saved_job in existing_jobs
+                ):
+                    logger.info("Vacancy already saved in output file, skipping duplicate entry")
+                    return
+                existing_jobs.append(job_info.model_dump())
             else:
                 seen_companies[company_name] = [job_info.model_dump()]
 
@@ -1194,14 +1202,15 @@ class JobApplier:
     async def _go_to_next_page(self) -> bool:
         """Go to the next page using framework-agnostic methods (async)"""
         target_page = self.page_num + 1
-        logger.info(f"Going to the page {target_page}")
+        target_page_label = target_page + 1
+        logger.info(f"Going to the page {target_page_label}")
 
         # Try multiple selectors for next page button
         next_page_selectors = [
-            f"button[aria-label='Page {target_page}']",
-            f"button[aria-label*='Page {target_page}']",
-            f"//button[normalize-space(text())='{target_page}']",
-            f"//button[contains(@aria-label, 'Page {target_page}')]",
+            f"button[aria-label='Page {target_page_label}']",
+            f"button[aria-label*='Page {target_page_label}']",
+            f"//button[normalize-space(text())='{target_page_label}']",
+            f"//button[contains(@aria-label, 'Page {target_page_label}')]",
             "//button[contains(@aria-label, 'next')]",
             "//button[contains(@aria-label, 'Next')]",
             "button[aria-label*='Next']",

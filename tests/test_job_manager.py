@@ -461,6 +461,34 @@ class TestCompanyManagement:
 
             assert "Tech Corp" in job_applier.skipped_companies
 
+    def test_save_company_skip_does_not_duplicate_existing_entry(self, job_applier):
+        """Test duplicate skipped vacancies are not appended again"""
+        with patch.object(job_applier, "_save_company_to_yaml") as mock_save:
+            job_applier.success_companies = {}
+            job_applier.skipped_companies = {
+                "Tech Corp": [
+                    {
+                        "job_title": "Software Engineer",
+                        "url": "https://linkedin.com/jobs/view/12345",
+                        "skip_reason": "Not interesting",
+                    }
+                ]
+            }
+            job_applier.failed_companies = {}
+
+            job = Job(
+                job_title="Software Engineer",
+                company_name="Tech Corp",
+                url="https://linkedin.com/jobs/view/12345",
+            )
+            vacancy = {"url": "https://linkedin.com/jobs/view/12345"}
+            apply_result = ("Skip", "Not interesting")
+
+            job_applier._save_company(job, apply_result, vacancy)
+
+            assert len(job_applier.skipped_companies["Tech Corp"]) == 1
+            mock_save.assert_not_called()
+
     def test_save_company_failed(self, job_applier):
         """Test saving company to failed list"""
         with patch.object(job_applier, "_save_company_to_yaml"):
@@ -606,6 +634,23 @@ class TestPagination:
 
         assert result is True
         assert job_applier.page_num == 2
+
+    @pytest.mark.asyncio
+    async def test_go_to_next_page_uses_human_page_number_for_numbered_buttons(self, job_applier):
+        """Test numbered pagination targets the next human-visible page number"""
+        job_applier.page_num = 0
+        attempted_selectors = []
+
+        async def safe_click_side_effect(page, selector, timeout=10000):
+            attempted_selectors.append(selector)
+            return selector == "button[aria-label='Page 2']"
+
+        with patch("src.job_manager.job_manager.safe_click", side_effect=safe_click_side_effect):
+            result = await job_applier._go_to_next_page()
+
+        assert result is True
+        assert job_applier.page_num == 1
+        assert attempted_selectors[0] == "button[aria-label='Page 2']"
 
 
 class TestInterestingJobs:
