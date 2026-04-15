@@ -272,7 +272,9 @@ class JobApplier:
             if result == "Limit" or result == "Error":
                 break
             # go to the next page
-            await self._go_to_next_page()
+            if not await self._go_to_next_page():
+                logger.info("No further results pages available, ending search loop")
+                break
         logger.info(f"Applications sent: {self.success_applies_num}")
         logger.info("Ending the work.")
         await self.send_report(result)
@@ -1147,6 +1149,30 @@ class JobApplier:
         """Check if we have already applied to this vacancy"""
         company_name = job.company_name
         job_title = job.job_title
+
+        def _match_seen_jobs(
+            companies: Dict[str, List[dict]],
+        ) -> Tuple[bool, str]:
+            for comp in companies:
+                if sanitize_text(company_name) != sanitize_text(comp):
+                    continue
+
+                if self.apply_once_at_company and COLLECT_INFO_MODE is False:
+                    logger.warning(
+                        "The company has already been encountered and the setting is not to apply again to the same company, skipping"
+                    )
+                    return (
+                        True,
+                        "The company has already been encountered and the setting is not to apply again to the same company",
+                    )
+
+                for job_info in companies[comp]:
+                    if job_title == job_info["job_title"]:
+                        logger.warning("The vacancy has already been encountered, skipping")
+                        return True, "The vacancy has already been encountered"
+
+            return False, ""
+
         if COLLECT_INFO_MODE is True:
             my_companies = self.interesting_jobs
             for job_info in my_companies:
@@ -1154,32 +1180,28 @@ class JobApplier:
                     logger.warning("The vacancy has already been encountered, skipping")
                     return True, "The vacancy has already been encountered"
         else:
-            my_companies = self.success_companies
-            for comp in my_companies:
-                if sanitize_text(company_name) == sanitize_text(comp):
-                    if self.apply_once_at_company and COLLECT_INFO_MODE is False:
-                        logger.warning(
-                            "The company has already been encountered and the setting is not to apply "
-                            "again to the same company, skipping"
-                        )
-                        return (
-                            True,
-                            "The company has already been encountered and the setting is not to apply "
-                            "again to the same company",
-                        )
-                    for job_info in my_companies[comp]:
-                        if job_title == job_info["job_title"]:
-                            logger.warning("The vacancy has already been encountered, skipping")
-                            return True, "The vacancy has already been encountered"
+            for seen_companies in (
+                self.success_companies,
+                self.skipped_companies,
+                self.failed_companies,
+            ):
+                is_seen, reason = _match_seen_jobs(seen_companies)
+                if is_seen:
+                    return is_seen, reason
+
         return False, ""
 
-    async def _go_to_next_page(self) -> None:
+    async def _go_to_next_page(self) -> bool:
         """Go to the next page using framework-agnostic methods (async)"""
-        self.page_num += 1
-        logger.info(f"Going to the page {self.page_num}")
+        target_page = self.page_num + 1
+        logger.info(f"Going to the page {target_page}")
 
         # Try multiple selectors for next page button
         next_page_selectors = [
+            f"button[aria-label='Page {target_page}']",
+            f"button[aria-label*='Page {target_page}']",
+            f"//button[normalize-space(text())='{target_page}']",
+            f"//button[contains(@aria-label, 'Page {target_page}')]",
             "//button[contains(@aria-label, 'next')]",
             "//button[contains(@aria-label, 'Next')]",
             "button[aria-label*='Next']",
@@ -1212,8 +1234,11 @@ class JobApplier:
 
         if not page_clicked:
             logger.warning("Could not find or click next page button")
+            return False
 
         pause(2, 3)
+        self.page_num = target_page
+        return True
 
 
 if __name__ == "__main__":

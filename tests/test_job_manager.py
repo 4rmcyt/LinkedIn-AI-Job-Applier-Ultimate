@@ -511,6 +511,8 @@ class TestJobSeenChecking:
     def test_job_is_already_seen_not_seen(self, job_applier):
         """Test when job has not been seen before"""
         job_applier.success_companies = {}
+        job_applier.skipped_companies = {}
+        job_applier.failed_companies = {}
         job_applier.apply_once_at_company = True
 
         job = Job(job_title="Software Engineer", company_name="New Company")
@@ -525,6 +527,8 @@ class TestJobSeenChecking:
         job_applier.success_companies = {
             "Tech Corp": [{"job_title": "Other Position", "url": "http://test.com"}]
         }
+        job_applier.skipped_companies = {}
+        job_applier.failed_companies = {}
         job_applier.apply_once_at_company = True
 
         job = Job(job_title="Software Engineer", company_name="Tech Corp")
@@ -540,6 +544,8 @@ class TestJobSeenChecking:
         job_applier.success_companies = {
             "Tech Corp": [{"job_title": "Software Engineer", "url": "http://test.com"}]
         }
+        job_applier.skipped_companies = {}
+        job_applier.failed_companies = {}
         job_applier.apply_once_at_company = False
         job = Job(job_title="Software Engineer", company_name="Tech Corp")
         with patch("src.job_manager.job_manager.COLLECT_INFO_MODE", False):
@@ -547,6 +553,59 @@ class TestJobSeenChecking:
 
         assert is_seen is True
         assert "vacancy has already been encountered" in reason
+
+    def test_job_is_already_seen_when_skipped_before(self, job_applier):
+        """Test skipped jobs are treated as already seen"""
+        job_applier.success_companies = {}
+        job_applier.skipped_companies = {
+            "Tech Corp": [{"job_title": "Software Engineer", "url": "http://test.com"}]
+        }
+        job_applier.failed_companies = {}
+        job_applier.apply_once_at_company = False
+
+        job = Job(job_title="Software Engineer", company_name="Tech Corp")
+
+        with patch("src.job_manager.job_manager.COLLECT_INFO_MODE", False):
+            is_seen, reason = job_applier._job_is_already_seen(job)
+
+        assert is_seen is True
+        assert "vacancy has already been encountered" in reason
+
+
+class TestPagination:
+    """Test search result pagination"""
+
+    @pytest.mark.asyncio
+    async def test_go_to_next_page_does_not_increment_when_click_fails(self, job_applier):
+        """Test page number stays unchanged if next page button is missing"""
+        job_applier.page_num = 1
+
+        with (
+            patch("src.job_manager.job_manager.safe_click", new_callable=AsyncMock) as mock_click,
+            patch(
+                "src.job_manager.job_manager.find_element_safely", new_callable=AsyncMock
+            ) as mock_find,
+        ):
+            mock_click.return_value = False
+            mock_find.return_value = None
+
+            result = await job_applier._go_to_next_page()
+
+        assert result is False
+        assert job_applier.page_num == 1
+
+    @pytest.mark.asyncio
+    async def test_go_to_next_page_increments_after_successful_click(self, job_applier):
+        """Test page number advances only after a successful click"""
+        job_applier.page_num = 1
+
+        with patch("src.job_manager.job_manager.safe_click", new_callable=AsyncMock) as mock_click:
+            mock_click.return_value = True
+
+            result = await job_applier._go_to_next_page()
+
+        assert result is True
+        assert job_applier.page_num == 2
 
 
 class TestInterestingJobs:
