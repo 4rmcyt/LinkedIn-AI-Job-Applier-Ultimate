@@ -212,7 +212,7 @@ class IndeedJobManager(BaseJobManager):
                 logger.info(f"Skipping blacklisted job: {job.job_title} at {job.company_name}")
                 return "skipped"
 
-            if job.apply_method != "easy_apply" and EASY_APPLY_ONLY_MODE:
+            if job.apply_method != "easy_apply" and EASY_APPLY_ONLY_MODE and not COLLECT_INFO_MODE:
                 logger.info(f"Skipping external apply job: {job.job_title} at {job.company_name}")
                 return "skipped"
 
@@ -224,7 +224,7 @@ class IndeedJobManager(BaseJobManager):
                 job.job_description = await self._extract_job_description_from_page(new_page)
                 job.company_description = await self._extract_company_description(new_page)
 
-                if MONKEY_MODE or COLLECT_INFO_MODE:
+                if MONKEY_MODE is True and COLLECT_INFO_MODE is False:
                     job_is_interesting = True
                     score, reasoning = 0, "Monkey mode"
                 else:
@@ -247,6 +247,13 @@ class IndeedJobManager(BaseJobManager):
                 if int(score) > 0:
                     self._update_skill_stat(self.job_key_skills)
                     self._save_interesting_job(job, score, reasoning)
+
+                if COLLECT_INFO_MODE:
+                    logger.info(
+                        "We are in the mode of collecting skill statistics or searching for "
+                        "interesting jobs - do not apply to the vacancy"
+                    )
+                    return "OK"
 
                 if not EASY_APPLY_ONLY_MODE and job.apply_method == "external":
                     if TEST_MODE:
@@ -281,6 +288,13 @@ class IndeedJobManager(BaseJobManager):
 
     async def easy_apply(self, job: Job, page: Any = None) -> Tuple[str, str]:
         """Delegate application to IndeedEasyApplier"""
+        if COLLECT_INFO_MODE:
+            logger.info(
+                "We are in the mode of collecting skill statistics or searching for "
+                "interesting jobs - do not apply to the vacancy"
+            )
+            return "Skip", ""
+
         easy_applier = IndeedEasyApplier(
             page=page,
             gpt_answerer=self.llm_answerer_component,

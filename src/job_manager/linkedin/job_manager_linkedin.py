@@ -278,7 +278,7 @@ class LinkedInJobManager(BaseJobManager):
                         self._save_interesting_job(job, score, reasoning)
                 # apply to the vacancy only if it's interesting
                 if job_is_interesting:
-                    if EASY_APPLY_ONLY_MODE is False:
+                    if EASY_APPLY_ONLY_MODE is False and COLLECT_INFO_MODE is False:
                         apply_url = await self._check_apply_button()
                         if apply_url:
                             if TEST_MODE is False:

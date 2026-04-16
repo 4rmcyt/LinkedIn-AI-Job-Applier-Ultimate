@@ -726,6 +726,14 @@ class GPTAnswerer:
 
     def _extract_number_from_string(self, output_str: str) -> str:
         """Extract number from string"""
+        stripped = output_str.strip()
+        # If the output looks like a phone number or other formatted number
+        # (starts with + or digit and contains only digits/spaces/hyphens/parens),
+        # return all digits concatenated to preserve the full value.
+        if len(stripped) > 1 and re.match(r"^[+\d][\d\s\-().]*$", stripped):
+            all_digits = re.sub(r"\D", "", stripped)
+            if all_digits:
+                return all_digits
         numbers = re.findall(r"\d+", output_str)
         if numbers:
             return str(numbers[0])

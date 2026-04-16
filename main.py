@@ -8,12 +8,19 @@ from threading import Lock
 
 import dotenv
 
-# TODO: test full Indeed pipeline
-# TODO: COLLECT_INFO_MODE = True for Indeed
-# TODO: EASY_APPLY_ONLY_MODE = False for Indeed
+# TODO: Make window size 1920x1080 always
+
+# TODO: Add to README more info about why Indeed sucks when it comes to applying
+# TODO: But when you just gather information about jobs, Indeed is fine
+
 # TODO: Make sure that LinkedIn still works
-# TODO: EASY_APPLY_ONLY_MODE = False for LinkedIn
+# TODO: Check COLLECT_INFO_MODE for LinkedIn
+# TODO: Check COLLECT_INFO_MODE for Indeed
+
 # TODO: Install project from scratch and then try to apply
+
+# TODO: EASY_APPLY_ONLY_MODE = False for Indeed
+# TODO: EASY_APPLY_ONLY_MODE = False for LinkedIn
 
 # TODO: Create tests for Indeed
 

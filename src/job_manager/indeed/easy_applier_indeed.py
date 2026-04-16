@@ -572,6 +572,7 @@ class IndeedEasyApplier(BaseEasyApplier):
                 )
                 if answer.lower().startswith("no info"):
                     raise NoInfoException(f"No info found for question: {question_text}")
+                answer = self.resume_anonymizer.deanonymize_text(answer)
                 self._save_questions(
                     Question(question_type="text", question=question_text, answer=answer)
                 )
@@ -996,7 +997,7 @@ if __name__ == "__main__":
         logger.info("Starting IndeedEasyApplier test...")
 
         # Test job URL
-        job_url = "https://www.indeed.com/viewjob?jk=94f5a74b26cc0e22"
+        job_url = "https://www.indeed.com/viewjob?jk=ac6392b428869158"
         # job_url = (
         #     "https://www.indeed.com/viewjob?jk=5d8d545b93be6f7f&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
         # )
