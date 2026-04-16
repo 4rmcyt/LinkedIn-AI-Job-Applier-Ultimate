@@ -86,6 +86,23 @@ class IndeedSearchCustomizer(BaseSearchCustomizer):
 
         return f"{INDEED_BASE_URL}?{'&'.join(params)}"
 
+    async def _set_max_distance(self) -> None:
+        """If the Distance filter button is visible, select the furthest available option."""
+        distance_btn = self.page.locator("#radius_filter_button")
+        if not await distance_btn.is_visible():
+            return
+        logger.info("Distance filter button found, selecting max distance")
+        await distance_btn.click()
+        listbox = self.page.locator('ul[aria-label="Distance options"]')
+        await listbox.wait_for(state="visible")
+        options = listbox.locator('li[role="option"]')
+        count = await options.count()
+        if count > 0:
+            await options.nth(count - 1).click()
+        update_btn = self.page.locator('button:has-text("Update")').last
+        await update_btn.click()
+        await async_pause(1, 2)
+
     async def set_search_params(self) -> None:
         """Navigate to the first Indeed search URL"""
         if not self.positions:
@@ -96,7 +113,8 @@ class IndeedSearchCustomizer(BaseSearchCustomizer):
         url = self._build_search_url(self.positions[0], location)
         logger.info(f"Navigating to Indeed search: {url}")
         await self.page.goto(url, wait_until="domcontentloaded")
-        await async_pause(1, 2)
+        await async_pause(2, 3)
+        await self._set_max_distance()
 
     def get_search_urls(self) -> list:
         """Return all search URL combinations (position x location)"""

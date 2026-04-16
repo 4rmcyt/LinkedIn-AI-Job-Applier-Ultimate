@@ -48,6 +48,9 @@ class BaseEasyApplier(ABC):
     async def _find_and_handle_dropdown_question(self, section: Any) -> bool:
         pass
 
+    async def _find_and_handle_date_question(self, section: Any) -> bool:
+        return False
+
     async def _create_and_upload_resume(self, element: Any, job: Job) -> None:
         try:
             os.makedirs(self.generated_resume_dir, exist_ok=True)
@@ -126,6 +129,9 @@ class BaseEasyApplier(ABC):
             return
         if await self._find_and_handle_dropdown_question(section):
             logger.debug("Handled dropdown question")
+            return
+        if await self._find_and_handle_date_question(section):
+            logger.debug("Handled date question")
             return
         if await self._find_and_handle_textbox_question(section):
             logger.debug("Handled textbox question")

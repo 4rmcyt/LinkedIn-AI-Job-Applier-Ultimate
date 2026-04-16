@@ -1,6 +1,7 @@
 import os
 import re
 import traceback
+from datetime import datetime
 from pathlib import Path
 from typing import Any, List, Tuple
 
@@ -464,6 +465,63 @@ class IndeedEasyApplier(BaseEasyApplier):
 
     async def _handle_terms_of_service(self, section: Any) -> bool:
         return False
+
+    async def _find_and_handle_date_question(self, section: Any) -> bool:
+        """Fill date input fields (MM/DD/YYYY format) using cache or LLM"""
+        date_input = await find_element_safely(
+            section,
+            "input[placeholder='MM/DD/YYYY'], input[id^='date-question-input']",
+            timeout=500,
+        )
+        if not date_input:
+            return False
+        question_text = await get_clean_text(section)
+        try:
+            self.previous_question_texts.append(question_text)
+            current_question_sanitized = sanitize_text(question_text)
+            existing_answer = None
+            for item in self.all_questions:
+                if item.question == current_question_sanitized and item.question_type == "date":
+                    existing_answer = item.answer
+                    break
+            if existing_answer:
+                answer = existing_answer
+                logger.debug(f"Using cached date answer for '{question_text}': '{answer}'")
+            else:
+                raw = self.gpt_answerer.answer_question_textual_wide_range(
+                    question_text, self.previous_question_texts[:-1]
+                )
+                if raw.lower().startswith("no info"):
+                    raise NoInfoException(f"No info found for question: {question_text}")
+                answer = self._parse_date_to_mmddyyyy(raw)
+                self._save_questions(
+                    Question(question_type="date", question=question_text, answer=answer)
+                )
+            await date_input.fill(answer)
+            logger.debug(f"Filled date field '{question_text}' with '{answer}'")
+        except Exception as e:
+            logger.warning(f"Error handling date field section: {e}")
+            await debug_capture(self.page, "indeed_date_field_error")
+            return False
+        return True
+
+    def _parse_date_to_mmddyyyy(self, date_str: str) -> str:
+        """Try to parse a date string and return it in MM/DD/YYYY format"""
+        formats = [
+            "%m/%d/%Y",
+            "%Y-%m-%d",
+            "%B %d, %Y",
+            "%b %d, %Y",
+            "%d/%m/%Y",
+            "%m-%d-%Y",
+        ]
+        for fmt in formats:
+            try:
+                return datetime.strptime(date_str.strip(), fmt).strftime("%m/%d/%Y")
+            except ValueError:
+                continue
+        logger.warning(f"Could not parse date '{date_str}', using as-is")
+        return date_str
 
     async def _find_and_handle_textbox_question(self, section: Any) -> bool:
         """Fill appropriate textbox using cache or LLM"""
