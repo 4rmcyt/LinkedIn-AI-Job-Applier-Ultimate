@@ -6,6 +6,7 @@ from typing import Any, List, Tuple
 
 from playwright.sync_api import Page
 
+from config.app_config import UPLOAD_RESUME
 from config.logger_config import logger
 from src.job_manager.easy_applier import BaseEasyApplier, NoInfoException
 from src.job_manager.resume_anonymizer import ResumeAnonymizer
@@ -247,28 +248,29 @@ class IndeedEasyApplier(BaseEasyApplier):
             await debug_capture(self.page, "indeed_fill_form_error")
 
     async def _handle_resume_selection(self, job: Job) -> None:
-        """Prefer Indeed Resume if available; otherwise upload ready-made or generated resume"""
+        """Select resume: use Indeed Resume if UPLOAD_RESUME is False, otherwise upload a file"""
         try:
-            indeed_resume_radio = await find_element_safely(
-                self.page,
-                "input[data-testid='resume-selection-structured-resume-radio-card-input']",
-                timeout=2000,
-            )
-            if indeed_resume_radio:
-                if not await indeed_resume_radio.is_checked():
-                    # The radio input is visually hidden; click the visible label instead
-                    indeed_resume_label = await find_element_safely(
-                        self.page,
-                        "label[data-testid='resume-selection-structured-resume-radio-card-label']",
-                        timeout=2000,
-                    )
-                    if indeed_resume_label:
-                        await indeed_resume_label.click()
-                    else:
-                        await indeed_resume_radio.click(force=True)
-                    await async_pause(0.5, 1)
-                logger.info("Using Indeed Resume")
-                return
+            if not UPLOAD_RESUME:
+                indeed_resume_radio = await find_element_safely(
+                    self.page,
+                    "input[data-testid='resume-selection-structured-resume-radio-card-input']",
+                    timeout=2000,
+                )
+                if indeed_resume_radio:
+                    if not await indeed_resume_radio.is_checked():
+                        indeed_resume_label = await find_element_safely(
+                            self.page,
+                            "label[data-testid='resume-selection-structured-resume-radio-card-label']",
+                            timeout=2000,
+                        )
+                        if indeed_resume_label:
+                            await indeed_resume_label.click()
+                        else:
+                            await indeed_resume_radio.click(force=True)
+                        await async_pause(0.5, 1)
+                    logger.info("Using Indeed Resume")
+                    return
+                logger.warning("Indeed Resume not available, falling back to file upload")
 
             upload_radio_input = await find_element_safely(
                 self.page,

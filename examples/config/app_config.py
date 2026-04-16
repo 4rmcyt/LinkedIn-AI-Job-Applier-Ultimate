@@ -39,6 +39,13 @@ their skill statistics and saves them to the files data/output/interesting_jobs.
 COLLECT_INFO_MODE = False
 
 """
+For Indeed only
+If this setting is False, Indeed Resume will be used (no file upload).
+If True, app will try to upload a resume file.
+"""
+UPLOAD_RESUME = True
+
+"""
 In this mode app applies only the jobs with Easy Apply
 If this mode is deactivated, app will apply to the jobs with Easy Apply and try to apply to the jobs with 3rd party applications
 WARNING: applying to the jobs with 3rd party applications is not guaranteed to be successful, but is guaranteed to consume at least 10-100x more tokens
