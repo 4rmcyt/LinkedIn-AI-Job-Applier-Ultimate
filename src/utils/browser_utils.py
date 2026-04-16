@@ -591,6 +591,7 @@ async def HTML_to_PDF(FilePath):
 
         # Wait for the page and all network resources to load
         await page.goto(file_url, wait_until="networkidle")
+        logger.info(f"Page loaded: {file_url}")
 
         # Wait for fonts to load
         await page.evaluate("""

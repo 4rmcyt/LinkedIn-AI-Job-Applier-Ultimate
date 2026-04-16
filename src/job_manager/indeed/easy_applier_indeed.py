@@ -71,6 +71,7 @@ class IndeedEasyApplier(BaseEasyApplier):
         """Entry point - navigate to job page and apply"""
         logger.info(f"Navigating to Indeed job: {job.url}")
         await self.page.goto(job.url)
+        logger.info(f"Page loaded: {job.url}")
         await async_pause(1, 2)
         result, cover_letter = await self.job_easy_apply(job)
         return result, cover_letter
@@ -236,7 +237,7 @@ class IndeedEasyApplier(BaseEasyApplier):
 
             sections = await find_elements_safely(
                 self.page,
-                "div.ia-Questions-item, div[data-testid='ia-Questions-item']",
+                "div.ia-Questions-item, div[data-testid='ia-Questions-item'], div.ia-Qual-Questions-item",
             )
             for section in sections or []:
                 try:
@@ -488,7 +489,7 @@ class IndeedEasyApplier(BaseEasyApplier):
                 answer = existing_answer
                 logger.debug(f"Using cached date answer for '{question_text}': '{answer}'")
             else:
-                raw = self.gpt_answerer.answer_question_textual_wide_range(
+                raw = self.gpt_answerer.answer_question_date(
                     question_text, self.previous_question_texts[:-1]
                 )
                 if raw.lower().startswith("no info"):
@@ -523,6 +524,15 @@ class IndeedEasyApplier(BaseEasyApplier):
         logger.warning(f"Could not parse date '{date_str}', using as-is")
         return date_str
 
+    async def _is_numeric_field(self, field: Any) -> bool:
+        """Check if a form field is a numeric (number) question on Indeed"""
+        field_type = (await field.get_attribute("type") or "").lower()
+        field_id = (await field.get_attribute("id") or "").lower()
+        inputmode = (await field.get_attribute("inputmode") or "").lower()
+        return (
+            field_type == "number" or inputmode == "numeric" or field_id.startswith("number-input-")
+        )
+
     async def _find_and_handle_textbox_question(self, section: Any) -> bool:
         """Fill appropriate textbox using cache or LLM"""
         text_input = await find_element_safely(
@@ -533,15 +543,29 @@ class IndeedEasyApplier(BaseEasyApplier):
         question_text = await get_clean_text(section)
         try:
             self.previous_question_texts.append(question_text)
+            is_numeric = await self._is_numeric_field(text_input)
+            question_type = "numeric" if is_numeric else "text"
             current_question_sanitized = sanitize_text(question_text)
             existing_answer = None
             for item in self.all_questions:
-                if item.question == current_question_sanitized and item.question_type == "text":
+                if (
+                    item.question == current_question_sanitized
+                    and item.question_type == question_type
+                ):
                     existing_answer = item.answer
                     break
             if existing_answer:
                 answer = existing_answer
                 logger.debug(f"Using cached answer for '{question_text}': '{answer}'")
+            elif is_numeric:
+                answer = self.gpt_answerer.answer_question_numeric(
+                    question_text, self.previous_question_texts[:-1]
+                )
+                if answer.lower().startswith("no info"):
+                    raise NoInfoException(f"No info found for question: {question_text}")
+                self._save_questions(
+                    Question(question_type="numeric", question=question_text, answer=answer)
+                )
             else:
                 answer = self.gpt_answerer.answer_question_textual_wide_range(
                     question_text, self.previous_question_texts[:-1]
@@ -552,7 +576,9 @@ class IndeedEasyApplier(BaseEasyApplier):
                     Question(question_type="text", question=question_text, answer=answer)
                 )
             await text_input.fill(answer)
-            logger.debug(f"Filled text field '{question_text}' with '{answer}'")
+            logger.debug(
+                f"Filled {'numeric' if is_numeric else 'text'} field '{question_text}' with '{answer}'"
+            )
         except Exception as e:
             logger.warning(f"Error handling text field section: {e}")
             await debug_capture(self.page, "indeed_text_field_error")
@@ -699,19 +725,32 @@ class IndeedEasyApplier(BaseEasyApplier):
                 self._save_questions(
                     Question(question_type="radio", question=question_text, answer=answer)
                 )
+
+            async def click_radio(radio: Any) -> None:
+                """Click via label when the input is visually hidden, else direct click."""
+                radio_id = await radio.get_attribute("id")
+                if radio_id:
+                    label_el = await find_element_safely(
+                        section, f"label[for='{radio_id}']", timeout=1000
+                    )
+                    if label_el and await label_el.is_visible():
+                        await label_el.click()
+                        return
+                await radio.click()
+
             # Exact match first to avoid substring false positives (e.g. "male" in "female")
             for radio, option in zip(radios, option_texts):
                 if answer.lower() == option.lower():
-                    await radio.click()
+                    await click_radio(radio)
                     logger.debug(f"Selected radio '{option}'")
                     return True
             for radio, option in zip(radios, option_texts):
                 if answer.lower() in option.lower():
-                    await radio.click()
+                    await click_radio(radio)
                     logger.debug(f"Selected radio '{option}'")
                     return True
             # Fallback: click first option
-            await radios[0].click()
+            await click_radio(radios[0])
         except Exception as e:
             logger.warning(f"Error handling radio section: {e}")
             await debug_capture(self.page, "indeed_radio_error")
@@ -915,6 +954,7 @@ class IndeedEasyApplier(BaseEasyApplier):
             except Exception as e:
                 logger.warning(f"Error fixing textbox field '{question_text}': {e}")
                 await debug_capture(self.page, "indeed_textbox_error_fix_error")
+                return False
 
         return True
 
@@ -956,9 +996,7 @@ if __name__ == "__main__":
         logger.info("Starting IndeedEasyApplier test...")
 
         # Test job URL
-        job_url = (
-            "https://www.indeed.com/viewjob?jk=55f3b1bf0b69babb&tk=1jlgv4jjvi96p881&from=serp&vjs=3"
-        )
+        job_url = "https://www.indeed.com/viewjob?jk=94f5a74b26cc0e22"
         # job_url = (
         #     "https://www.indeed.com/viewjob?jk=5d8d545b93be6f7f&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
         # )
@@ -1029,11 +1067,6 @@ if __name__ == "__main__":
             )
             if not easy_applier.ready_made_resume_path.is_file():
                 resume_generator_manager.choose_style()
-
-            # Navigate to job page
-            # logger.info(f"Navigating to job page: {job_url}")
-            # await page.goto(job_url)
-            # await async_pause(3, 5)
 
             # Test the apply_to_job method
             logger.info("Testing IndeedEasyApplier.apply_to_job method...")

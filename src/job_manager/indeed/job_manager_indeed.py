@@ -91,60 +91,56 @@ class IndeedJobManager(BaseJobManager):
         # write recommendations for improving the resume
         self.resume_improvement_recommendations()
 
-        search_urls = self.search_component.get_search_urls()
-        logger.info(f"Indeed search URLs: {search_urls}")
+        # for url in search_urls:
+        self.page_num = 0
+        await async_pause(1, 2)
 
-        for url in search_urls:
-            self.page_num = 0
-            await self.page.goto(url, wait_until="domcontentloaded")
-            await async_pause(1, 2)
+        # continue until the maximum number of applications is reached
+        while self.success_applies_num < self.max_applies_num and self.applies_num < 400:
+            # Check if execution is paused
+            if self.pause_checker:
+                await self.pause_checker()
 
-            # continue until the maximum number of applications is reached
-            while self.success_applies_num < self.max_applies_num and self.applies_num < 400:
-                # Check if execution is paused
+            # go through all pages until they are finished
+            vacancies = await self.get_vacancies_from_page()
+            if len(vacancies) == 0:
+                if self.page_num == 0:
+                    logger.warning("No vacancies found for the search query")
+                break
+            for vacancy in vacancies:
+                # Check if execution is paused before processing each job
                 if self.pause_checker:
                     await self.pause_checker()
 
-                # go through all pages until they are finished
-                vacancies = await self.get_vacancies_from_page()
-                if len(vacancies) == 0:
-                    if self.page_num == 0:
-                        logger.warning("No vacancies found for the search query")
-                    break
-                for vacancy in vacancies:
-                    # Check if execution is paused before processing each job
-                    if self.pause_checker:
-                        await self.pause_checker()
-
-                    try:
-                        result = await self.apply_job(vacancy)
-                        if result == "Limit":
-                            logger.warning("Maximum number of applications reached")
-                            break
-                    except Exception:
-                        tb_str = traceback.format_exc()
-                        logger.error(f"Unknown error on the page: {url}\n{tb_str}")
-                        await debug_capture(self.page, "apply_loop_error")
-                        # counter of repeated errors, if too many errors in a row -
-                        # exit the program and send a notification
-                        if self.error_num == MAX_APPLIES_NUM:
-                            logger.error(f"Critical number of consecutive errors {MAX_APPLIES_NUM}")
-                            result = "Error"
-                            break
-                        else:
-                            self.error_num += 1
-                        continue
+                try:
+                    result = await self.apply_job(vacancy)
+                    if result == "Limit":
+                        logger.warning("Maximum number of applications reached")
+                        break
+                except Exception:
+                    tb_str = traceback.format_exc()
+                    logger.error(f"Unknown error on the page: {self.page.url}\n{tb_str}")
+                    await debug_capture(self.page, "apply_loop_error")
+                    # counter of repeated errors, if too many errors in a row -
+                    # exit the program and send a notification
+                    if self.error_num == MAX_APPLIES_NUM:
+                        logger.error(f"Critical number of consecutive errors {MAX_APPLIES_NUM}")
+                        result = "Error"
+                        break
                     else:
-                        self.error_num = 0
-                # break the search for vacancies if the limit is reached
-                if result == "Limit" or result == "Error":
-                    break
-                # go to the next page; stop if there are no more pages
-                if not await self._go_to_next_page():
-                    break
-
+                        self.error_num += 1
+                    continue
+                else:
+                    self.error_num = 0
+            # break the search for vacancies if the limit is reached
             if result == "Limit" or result == "Error":
                 break
+            # go to the next page; stop if there are no more pages
+            if not await self._go_to_next_page():
+                break
+
+        # if result == "Limit" or result == "Error":
+        #     break
 
         logger.info(f"Applications sent: {self.success_applies_num}")
         logger.info("Ending the work.")

@@ -523,6 +523,7 @@ class GPTAnswerer:
             "extract_skills_from_vacancy": self._create_chain(prompts.extract_skills_from_vacancy),
             "summarize_job_description": self._create_chain(prompts.summarize_prompt_template),
             "job_is_interesting": self._create_chain(prompts.job_is_interesting),
+            "date_question": self._create_chain(prompts.date_question_template),
             "text_question": self._create_chain(prompts.text_question_answer_template),
             "numeric_question": self._create_chain(prompts.numeric_question_template),
             "text_question_with_error": self._create_chain(
@@ -649,6 +650,21 @@ class GPTAnswerer:
         output = chain.invoke({"text": text})
         logger.debug(f"Generated brief description: {output}")
         return output
+
+    def answer_question_date(self, question: str, previous_questions: list[str]) -> str:
+        """Answer a date question and return the result in MM/DD/YYYY format"""
+        current_date = datetime.now().date().strftime("%Y-%m-%d")
+        chain = self.chains["date_question"]
+        output = chain.invoke(
+            {
+                "resume": self.resume_readable,
+                "question": question,
+                "current_date": current_date,
+                "previous_questions": previous_questions,
+            }
+        )
+        logger.debug(f"Date answer: {output}")
+        return output.strip()
 
     def answer_question_textual_wide_range(
         self, question: str, previous_questions: list[str]

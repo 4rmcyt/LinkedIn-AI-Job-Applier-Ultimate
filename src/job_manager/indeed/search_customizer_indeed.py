@@ -99,6 +99,7 @@ class IndeedSearchCustomizer(BaseSearchCustomizer):
         count = await options.count()
         if count > 0:
             await options.nth(count - 1).click()
+            await async_pause(1, 2)
         update_btn = self.page.locator('button:has-text("Update")').last
         await update_btn.click()
         await async_pause(1, 2)
@@ -115,12 +116,3 @@ class IndeedSearchCustomizer(BaseSearchCustomizer):
         await self.page.goto(url, wait_until="domcontentloaded")
         await async_pause(2, 3)
         await self._set_max_distance()
-
-    def get_search_urls(self) -> list:
-        """Return all search URL combinations (position x location)"""
-        urls = []
-        locations = self.locations if self.locations else [""]
-        for position in self.positions:
-            for location in locations:
-                urls.append(self._build_search_url(position, location))
-        return urls
