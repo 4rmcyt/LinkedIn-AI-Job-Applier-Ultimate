@@ -94,7 +94,7 @@ class IndeedEasyApplier(BaseEasyApplier):
     async def job_easy_apply(self, job: Job) -> Tuple[str, str]:
         """
         Attempt to apply to an Indeed job.
-        Returns (result, cover_letter_text) where result is 'success' | 'skipped' | 'error'.
+        Returns (result, cover_letter_text) where result is 'Success' | 'Skip' | 'Error'.
         """
         cover_letter = ""
         self.current_job = job
@@ -102,7 +102,7 @@ class IndeedEasyApplier(BaseEasyApplier):
             apply_btn = await self._find_apply_button(job)
             if not apply_btn:
                 logger.warning(f"No apply button found for: {job.job_title} at {job.company_name}")
-                return "skipped", cover_letter
+                return "Skip", cover_letter
 
             try:
                 async with self.page.context.expect_page(timeout=10000) as new_page_info:
@@ -128,7 +128,7 @@ class IndeedEasyApplier(BaseEasyApplier):
                     company_name=job.company_name,
                     url=job.url,
                 )
-                return "success", cover_letter
+                return "Success", cover_letter
 
             result = await self._submit_application()
             if result:
@@ -139,7 +139,7 @@ class IndeedEasyApplier(BaseEasyApplier):
                     company_name=job.company_name,
                     url=job.url,
                 )
-            return ("success" if result else "error"), cover_letter
+            return ("Success" if result else "Error"), cover_letter
 
         except StopRequested:
             raise
@@ -157,7 +157,7 @@ class IndeedEasyApplier(BaseEasyApplier):
                 await self._discard_application()
             except Exception:
                 logger.error(f"Error discarding application: {e}", exc_info=True)
-            return "error", cover_letter
+            return "Error", cover_letter
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -276,9 +276,10 @@ class IndeedEasyApplier(BaseEasyApplier):
             for section in sections or []:
                 try:
                     await self._process_form_section(section)
-                except NoInfoException as e:
-                    logger.warning(f"{e}")
-                    continue
+                except NoInfoException:
+                    raise
+        except NoInfoException:
+            raise
         except Exception as e:
             logger.error(f"Error filling form step: {e}", exc_info=True)
             await debug_capture(self.page, "indeed_fill_form_error")
@@ -621,6 +622,8 @@ class IndeedEasyApplier(BaseEasyApplier):
                 )
             await date_input.fill(answer)
             logger.debug(f"Filled date field '{question_text}' with '{answer}'")
+        except NoInfoException:
+            raise
         except Exception as e:
             logger.warning(f"Error handling date field section: {e}")
             await debug_capture(self.page, "indeed_date_field_error")
@@ -701,6 +704,8 @@ class IndeedEasyApplier(BaseEasyApplier):
             logger.debug(
                 f"Filled {'numeric' if is_numeric else 'text'} field '{question_text}' with '{answer}'"
             )
+        except NoInfoException:
+            raise
         except Exception as e:
             logger.warning(f"Error handling text field section: {e}")
             await debug_capture(self.page, "indeed_text_field_error")
@@ -873,6 +878,8 @@ class IndeedEasyApplier(BaseEasyApplier):
                     return True
             # Fallback: click first option
             await click_radio(radios[0])
+        except NoInfoException:
+            raise
         except Exception as e:
             logger.warning(f"Error handling radio section: {e}")
             await debug_capture(self.page, "indeed_radio_error")
@@ -916,10 +923,11 @@ class IndeedEasyApplier(BaseEasyApplier):
                 answer = self.gpt_answerer.select_one_answer_from_options(
                     question_text, option_texts, self.previous_question_texts[:-1]
                 )
-                if not answer.lower().startswith("no info"):
-                    self._save_questions(
-                        Question(question_type="dropdown", question=question_text, answer=answer)
-                    )
+                if answer.lower().startswith("no info"):
+                    raise NoInfoException(f"No info found for question: {question_text}")
+                self._save_questions(
+                    Question(question_type="dropdown", question=question_text, answer=answer)
+                )
             # Exact match first to avoid substring false positives
             for opt_text in option_texts:
                 if answer.lower() == opt_text.lower():
@@ -934,6 +942,8 @@ class IndeedEasyApplier(BaseEasyApplier):
             # Fallback: skip default/empty option and pick the first real one
             if len(option_texts) > 1:
                 await dropdown.select_option(label=option_texts[1])
+        except NoInfoException:
+            raise
         except Exception as e:
             logger.warning(f"Error handling dropdown section: {e}")
             await debug_capture(self.page, "indeed_dropdown_error")
@@ -1184,7 +1194,7 @@ if __name__ == "__main__":
             logger.info("Testing IndeedEasyApplier.apply_to_job method...")
             result = await easy_applier.apply_to_job(test_job)
 
-            if result[0] == "success":
+            if result[0] == "Success":
                 logger.info("✅ IndeedEasyApplier test completed successfully!")
                 return True
             else:

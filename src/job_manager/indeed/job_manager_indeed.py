@@ -504,8 +504,7 @@ class IndeedJobManager(BaseJobManager):
 
     async def _handle_apply_result(self, result: str, job: Job, cover_letter: str) -> None:
         """Save job result to the appropriate YAML file"""
-        result_map = {"success": "Success", "skipped": "Skip", "error": "Error"}
-        self._save_company(job, (result_map.get(result, "Error"), ""), {"url": job.url})
+        self._save_company(job, result, {"url": job.url})
         emit_event(
             "job_result",
             f"Job result: {result}",

@@ -470,9 +470,8 @@ class LinkedInEasyApplier(BaseEasyApplier):
             for element in form_elements:
                 try:
                     await self._process_form_element(element, job, processed_file_inputs)
-                except NoInfoException as e:
-                    logger.warning(f"{e}")
-                    continue
+                except NoInfoException:
+                    raise
 
             # Also look for upload sections separately (they may not be in fb-dash-form-element)
             upload_sections = await modal_content.locator(
@@ -496,6 +495,8 @@ class LinkedInEasyApplier(BaseEasyApplier):
                     parent_container = file_input.locator("xpath=../..").first
                     await self._handle_upload_fields(parent_container, job, processed_file_inputs)
                     processed_file_inputs.add(file_input_id)
+        except NoInfoException:
+            raise
         except Exception:
             tb_str = traceback.format_exc()
             logger.error(f"Failed to find form elements: {tb_str}")
