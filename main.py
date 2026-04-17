@@ -8,8 +8,6 @@ from threading import Lock
 
 import dotenv
 
-# TODO: Install project from scratch and then try to apply
-
 # TODO: Check COLLECT_INFO_MODE for LinkedIn
 # TODO: Check COLLECT_INFO_MODE for Indeed
 
@@ -360,9 +358,11 @@ def main() -> None:
         try:
             # create output folder if it doesn't exist
             data = Path("data")
-            linkedin_output_folder = data / "output" / "linkedin"
+            output_folder = data / "output"
+            output_folder.mkdir(exist_ok=True)
+            linkedin_output_folder = output_folder / "linkedin"
             linkedin_output_folder.mkdir(exist_ok=True)
-            indeed_output_folder = data / "output" / "indeed"
+            indeed_output_folder = output_folder / "indeed"
             indeed_output_folder.mkdir(exist_ok=True)
 
             # validate config files
