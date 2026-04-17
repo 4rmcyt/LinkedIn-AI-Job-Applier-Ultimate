@@ -16,6 +16,7 @@ from config.app_config import (
 )
 from config.constants import COVER_LETTER_DIR, OUTPUT_DIR_INDEED, RESUME_DIR, SEARCH_CONFIG_FILE
 from config.logger_config import logger
+from src.dashboard.runtime import StopRequested, emit_event
 from src.job_manager.indeed.easy_applier_indeed import IndeedEasyApplier
 from src.job_manager.job_manager import BaseJobManager
 from src.pydantic_models.job_models import Job
@@ -68,6 +69,7 @@ class IndeedJobManager(BaseJobManager):
         self.job_key_skills: List[str] = []
         self.interesting_jobs: List[Any] = []
         self.page_num = 0
+        self.total_discovered_jobs = 0
         self.error_num = 0
         self.total_applies_num = 0
         self.applies_num = 0
@@ -124,6 +126,8 @@ class IndeedJobManager(BaseJobManager):
                     if result == "Limit":
                         logger.warning("Maximum number of applications reached")
                         break
+                except StopRequested:
+                    raise
                 except Exception:
                     tb_str = traceback.format_exc()
                     logger.error(f"Unknown error on the page: {self.page.url}\n{tb_str}")
@@ -174,6 +178,14 @@ class IndeedJobManager(BaseJobManager):
                         continue
                     seen_jks.add(jk)
                 unique_cards.append(card)
+            self.total_discovered_jobs += len(unique_cards)
+            emit_event(
+                "jobs_discovered",
+                f"Found {len(unique_cards)} jobs on page {self.page_num}",
+                count=len(unique_cards),
+                total_discovered=self.total_discovered_jobs,
+                page_num=self.page_num,
+            )
             return unique_cards
         except Exception as e:
             logger.warning(f"Could not find job cards: {e}")
@@ -182,8 +194,7 @@ class IndeedJobManager(BaseJobManager):
 
     async def _scroll_left_panel(self) -> None:
         """Scroll the full page to trigger lazy-loading of job cards"""
-        await self.page.evaluate(
-            """
+        await self.page.evaluate("""
             () => new Promise((resolve) => {
                 const distance = document.body.scrollHeight;
                 const durationMs = 2000;
@@ -196,8 +207,7 @@ class IndeedJobManager(BaseJobManager):
                 }
                 requestAnimationFrame(step);
             })
-            """
-        )
+            """)
         await async_pause(1, 2)
         await self.page.evaluate("() => window.scrollTo(0, 0)")
 
@@ -483,6 +493,9 @@ class IndeedJobManager(BaseJobManager):
             await async_pause(1, 2)
             self.page_num += 1
             logger.info(f"Moved to page {self.page_num + 1}")
+            emit_event(
+                "page_changed", f"Moving to page {self.page_num + 1}", page_num=self.page_num
+            )
             return True
         except Exception as e:
             logger.warning(f"Could not navigate to next page: {e}")
@@ -493,6 +506,14 @@ class IndeedJobManager(BaseJobManager):
         """Save job result to the appropriate YAML file"""
         result_map = {"success": "Success", "skipped": "Skip", "error": "Error"}
         self._save_company(job, (result_map.get(result, "Error"), ""), {"url": job.url})
+        emit_event(
+            "job_result",
+            f"Job result: {result}",
+            result=result.lower(),
+            job_title=job.job_title,
+            company_name=job.company_name,
+            url=job.url,
+        )
 
         if result == "success":
             self.applies_num += 1

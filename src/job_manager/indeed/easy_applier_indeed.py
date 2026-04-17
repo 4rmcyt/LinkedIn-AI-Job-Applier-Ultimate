@@ -9,6 +9,7 @@ from playwright.sync_api import Page
 
 from config.app_config import UPLOAD_RESUME
 from config.logger_config import logger
+from src.dashboard.runtime import StopRequested, capture_page_screenshot, emit_event
 from src.job_manager.easy_applier import BaseEasyApplier, NoInfoException
 from src.job_manager.resume_anonymizer import ResumeAnonymizer
 from src.llm.llm_manager import GPTAnswerer
@@ -77,6 +78,13 @@ class IndeedEasyApplier(BaseEasyApplier):
     async def apply_to_job(self, job: Job) -> Tuple[str, str]:
         """Entry point - navigate to job page and apply"""
         logger.info(f"Navigating to Indeed job: {job.url}")
+        emit_event(
+            "easy_apply_started",
+            f"Easy Apply started for {job.job_title}",
+            job_title=job.job_title,
+            company_name=job.company_name,
+            url=job.url,
+        )
         await self.page.goto(job.url)
         logger.info(f"Page loaded: {job.url}")
         await async_pause(1, 2)
@@ -108,15 +116,33 @@ class IndeedEasyApplier(BaseEasyApplier):
                 logger.debug("No new tab opened, form is modal on current page")
                 await async_pause(1, 2)
 
+            await capture_page_screenshot(self.page, "easy-apply-opened")
             cover_letter = await self._fill_application_form(job)
             if self.test_mode:
                 logger.info("TEST_MODE: skipping form submission")
                 await self._discard_application()
+                emit_event(
+                    "easy_apply_completed",
+                    f"Easy Apply completed for {job.job_title}",
+                    job_title=job.job_title,
+                    company_name=job.company_name,
+                    url=job.url,
+                )
                 return "success", cover_letter
 
             result = await self._submit_application()
+            if result:
+                emit_event(
+                    "easy_apply_completed",
+                    f"Easy Apply completed for {job.job_title}",
+                    job_title=job.job_title,
+                    company_name=job.company_name,
+                    url=job.url,
+                )
             return ("success" if result else "error"), cover_letter
 
+        except StopRequested:
+            raise
         except NoInfoException as e:
             logger.warning(f"Could not apply to {job.job_title} at {job.company_name}. Reason: {e}")
             return (
@@ -125,6 +151,7 @@ class IndeedEasyApplier(BaseEasyApplier):
             )
         except Exception as e:
             logger.error(f"Error applying to Indeed job {job.job_title}: {e}", exc_info=True)
+            await capture_page_screenshot(self.page, "easy-apply-error")
             await debug_capture(self.page, "indeed_job_easy_apply_error")
             try:
                 await self._discard_application()
