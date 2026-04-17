@@ -9,6 +9,7 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
 from config.logger_config import logger
+from src.dashboard.runtime import StopRequested, capture_page_screenshot, emit_event
 from src.job_manager.easy_applier import BaseEasyApplier, NoInfoException
 from src.job_manager.resume_anonymizer import ResumeAnonymizer
 from src.llm.llm_manager import GPTAnswerer
@@ -84,6 +85,13 @@ class LinkedInEasyApplier(BaseEasyApplier):
         :return: None
         """
         logger.info(f"Applying to job: {job.job_title} at {job.company_name}")
+        emit_event(
+            "easy_apply_started",
+            f"Easy Apply started for {job.job_title}",
+            job_title=job.job_title,
+            company_name=job.company_name,
+            url=job.url,
+        )
 
         # Check for Easy Apply daily limit before attempting to apply
         if await self._check_easy_apply_limit():
@@ -92,6 +100,8 @@ class LinkedInEasyApplier(BaseEasyApplier):
 
         try:
             return await self.job_easy_apply(job)
+        except StopRequested:
+            raise
         except Exception as e:
             logger.error(f"Failed to apply to job: {job.job_title} at {job.url}, error: {str(e)}")
             await debug_capture(self.page, "apply_to_job_error")
@@ -128,8 +138,16 @@ class LinkedInEasyApplier(BaseEasyApplier):
 
             logger.info("Filling out application form")
             await async_pause(2, 3)
+            await capture_page_screenshot(self.page, "easy-apply-opened")
             await self._fill_application_form(job)
             logger.info(f"Successfully applied to job: {job.job_title}")
+            emit_event(
+                "easy_apply_completed",
+                f"Easy Apply completed for {job.job_title}",
+                job_title=job.job_title,
+                company_name=job.company_name,
+                url=job.url,
+            )
             return "Success", ""
 
         except NoInfoException as e:
@@ -138,10 +156,13 @@ class LinkedInEasyApplier(BaseEasyApplier):
                 "Skip",
                 f"Could not apply to {job.job_title} at {job.company_name}. Reason: {e}",
             )
+        except StopRequested:
+            raise
         except Exception:
             tb_str = traceback.format_exc()
             logger.error(f"Failed to apply to job: {job.job_title} at {job.url}, error: {tb_str}")
             await debug_capture(self.page, "job_easy_apply_error")
+            await capture_page_screenshot(self.page, "easy-apply-error")
             try:
                 await self._save_job_application_process()
             except Exception as e:
@@ -1014,8 +1035,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
                 question_text = ""
 
             # Extract options text from radio buttons and their labels
-            options = await section.locator(",".join(radio_selectors)).evaluate_all(
-                """els => {
+            options = await section.locator(",".join(radio_selectors)).evaluate_all("""els => {
                     const seen = new Set();
                     return els.reduce((acc, e) => {
                         if (e.id && !seen.has(e.id)) {
@@ -1026,8 +1046,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
                         }
                         return acc;
                     }, []);
-                }"""
-            )
+                }""")
             options = list(dict.fromkeys(options))
 
             if not options:

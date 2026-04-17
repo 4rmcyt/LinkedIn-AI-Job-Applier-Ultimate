@@ -17,6 +17,7 @@ from config.app_config import (
 )
 from config.constants import COVER_LETTER_DIR, OUTPUT_DIR_LINKEDIN, RESUME_DIR, SEARCH_CONFIG_FILE
 from config.logger_config import logger
+from src.dashboard.runtime import StopRequested, emit_event
 from src.job_manager.job_manager import BaseJobManager
 from src.job_manager.linkedin.easy_applier_linkedin import LinkedInEasyApplier
 from src.pydantic_models.job_models import Job
@@ -53,13 +54,16 @@ class LinkedInJobManager(BaseJobManager):
         self.llm_agent_component = None
         self.resume_generator_manager = None
         self.pause_checker = None
-        self.jobs_no_info = []  # vacancies to which applications were not sent due to missing information
+        self.jobs_no_info = (
+            []
+        )  # vacancies to which applications were not sent due to missing information
         self.job_key_skills = []  # key skills according to employer's opinion
         self.interesting_jobs = []
         self.page_num = 0
         self.resume_vac_page_num = -1  # number of pages with vacancies similar to resume
         self.error_num = 0
         self.total_applies_num = 0
+        self.total_discovered_jobs = 0
         self.resume_recommendations = ""
 
         logger.info("LinkedInJobManager successfully initialized")
@@ -120,6 +124,14 @@ class LinkedInJobManager(BaseJobManager):
             logger.info(
                 f"Successfully parsed {len(vacancies)} job vacancies from page {self.page_num}"
             )
+            self.total_discovered_jobs += len(vacancies)
+            emit_event(
+                "jobs_discovered",
+                f"Found {len(vacancies)} jobs on page {self.page_num}",
+                count=len(vacancies),
+                total_discovered=self.total_discovered_jobs,
+                page_num=self.page_num,
+            )
 
         except Exception as e:
             logger.error(f"Error parsing job vacancies from page {self.page_num}: {e}")
@@ -165,6 +177,8 @@ class LinkedInJobManager(BaseJobManager):
                     if result == "Limit":
                         logger.warning("Maximum number of applications reached")
                         break
+                except StopRequested:
+                    raise
                 except Exception:
                     tb_str = traceback.format_exc()
                     logger.error(f"Unknown error on the page: {url}\n{tb_str}")
@@ -373,6 +387,14 @@ class LinkedInJobManager(BaseJobManager):
             logger.info(f"Total number of successful applications: {self.total_applies_num}")
         if result != "Limit":
             self._save_company(job, apply_result, vacancy)
+        emit_event(
+            "job_result",
+            f"Job result: {result}",
+            result=result.lower(),
+            job_title=job.job_title,
+            company_name=job.company_name,
+            url=job.url,
+        )
         # if the page was processed faster than the minimum time -
         # wait until this time is over
         time_left = int(minimum_job_time - time.time())
@@ -774,6 +796,7 @@ class LinkedInJobManager(BaseJobManager):
         """Go to the next page using framework-agnostic methods (async)"""
         self.page_num += 1
         logger.info(f"Going to the page {self.page_num}")
+        emit_event("page_changed", f"Moving to page {self.page_num}", page_num=self.page_num)
 
         # Try multiple selectors for next page button
         next_page_selectors = [

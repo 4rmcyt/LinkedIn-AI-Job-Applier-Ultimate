@@ -7,7 +7,8 @@ from typing import Any, Dict, List
 
 import yaml
 
-from config.constants import LAST_RUN_FILE, LOG_DIR, OUTPUT_DIR, SEARCH_CONFIG_FILE
+from config.app_config import JOB_SITE
+from config.constants import LOG_DIR, OUTPUT_DIR_INDEED, OUTPUT_DIR_LINKEDIN, SEARCH_CONFIG_FILE
 from src.dashboard.runtime import (
     CONTROL_FILE,
     EVENTS_FILE,
@@ -23,7 +24,9 @@ from src.dashboard.runtime import (
 )
 from src.pydantic_models.config_models import SearchConfig
 
+OUTPUT_DIR = OUTPUT_DIR_LINKEDIN if JOB_SITE == "linkedin" else OUTPUT_DIR_INDEED
 APP_CONFIG_FILE = ROOT_DIR / "config" / "app_config.py"
+LAST_RUN_FILE = ROOT_DIR / OUTPUT_DIR / "last_run.yaml"
 SUCCESS_FILE = ROOT_DIR / OUTPUT_DIR / "success.yaml"
 SKIPPED_FILE = ROOT_DIR / OUTPUT_DIR / "skipped.yaml"
 FAILED_FILE = ROOT_DIR / OUTPUT_DIR / "failed.yaml"

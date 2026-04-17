@@ -3,15 +3,15 @@ import os
 import signal
 import subprocess
 import threading
-from shutil import copyfile
 from datetime import datetime
 from pathlib import Path
+from shutil import copyfile
 from typing import Any, Dict, List, Tuple
 
-from config.constants import LOG_DIR, OUTPUT_DIR
+from config.constants import LOG_DIR
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-DASHBOARD_DIR = ROOT_DIR / OUTPUT_DIR / "dashboard"
+DASHBOARD_DIR = ROOT_DIR / "data" / "output" / "dashboard"
 SCREENSHOT_DIR = DASHBOARD_DIR / "screenshots"
 EVENTS_FILE = DASHBOARD_DIR / "events.jsonl"
 SNAPSHOT_FILE = DASHBOARD_DIR / "snapshot.json"
