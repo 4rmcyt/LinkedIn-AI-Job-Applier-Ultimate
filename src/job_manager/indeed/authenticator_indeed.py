@@ -12,7 +12,7 @@ class IndeedAuthenticator(BaseAuthenticator):
     """Class for Indeed login and session management"""
 
     INDEED_LOGIN_URL = "https://secure.indeed.com/account/login"
-    INDEED_HOME_URL = "https://www.indeed.com"
+    INDEED_HOME_URL = "https://www.indeed.com/?lang=en"
 
     def __init__(self, page: Union[Page, any] = None):
         super().__init__(page)

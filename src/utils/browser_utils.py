@@ -72,10 +72,29 @@ async def create_playwright_browser() -> tuple[Browser, BrowserContext, Page]:
         viewport = {"width": 1920, "height": 1080}
         storage_state = BROWSER_STORAGE_STATE if os.path.exists(BROWSER_STORAGE_STATE) else None
 
+        args = [
+            "--window-position=0,0",
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--ignore-certificate-errors",
+            "--disable-extensions",
+            "--disable-gpu",
+            "--disable-background-timer-throttling",
+            "--disable-backgrounding-occluded-windows",
+            "--disable-translate",
+            "--disable-popup-blocking",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-logging",
+            "--disable-autofill",
+            "--disable-plugins",
+            "--disable-blink-features=AutomationControlled",
+        ]
+
         playwright = await async_playwright().start()
         browser = await playwright.chromium.launch(
             headless=HEADLESS_MODE,
-            args=["--window-size=1920,1080"],
+            args=args,
         )
 
         context = await browser.new_context(

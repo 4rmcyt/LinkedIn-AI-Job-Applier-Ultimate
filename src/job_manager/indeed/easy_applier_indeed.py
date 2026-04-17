@@ -997,17 +997,7 @@ if __name__ == "__main__":
         logger.info("Starting IndeedEasyApplier test...")
 
         # Test job URL
-        job_url = "https://www.indeed.com/viewjob?jk=ac6392b428869158"
-        # job_url = (
-        #     "https://www.indeed.com/viewjob?jk=5d8d545b93be6f7f&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
-        # )
-        # job_url = (
-        #     "https://www.indeed.com/viewjob?jk=f50b368946d1affe&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
-        # )
-        # job_url = "https://www.indeed.com/viewjob?jk=db5d6bbd822a8a89&from=serp&vjs=3"
-        # job_url = (
-        #     "https://www.indeed.com/viewjob?jk=0cc1bcc48e791a51&tk=1jlgv2qrp21cc009&from=serp&vjs=3"
-        # )
+        job_url = "https://www.indeed.com/viewjob?jk=055897b5ebe32974"
 
         # Initialize Playwright browser
         try:
