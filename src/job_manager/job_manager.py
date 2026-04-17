@@ -259,6 +259,28 @@ class BaseJobManager(ABC):
             return True
         return False
 
+    def _match_seen_jobs(self, job: Job, companies: dict) -> Tuple[bool, str]:
+        """Check if job matches any seen job in the given companies dictionary"""
+        company_name = job.company_name
+        job_title = job.job_title
+        for comp in companies:
+            if sanitize_text(company_name) == sanitize_text(comp):
+                if self.apply_once_at_company and COLLECT_INFO_MODE is False:
+                    logger.warning(
+                        "The company has already been encountered and the setting is not to apply "
+                        "again to the same company, skipping"
+                    )
+                    return (
+                        True,
+                        "The company has already been encountered and the setting is not to apply "
+                        "again to the same company",
+                    )
+                for job_info in companies[comp]:
+                    if job_title == job_info["job_title"]:
+                        logger.warning("The vacancy has already been encountered, skipping")
+                        return True, "The vacancy has already been encountered"
+        return False, ""
+
     def _job_is_already_seen(self, job: Job) -> Tuple[bool, str]:
         """Check if we have already applied to this vacancy"""
         company_name = job.company_name
@@ -270,23 +292,14 @@ class BaseJobManager(ABC):
                     logger.warning("The vacancy has already been encountered, skipping")
                     return True, "The vacancy has already been encountered"
         else:
-            my_companies = self.success_companies
-            for comp in my_companies:
-                if sanitize_text(company_name) == sanitize_text(comp):
-                    if self.apply_once_at_company and COLLECT_INFO_MODE is False:
-                        logger.warning(
-                            "The company has already been encountered and the setting is not to apply "
-                            "again to the same company, skipping"
-                        )
-                        return (
-                            True,
-                            "The company has already been encountered and the setting is not to apply "
-                            "again to the same company",
-                        )
-                    for job_info in my_companies[comp]:
-                        if job_title == job_info["job_title"]:
-                            logger.warning("The vacancy has already been encountered, skipping")
-                            return True, "The vacancy has already been encountered"
+            for companies in (
+                self.success_companies,
+                self.skipped_companies,
+                self.failed_companies,
+            ):
+                is_seen, reason = self._match_seen_jobs(job, companies)
+                if is_seen:
+                    return True, reason
         return False, ""
 
     def _check_the_previous_apply_number(self) -> int:

@@ -54,7 +54,9 @@ class LinkedInJobManager(BaseJobManager):
         self.llm_agent_component = None
         self.resume_generator_manager = None
         self.pause_checker = None
-        self.jobs_no_info = []  # vacancies to which applications were not sent due to missing information
+        self.jobs_no_info = (
+            []
+        )  # vacancies to which applications were not sent due to missing information
         self.job_key_skills = []  # key skills according to employer's opinion
         self.interesting_jobs = []
         self.page_num = 0
@@ -196,7 +198,9 @@ class LinkedInJobManager(BaseJobManager):
             if result == "Limit" or result == "Error":
                 break
             # go to the next page
-            await self._go_to_next_page()
+            if not await self._go_to_next_page():
+                logger.info("No further result pages available")
+                break
         logger.info(f"Applications sent: {self.success_applies_num}")
         logger.info("Ending the work.")
         await self.send_report(result)
@@ -793,14 +797,16 @@ class LinkedInJobManager(BaseJobManager):
         logger.warning("No apply button found")
         return ""
 
-    async def _go_to_next_page(self) -> None:
+    async def _go_to_next_page(self) -> bool:
         """Go to the next page using framework-agnostic methods (async)"""
-        self.page_num += 1
-        logger.info(f"Going to the page {self.page_num}")
-        emit_event("page_changed", f"Moving to page {self.page_num}", page_num=self.page_num)
+        target_page = self.page_num + 1
+        logger.info(f"Going to the page {target_page}")
+        emit_event("page_changed", f"Moving to page {target_page}", page_num=target_page)
 
         # Try multiple selectors for next page button
         next_page_selectors = [
+            f"//button[@aria-label='Page {target_page}']",
+            f"//button[contains(@aria-label, 'Page {target_page}')]",
             "//button[contains(@aria-label, 'next')]",
             "//button[contains(@aria-label, 'Next')]",
             "button[aria-label*='Next']",
@@ -833,8 +839,11 @@ class LinkedInJobManager(BaseJobManager):
 
         if not page_clicked:
             logger.warning("Could not find or click next page button")
+            return False
 
+        self.page_num = target_page
         await async_pause(2, 3)
+        return True
 
 
 if __name__ == "__main__":
