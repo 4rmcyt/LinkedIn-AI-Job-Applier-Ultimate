@@ -167,7 +167,7 @@ async def safe_click(
             # Fall back to attached state if not visible
             await target.wait_for(state="attached", timeout=timeout)
 
-        await target.scroll_into_view_if_needed()
+        await target.scroll_into_view_if_needed(timeout=500)
 
         # Human-like pause before clicking
         pause_time = random.uniform(0.1, 0.3)
@@ -196,7 +196,7 @@ async def safe_fill(
 
         if wait_for_timeout is not None:
             try:
-                await locator.wait_for(state="attached", timeout=wait_for_timeout)
+                await locator.first.wait_for(state="attached", timeout=wait_for_timeout)
             except Exception:
                 return False
 
@@ -207,38 +207,48 @@ async def safe_fill(
             await debug_capture(page, "fill_not_found")
             return False
 
-        # Select the first matched element (even if multiple)
-        target = locator.first if element_count > 1 else locator
-
         if element_count > 1:
             logger.debug(
-                f"Found {element_count} elements for selector '{selector}', using the first match"
+                f"Found {element_count} elements for selector '{selector}', trying each one"
             )
 
-        # Ensure visibility and bring into view
-        try:
-            await target.wait_for(state="visible", timeout=timeout)
-        except Exception:
-            # Fall back to attached state if not visible
-            await target.wait_for(state="attached", timeout=timeout)
+        targets = [locator.nth(i) for i in range(element_count)] if element_count > 1 else [locator]
+        fill_timeout = 2000 if element_count > 1 else timeout
 
-        await target.scroll_into_view_if_needed()
+        for i, target in enumerate(targets):
+            try:
+                try:
+                    await target.wait_for(state="visible", timeout=fill_timeout)
+                except Exception:
+                    await target.wait_for(state="attached", timeout=fill_timeout)
 
-        # Clear then fill
-        try:
-            await target.clear()
-        except Exception:
-            pass
+                await target.scroll_into_view_if_needed(timeout=500)
 
-        await async_pause(1, 2)
+                try:
+                    await target.clear()
+                except Exception:
+                    pass
 
-        await target.fill(text)
+                await async_pause(1, 2)
 
-        if "password" in selector:
-            logger.debug(f"Successfully filled '{selector}'")
-        else:
-            logger.debug(f"Successfully filled '{selector}' with text {text}")
-        return True
+                await target.fill(text)
+
+                if "password" in selector:
+                    logger.debug(
+                        f"Successfully filled '{selector}'"
+                        + (f" (element {i})" if element_count > 1 else "")
+                    )
+                else:
+                    logger.debug(
+                        f"Successfully filled '{selector}' with text {text}"
+                        + (f" (element {i})" if element_count > 1 else "")
+                    )
+                return True
+            except Exception as e:
+                if element_count > 1:
+                    logger.debug(f"Element {i} not fillable for '{selector}': {e}, trying next")
+                    continue
+                raise
 
     except Exception as e:
         logger.warning(f"Failed to fill element '{selector}': {e}")

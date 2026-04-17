@@ -8,9 +8,8 @@ from threading import Lock
 
 import dotenv
 
-# TODO: Make window size 1920x1080 always
+# TODO: Fix shrinking browser when new window is opened first time
 
-# TODO: Make sure that LinkedIn still works
 # TODO: Check COLLECT_INFO_MODE for LinkedIn
 # TODO: Check COLLECT_INFO_MODE for Indeed
 

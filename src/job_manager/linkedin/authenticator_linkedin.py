@@ -5,7 +5,7 @@ from playwright.sync_api import Page
 
 from config.logger_config import logger
 from src.job_manager.authenticator import BaseAuthenticator
-from src.utils.browser_utils import find_element_safely, safe_click, safe_fill
+from src.utils.browser_utils import debug_capture, find_element_safely, safe_fill
 from src.utils.utils import async_pause
 
 
@@ -71,32 +71,47 @@ class LinkedInAuthenticator(BaseAuthenticator):
                 return await self.check_login_success()
 
             # If saved account chooser is not shown, fall back to the classic login form.
-            if not await safe_fill(self.page, "#username", self.email):
+            email_selectors = [
+                "input[autocomplete='webauthn']",
+                "#username",
+            ]
+            filled_email = False
+            for sel in email_selectors:
+                if await safe_fill(self.page, sel, self.email):
+                    filled_email = True
+                    break
+            if not filled_email:
                 logger.error("Failed to fill email field")
+                await debug_capture(self.page, "email_field_not_found")
                 return False
             logger.info("Email entered")
 
             # Wait for and fill password field
-            if not await safe_fill(self.page, "#password", self.password):
+            password_selectors = [
+                "input[autocomplete='current-password']",
+                "#password",
+            ]
+            filled_password = False
+            for sel in password_selectors:
+                if await safe_fill(self.page, sel, self.password):
+                    filled_password = True
+                    break
+            if not filled_password:
                 logger.error("Failed to fill password field")
+                await debug_capture(self.page, "password_field_not_found")
                 return False
             logger.info("Password entered")
 
             await async_pause(1, 2)
 
             # Click login button with multiple selectors
-            login_selectors = [
-                "button[type='submit']",
-                "button[data-id='sign-in-form__submit-btn']",
-                ".btn__primary--large",
-            ]
-
-            for selector in login_selectors:
-                if await safe_click(self.page, selector, timeout=10000):
-                    logger.info(f"Login button clicked using selector: {selector}")
-                    break
-            else:
-                logger.error("Could not find or click login button")
+            try:
+                selector = "button:text-is('Sign in')"
+                locator = self.page.get_by_role("button", name="Sign in", exact=True)
+                await locator.click(timeout=5000)
+                logger.info(f"Login button clicked using selector: {selector}")
+            except Exception as e:
+                logger.error(f"Could not find or click login button: {e}")
                 return False
 
             # Wait for login to complete
