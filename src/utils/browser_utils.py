@@ -6,9 +6,12 @@ import re
 import time
 from typing import Any, List, Optional
 
-from patchright.async_api import Browser, BrowserContext, Page, async_playwright
+from config.app_config import HEADLESS_MODE, JOB_SITE
 
-from config.app_config import HEADLESS_MODE
+if JOB_SITE == "indeed":
+    from patchright.async_api import Browser, BrowserContext, Page, async_playwright
+else:
+    from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 from config.constants import BROWSER_STORAGE_STATE, DEBUG_DIR
 from config.logger_config import logger
 
