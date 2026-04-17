@@ -54,9 +54,7 @@ class LinkedInJobManager(BaseJobManager):
         self.llm_agent_component = None
         self.resume_generator_manager = None
         self.pause_checker = None
-        self.jobs_no_info = (
-            []
-        )  # vacancies to which applications were not sent due to missing information
+        self.jobs_no_info = []  # vacancies to which applications were not sent due to missing information
         self.job_key_skills = []  # key skills according to employer's opinion
         self.interesting_jobs = []
         self.page_num = 0
@@ -274,6 +272,9 @@ class LinkedInJobManager(BaseJobManager):
                     job_is_interesting = True
                     score = 0
                     reasoning = "Monkey mode"
+                    logger.info(
+                        "Monkey mode is enabled and Collect info mode is disabled, applying to all vacancies"
+                    )
                 else:
                     (
                         job_is_interesting,

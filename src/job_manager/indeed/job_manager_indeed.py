@@ -246,6 +246,9 @@ class IndeedJobManager(BaseJobManager):
                 if MONKEY_MODE is True and COLLECT_INFO_MODE is False:
                     job_is_interesting = True
                     score, reasoning = 0, "Monkey mode"
+                    logger.info(
+                        "Monkey mode is enabled and Collect info mode is disabled, applying to all vacancies"
+                    )
                 else:
                     interest_result = self.llm_answerer_component.job_is_interesting(
                         job.model_dump()

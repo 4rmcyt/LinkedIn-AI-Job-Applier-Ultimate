@@ -55,12 +55,7 @@ from src.resume_builder.resume_manager import ResumeManager
 from src.resume_builder.style_manager import StyleManager
 from src.utils.browser_utils import create_playwright_browser, save_browser_session, stop_tracing
 from src.utils.runtime_control import (
-    BrowserClosedError,
-    GracefulShutdownRequested,
-    attach_browser_close_watchers,
-    countdown_before_restart,
     register_shutdown_handlers,
-    run_with_runtime_guards,
     runtime_controller,
     sleep_with_shutdown,
 )
@@ -250,7 +245,6 @@ async def create_and_run_bot(
     try:
         browser, context, page = await create_playwright_browser()
         # Local runtime patch: detect manual browser closure and recover cleanly.
-        browser_closed = attach_browser_close_watchers(browser, context, page)
         logger.info("Playwright browser initialized successfully")
         emit_event("browser_initialized", "Playwright browser initialized")
 
@@ -388,7 +382,6 @@ def main() -> None:
 
     while True:
         should_exit = False
-        should_restart = False
         try:
             # create output folder if it doesn't exist
             data = Path("data")
