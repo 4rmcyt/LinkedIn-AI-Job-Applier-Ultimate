@@ -8,12 +8,14 @@ from threading import Lock
 
 import dotenv
 
-# TODO: Fix shrinking browser when new window is opened first time
+# TODO: Fix incorrect easy apply for Indeed
+# TODO: Fix incorrect easy apply for LinkedIn
 
 # TODO: Check COLLECT_INFO_MODE for LinkedIn
 # TODO: Check COLLECT_INFO_MODE for Indeed
 
 # TODO: Install project from scratch and then try to apply
+
 
 # TODO: EASY_APPLY_ONLY_MODE = False for Indeed
 # TODO: EASY_APPLY_ONLY_MODE = False for LinkedIn
