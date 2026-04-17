@@ -585,12 +585,8 @@ class EasyApplier:
                 # Mark this file input as processed before generating files
                 processed_file_inputs.add(file_input_id)
 
-                # output = self.gpt_answerer.resume_or_cover(container_text)
                 if "resume" in container_text:
                     logger.info("Uploading resume")
-                    # if await self._detect_already_selected_resume(parent):
-                    #     logger.info("There is already selected resume, skipping upload")
-                    #     continue
                     if (
                         self.ready_made_resume_path is not None
                         and self.ready_made_resume_path.resolve().is_file()
@@ -992,6 +988,10 @@ class EasyApplier:
                 # Look for existing answer if it's not a cover letter field
                 existing_answer = None
                 current_question_sanitized = sanitize_text(question_text)
+                checkbox_options = [
+                    self.resume_anonymizer.anonymize_text(opt) for opt in checkbox_options
+                ]
+
                 for item in self.all_questions:
                     if (
                         item.question == current_question_sanitized
@@ -1007,6 +1007,9 @@ class EasyApplier:
                     selected_options = self.gpt_answerer.select_many_answers_from_options(
                         question_text, checkbox_options, self.previous_question_texts[:-1]
                     )
+                    selected_options = [
+                        self.resume_anonymizer.deanonymize_text(opt) for opt in selected_options
+                    ]
                     question_data = Question(
                         question_type="checkbox", question=question_text, answer=selected_options
                     )
@@ -1140,6 +1143,7 @@ class EasyApplier:
 
             # Remove duplicates while preserving order
             options = list(dict.fromkeys(options))
+            options = [self.resume_anonymizer.anonymize_text(opt) for opt in options]
 
             existing_answer = None
             current_question_sanitized = sanitize_text(question_text)
@@ -1160,6 +1164,7 @@ class EasyApplier:
             )
             if answer.lower().startswith("no info"):
                 raise NoInfoException(f"No info found for question: {question_text}")
+            answer = self.resume_anonymizer.deanonymize_text(answer)
             question_data = Question(question_type="radio", question=question_text, answer=answer)
             self._save_questions(question_data)
             self.all_questions = self._load_questions()
@@ -1345,6 +1350,7 @@ class EasyApplier:
                         for opt in options_elements
                         if (await opt.text_content() or "").strip()
                     ]
+                    options = [self.resume_anonymizer.anonymize_text(opt) for opt in options]
                 except Exception:
                     options = []
 
@@ -1401,6 +1407,7 @@ class EasyApplier:
                     )
                     if answer.lower().startswith("no info"):
                         raise NoInfoException(f"No info found for question: {question_text}")
+                    answer = self.resume_anonymizer.deanonymize_text(answer)
                     question_data = Question(
                         question_type="dropdown", question=question_text, answer=answer
                     )
@@ -1842,7 +1849,7 @@ if __name__ == "__main__":
         logger.info("Starting EasyApplier test...")
 
         # Test job URL
-        job_url = "https://www.linkedin.com/jobs/view/4356663414"
+        job_url = "https://www.linkedin.com/jobs/view/4399548757"
         # Initialize Playwright browser
         try:
             browser, context, page = await create_playwright_browser()
