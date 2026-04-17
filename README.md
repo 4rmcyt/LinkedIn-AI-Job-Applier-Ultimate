@@ -21,8 +21,11 @@ Indeed support is functional but has important limitations compared to LinkedIn:
 
 - **Most jobs are not Easy Apply.** The vast majority of Indeed listings redirect to external company websites, which the bot cannot reliably handle.
 - **CAPTCHAs are frequent.** Indeed aggressively deploys CAPTCHAs that interrupt automated flows, even with bot-detection bypass techniques.
+- **Sometimes Indeed is sloooow.** It can take a lot of time to apply for a job on Indeed for some users because sometimes it takes a lot of time for Indeed pages to load.
 
 For these reasons, **LinkedIn is strongly recommended** over Indeed for automated job applications. Indeed support may improve in the future, but currently it is not well-suited for automation.
+
+But if you're planning to use Indeed for searching jobs without auto-applying - it's a great site. You can use it for searching suitable jobs and then apply for them manually.
 
 ### LinkedIn AI Job Applier Chat 👇
 

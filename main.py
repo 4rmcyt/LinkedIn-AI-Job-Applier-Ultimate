@@ -10,9 +10,6 @@ import dotenv
 
 # TODO: Make window size 1920x1080 always
 
-# TODO: Add to README more info about why Indeed sucks when it comes to applying
-# TODO: But when you just gather information about jobs, Indeed is fine
-
 # TODO: Make sure that LinkedIn still works
 # TODO: Check COLLECT_INFO_MODE for LinkedIn
 # TODO: Check COLLECT_INFO_MODE for Indeed

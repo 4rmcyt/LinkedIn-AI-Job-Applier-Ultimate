@@ -55,11 +55,6 @@ def ensure_playwright_profile() -> str:
     return session_dir
 
 
-_VIEWPORTS = [
-    {"width": 1920, "height": 1080},
-]
-
-
 async def create_playwright_browser() -> tuple[Browser, BrowserContext, Page]:
     """Create Playwright browser, context and page asynchronously (PRIMARY METHOD)
 
@@ -71,12 +66,13 @@ async def create_playwright_browser() -> tuple[Browser, BrowserContext, Page]:
 
     try:
         ensure_playwright_profile()
-        viewport = random.choice(_VIEWPORTS)
+        viewport = {"width": 1920, "height": 1080}
         storage_state = BROWSER_STORAGE_STATE if os.path.exists(BROWSER_STORAGE_STATE) else None
 
         playwright = await async_playwright().start()
         browser = await playwright.chromium.launch(
             headless=HEADLESS_MODE,
+            args=["--window-size=1920,1080"],
         )
 
         context = await browser.new_context(
@@ -89,6 +85,11 @@ async def create_playwright_browser() -> tuple[Browser, BrowserContext, Page]:
         )
 
         page = await context.new_page()
+
+        context.on(
+            "page",
+            lambda p: asyncio.ensure_future(p.set_viewport_size(viewport)),
+        )
 
         if DEBUG_MODE:
             await context.tracing.start(screenshots=True, snapshots=True, sources=True)
@@ -489,13 +490,15 @@ async def is_scrollable(element) -> bool:
             return False
 
         # Use JavaScript to get scroll properties directly from DOM
-        is_scrollable_result = await locator.evaluate("""
+        is_scrollable_result = await locator.evaluate(
+            """
             (element) => {
                 const verticalScrollable = element.scrollHeight > element.clientHeight;
                 const horizontalScrollable = element.scrollWidth > element.clientWidth;
                 return verticalScrollable || horizontalScrollable;
             }
-        """)
+        """
+        )
 
         return bool(is_scrollable_result)
 
@@ -594,9 +597,11 @@ async def HTML_to_PDF(FilePath):
         logger.info(f"Page loaded: {file_url}")
 
         # Wait for fonts to load
-        await page.evaluate("""
+        await page.evaluate(
+            """
             () => document.fonts.ready
-        """)
+        """
+        )
 
         # Additional wait to ensure all styles are applied
         await asyncio.sleep(1)
