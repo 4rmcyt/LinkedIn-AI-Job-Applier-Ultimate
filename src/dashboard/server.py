@@ -2,7 +2,7 @@ import asyncio
 import json
 from typing import Any, Dict
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -192,7 +192,9 @@ async def screenshot_file(path: str = Query(...)):
 
 
 @app.get("/api/events/stream")
-async def stream_events(run_id: str | None = Query(default=None)) -> StreamingResponse:
+async def stream_events(
+    request: Request, run_id: str | None = Query(default=None)
+) -> StreamingResponse:
     async def event_generator():
         initial = get_live_state()
         if run_id:
@@ -204,13 +206,19 @@ async def stream_events(run_id: str | None = Query(default=None)) -> StreamingRe
         yield f"event: snapshot\ndata: {JSONResponse(content=initial).body.decode('utf-8')}\n\n"
 
         position = latest_event_position()
-        while True:
-            if run_id:
-                events, position = read_events_since_for_run(position, run_id)
-            else:
-                events, position = read_events_since(position)
-            for event in events:
-                yield f"event: message\ndata: {JSONResponse(content=event).body.decode('utf-8')}\n\n"
-            await asyncio.sleep(1)
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+
+                if run_id:
+                    events, position = read_events_since_for_run(position, run_id)
+                else:
+                    events, position = read_events_since(position)
+                for event in events:
+                    yield f"event: message\ndata: {JSONResponse(content=event).body.decode('utf-8')}\n\n"
+                await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            return
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

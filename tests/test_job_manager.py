@@ -886,6 +886,46 @@ class TestGetApplyResult:
             assert result == "Limit"
 
 
+class TestApplyModeDetection:
+    """Test external apply vs Easy Apply detection"""
+
+    @pytest.mark.asyncio
+    async def test_check_apply_button_prefers_external_apply_link(self, job_applier):
+        """Test external apply links are detected from company website CTAs"""
+        button = AsyncMock()
+
+        with (
+            patch(
+                "src.job_manager.job_manager.find_elements_safely", new_callable=AsyncMock
+            ) as mock_find_elements,
+            patch.object(job_applier, "_get_button_link", new_callable=AsyncMock) as mock_get_link,
+        ):
+            mock_find_elements.side_effect = [[button]]
+            mock_get_link.return_value = "https://external.example/apply"
+
+            result = await job_applier._check_apply_button()
+
+            assert result == "https://external.example/apply"
+
+    @pytest.mark.asyncio
+    async def test_easy_apply_skips_external_apply_jobs(self, job_applier):
+        """Test Easy Apply path skips jobs that are handled off LinkedIn"""
+        job = Job(
+            job_title="Vice President – Integration & API Platforms",
+            company_name="Al Ghurair",
+            url="https://www.linkedin.com/jobs/view/4359175355",
+        )
+        job_applier.easy_applier_component = AsyncMock()
+
+        with patch.object(job_applier, "_check_apply_button", new_callable=AsyncMock) as mock_check:
+            mock_check.return_value = "https://external.example/apply"
+
+            result = await job_applier.easy_apply(job)
+
+            assert result == ("Skip", "Job uses external apply flow, not LinkedIn Easy Apply")
+            job_applier.easy_applier_component.apply_to_job.assert_not_called()
+
+
 class TestExtractSkillsFromVacancy:
     """Test skills extraction from vacancy"""
 

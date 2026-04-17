@@ -247,8 +247,12 @@ def test_event_stream_sends_initial_snapshot(monkeypatch):
         "src.dashboard.server.read_events_since_for_run", lambda position, run_id: ([], position)
     )
 
+    class MockRequest:
+        async def is_disconnected(self):
+            return False
+
     async def read_first_chunk():
-        response = await server.stream_events(run_id="run-1")
+        response = await server.stream_events(MockRequest(), run_id="run-1")
         first_chunk = await response.body_iterator.__anext__()
         await response.body_iterator.aclose()
         return first_chunk
@@ -257,3 +261,37 @@ def test_event_stream_sends_initial_snapshot(monkeypatch):
 
     assert "event: snapshot" in first_chunk
     assert '"selected_run_id":"run-1"' in first_chunk
+
+
+def test_event_stream_stops_when_client_disconnects(monkeypatch):
+    monkeypatch.setattr(
+        "src.dashboard.server.get_live_state",
+        lambda: {"snapshot": {"run_status": "running"}, "events": []},
+    )
+    monkeypatch.setattr("src.dashboard.server.latest_event_position", lambda: 0)
+    monkeypatch.setattr("src.dashboard.server.read_events_since", lambda position: ([], position))
+
+    async def fake_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr("src.dashboard.server.asyncio.sleep", fake_sleep)
+
+    class DisconnectingRequest:
+        def __init__(self):
+            self.calls = 0
+
+        async def is_disconnected(self):
+            self.calls += 1
+            return self.calls > 1
+
+    async def consume_stream():
+        response = await server.stream_events(DisconnectingRequest(), run_id=None)
+        chunks = []
+        async for chunk in response.body_iterator:
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(consume_stream())
+
+    assert len(chunks) == 1
+    assert "event: snapshot" in chunks[0]

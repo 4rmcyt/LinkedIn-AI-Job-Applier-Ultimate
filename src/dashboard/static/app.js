@@ -115,6 +115,7 @@ function renderJobs(jobs) {
     .map((job, index) => `
       <tr class="job-row" data-job-index="${index}">
         <td><span class="badge" data-status="${job.status}">${job.status}</span></td>
+        <td>${job.executed_at || job.updated_at || "-"}</td>
         <td><a href="${job.url || "#"}" target="_blank" rel="noreferrer">${job.job_title || "Unknown job"}</a></td>
         <td>${job.company_name || "-"}</td>
         <td>${job.interest_score ?? "-"}</td>
@@ -151,6 +152,7 @@ function renderJobDetails(job) {
     </div>
     <dl class="detail-grid">
       <div><dt>URL</dt><dd>${job.url ? `<a href="${job.url}" target="_blank" rel="noreferrer">Open posting</a>` : "-"}</dd></div>
+      <div><dt>Executed At</dt><dd>${job.executed_at || job.updated_at || "-"}</dd></div>
       <div><dt>Interest Score</dt><dd>${job.interest_score ?? "-"}</dd></div>
       <div><dt>Skip Reason</dt><dd>${job.skip_reason || "-"}</dd></div>
       <div><dt>Interest Reason</dt><dd>${job.interest_reason || "-"}</dd></div>

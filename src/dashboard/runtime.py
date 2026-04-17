@@ -251,6 +251,11 @@ def _update_snapshot_from_event(event: Dict[str, Any]) -> None:
             "stage": payload.get("stage", event_type),
             "message": event.get("message"),
         }
+    elif event_type == "llm_call_completed":
+        current_job = snapshot.get("current_job") or {}
+        if payload.get("url") and payload.get("url") == current_job.get("url"):
+            current_job["llm_time_seconds"] = payload.get("total_job_llm_time_seconds", 0.0)
+            snapshot["current_job"] = current_job
     elif event_type == "job_evaluated":
         counters["evaluated"] = counters.get("evaluated", 0) + 1
         if payload.get("interesting"):
@@ -262,6 +267,7 @@ def _update_snapshot_from_event(event: Dict[str, Any]) -> None:
             "stage": "evaluated",
             "interesting": payload.get("interesting"),
             "score": payload.get("score"),
+            "llm_time_seconds": payload.get("llm_time_seconds", 0.0),
             "message": event.get("message"),
         }
     elif event_type == "job_result":
@@ -272,6 +278,9 @@ def _update_snapshot_from_event(event: Dict[str, Any]) -> None:
             counters["skipped"] = counters.get("skipped", 0) + 1
         elif result in {"error", "failed"}:
             counters["failed"] = counters.get("failed", 0) + 1
+        current_job = snapshot.get("current_job") or {}
+        current_job["executed_at"] = event["timestamp"]
+        snapshot["current_job"] = current_job
         snapshot["current_job"] = None
     elif event_type == "screenshot_updated":
         snapshot["latest_screenshot_at"] = event["timestamp"]

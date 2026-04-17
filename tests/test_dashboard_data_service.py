@@ -17,7 +17,15 @@ def test_get_summary_aggregates_dashboard_outputs(monkeypatch, tmp_path):
 
     _write_yaml(
         output_dir / "success.yaml",
-        {"Acme": [{"job_title": "CTO", "url": "https://linkedin.com/jobs/view/1"}]},
+        {
+            "Acme": [
+                {
+                    "job_title": "CTO",
+                    "url": "https://linkedin.com/jobs/view/1",
+                    "executed_at": "2026-04-15T10:02:00",
+                }
+            ]
+        },
     )
     _write_yaml(
         output_dir / "skipped.yaml",
@@ -27,6 +35,8 @@ def test_get_summary_aggregates_dashboard_outputs(monkeypatch, tmp_path):
                     "job_title": "VP Engineering",
                     "url": "https://linkedin.com/jobs/view/2",
                     "skip_reason": "Not interesting",
+                    "llm_time_seconds": 3.2,
+                    "executed_at": "2026-04-15T10:03:00",
                 }
             ]
         },
@@ -51,6 +61,8 @@ def test_get_summary_aggregates_dashboard_outputs(monkeypatch, tmp_path):
                 "company_name": "Delta",
                 "url": "https://linkedin.com/jobs/view/4",
                 "interest_score": 90,
+                "llm_time_seconds": 1.5,
+                "executed_at": "2026-04-15T10:04:00",
             }
         ],
     )
@@ -67,9 +79,11 @@ def test_get_summary_aggregates_dashboard_outputs(monkeypatch, tmp_path):
     logs_dir.mkdir(parents=True, exist_ok=True)
     (logs_dir / "llm_api_calls.yaml").write_text(
         "model_name: model-a\n"
+        "response_time_seconds: 1.25\n"
         "total_tokens: 100\n"
         "total_cost: 0.1\n\n"
         "model_name: model-b\n"
+        "response_time_seconds: 2.75\n"
         "total_tokens: 250\n"
         "total_cost: 0.25\n",
         encoding="utf-8",
@@ -97,6 +111,8 @@ def test_get_summary_aggregates_dashboard_outputs(monkeypatch, tmp_path):
                 "company": "Epsilon",
                 "url": "https://linkedin.com/jobs/view/5",
                 "stage": "applying",
+                "llm_time_seconds": 4.0,
+                "executed_at": "2026-04-15T10:05:00",
             },
             "counters": {
                 "discovered": 15,
@@ -127,6 +143,7 @@ def test_get_summary_aggregates_dashboard_outputs(monkeypatch, tmp_path):
     assert summary["totals"]["llm_calls"] == 2
     assert summary["totals"]["llm_total_tokens"] == 350
     assert summary["totals"]["llm_total_cost"] == 0.35
+    assert summary["totals"]["llm_total_time_seconds"] == 4.0
 
 
 def test_update_search_config_normalizes_24_hours(monkeypatch, tmp_path):
@@ -252,6 +269,19 @@ def test_get_run_jobs_builds_status_from_events(monkeypatch):
             },
             {
                 "run_id": run_id,
+                "type": "llm_call_completed",
+                "message": "LLM call completed for CTO",
+                "timestamp": "2026-04-15T10:00:30",
+                "payload": {
+                    "job_title": "CTO",
+                    "company_name": "Acme",
+                    "url": "https://linkedin.com/jobs/view/1",
+                    "response_time_seconds": 1.5,
+                    "total_job_llm_time_seconds": 1.5,
+                },
+            },
+            {
+                "run_id": run_id,
                 "type": "job_evaluated",
                 "message": "Evaluated CTO",
                 "timestamp": "2026-04-15T10:01:00",
@@ -262,6 +292,7 @@ def test_get_run_jobs_builds_status_from_events(monkeypatch):
                     "interesting": True,
                     "score": 92,
                     "reasoning": "Strong match",
+                    "llm_time_seconds": 1.5,
                 },
             },
             {
@@ -275,6 +306,7 @@ def test_get_run_jobs_builds_status_from_events(monkeypatch):
                     "url": "https://linkedin.com/jobs/view/1",
                     "result": "Success",
                     "reason": "",
+                    "llm_time_seconds": 1.5,
                 },
             },
             {
@@ -308,11 +340,47 @@ def test_get_run_jobs_builds_status_from_events(monkeypatch):
     jobs = data_service.get_run_jobs("run-55")
 
     assert len(jobs) == 2
-    assert any(job["status"] == "applied" and job["interest_score"] == 92 for job in jobs)
+    assert any(
+        job["status"] == "applied"
+        and job["interest_score"] == 92
+        and job["llm_time_seconds"] == 1.5
+        and job["executed_at"] == "2026-04-15T10:02:00"
+        for job in jobs
+    )
     assert any(
         job["status"] == "skipped" and job["skip_reason"] == "Vacancy is not interesting"
         for job in jobs
     )
+
+
+def test_get_jobs_includes_executed_at_from_saved_outputs(monkeypatch, tmp_path):
+    output_dir = tmp_path / "data" / "output"
+
+    _write_yaml(
+        output_dir / "success.yaml",
+        {
+            "Acme": [
+                {
+                    "job_title": "CTO",
+                    "url": "https://linkedin.com/jobs/view/1",
+                    "executed_at": "2026-04-15T10:02:00",
+                }
+            ]
+        },
+    )
+    _write_yaml(output_dir / "skipped.yaml", {})
+    _write_yaml(output_dir / "failed.yaml", {})
+    _write_yaml(output_dir / "interesting_jobs.yaml", [])
+
+    monkeypatch.setattr(data_service, "SUCCESS_FILE", output_dir / "success.yaml")
+    monkeypatch.setattr(data_service, "SKIPPED_FILE", output_dir / "skipped.yaml")
+    monkeypatch.setattr(data_service, "FAILED_FILE", output_dir / "failed.yaml")
+    monkeypatch.setattr(data_service, "INTERESTING_FILE", output_dir / "interesting_jobs.yaml")
+    monkeypatch.setattr(data_service, "get_snapshot", lambda: {"current_job": None})
+
+    jobs = data_service.get_jobs()
+
+    assert jobs[0]["executed_at"] == "2026-04-15T10:02:00"
 
 
 def test_get_run_detail_combines_run_jobs_and_events(monkeypatch):

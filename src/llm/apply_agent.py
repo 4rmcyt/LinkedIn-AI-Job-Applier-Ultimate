@@ -171,6 +171,7 @@ class ApplyAgent:
                 total_tokens=total_tokens,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
+                response_time_seconds=0.0,
                 total_cost=total_cost,
             )
             logger.debug(f"Log entry created: {log_entry}")

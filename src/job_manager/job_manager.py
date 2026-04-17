@@ -315,6 +315,11 @@ class JobApplier:
                 result="Error",
                 reason=str(e),
                 url=vacancy.get("url"),
+                llm_time_seconds=self.llm_answerer_component.get_job_llm_time_seconds(
+                    vacancy.get("url", "")
+                )
+                if self.llm_answerer_component
+                else 0.0,
             )
             await self._new_page.close()
             pause()
@@ -397,6 +402,9 @@ class JobApplier:
                     interesting=job_is_interesting is True,
                     score=int(score) if str(score).isdigit() else None,
                     reasoning=reasoning,
+                    llm_time_seconds=self.llm_answerer_component.get_job_llm_time_seconds(
+                        vacancy.get("url", "")
+                    ),
                 )
                 if job_is_interesting:
                     # extract skills from the vacancy
@@ -458,6 +466,13 @@ class JobApplier:
         """Apply to the vacancy using LinkedIn Easy Apply functionality (async)"""
         # set the vacancy to answerer and agent for evaluation
         try:
+            external_apply_url = await self._check_apply_button()
+            if external_apply_url:
+                logger.info(
+                    f"Job uses external apply flow, skipping Easy Apply path: {external_apply_url}"
+                )
+                return "Skip", "Job uses external apply flow, not LinkedIn Easy Apply"
+
             if COLLECT_INFO_MODE is True:
                 # if we are in the mode of collecting information for interesting jobs and skill statistics -
                 # do not apply to the vacancy, only save gathered information to files
@@ -522,6 +537,11 @@ class JobApplier:
                 job_title=job.job_title,
                 company_name=job.company_name,
                 url=vacancy.get("url"),
+                llm_time_seconds=(
+                    self.llm_answerer_component.get_job_llm_time_seconds(vacancy.get("url", ""))
+                    if self.llm_answerer_component
+                    else 0.0
+                ),
             )
         # if the page was processed faster than the minimum time -
         # wait until this time is over
@@ -967,10 +987,13 @@ class JobApplier:
         """Check if the apply button is present and return the URL of the apply button (async).
         If no apply button is found, return an empty string."""
         apply_selectors = [
-            '//a[contains(., "Apply")]',
+            "a[aria-label*='Apply on company website']",
+            "//*[contains(text(), 'Responses managed off LinkedIn')]/ancestor::*[self::div or self::section][1]//a[contains(., 'Apply')]",
+            "//a[contains(@href, '/safety/go/') and contains(., 'Apply')]",
         ]
         for selector in apply_selectors:
-            apply_buttons = await find_elements_safely(self.page, selector, "xpath")
+            selector_type = "css selector" if selector.startswith("a[") else "xpath"
+            apply_buttons = await find_elements_safely(self.page, selector, selector_type)
 
             if len(apply_buttons) > 0:
                 return await self._get_button_link(apply_buttons)
@@ -1101,6 +1124,12 @@ class JobApplier:
                 job_title=company_job_title,
                 url=vacancy["url"],
                 skip_reason=reason,
+                llm_time_seconds=(
+                    self.llm_answerer_component.get_job_llm_time_seconds(vacancy["url"])
+                    if self.llm_answerer_component
+                    else 0.0
+                ),
+                executed_at=datetime.now().isoformat(timespec="seconds"),
             )
         except Exception as e:
             logger.warning(f"Error in saving job info: {e}")
@@ -1168,6 +1197,11 @@ class JobApplier:
             interest_score=score,
             interest_reason=reasoning,
             skills=self.job_key_skills,
+            llm_time_seconds=(
+                self.llm_answerer_component.get_job_llm_time_seconds(job.url)
+                if self.llm_answerer_component
+                else 0.0
+            ),
         )
         self.interesting_jobs.append(interesting_job)
         self.interesting_jobs = sorted(

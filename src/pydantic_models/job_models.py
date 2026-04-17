@@ -240,6 +240,12 @@ class JobInfo(BaseModel):
     interest_reason: Optional[str] = Field(
         default=None, description="Reasoning for the interest score"
     )
+    llm_time_seconds: float = Field(
+        default=0.0, description="Total LLM time spent for this job in seconds"
+    )
+    executed_at: Optional[str] = Field(
+        default=None, description="When the job was processed by the bot"
+    )
 
     @field_validator("interest_score", mode="before")
     @classmethod

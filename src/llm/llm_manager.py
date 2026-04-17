@@ -1,6 +1,8 @@
 import os
 import re
 import textwrap
+import threading
+import time
 import traceback
 from abc import ABC, abstractmethod
 from collections import deque
@@ -32,6 +34,7 @@ from config.constants import LOG_DIR, RESUME_DIR, cost_per_token
 from config.logger_config import logger
 from src.pydantic_models.log_models import LLMCall
 from src.pydantic_models.prompt_models import ResumeStructure
+from src.dashboard.runtime import emit_event
 from src.utils.json_to_readable import transform_search_config_data, transform_vacancy_data
 from src.utils.utils import append_yaml_file, pause
 
@@ -268,7 +271,13 @@ class LLMLogger:
         self.calls_log = os.path.join(Path(LOG_DIR), "llm_api_calls.yaml")
         logger.info("LLMLogger successfully initialized")
 
-    def log_request(self, prompts, parsed_reply: Dict[str, Dict]) -> None:
+    def log_request(
+        self,
+        prompts,
+        parsed_reply: Dict[str, Dict],
+        response_time_seconds: float = 0.0,
+        context: Dict[str, str] | None = None,
+    ) -> None:
         """Method for logging all LLM operations"""
         logger.debug("Starting execution of log_request method")
         logger.debug("Prompts received")
@@ -345,7 +354,11 @@ class LLMLogger:
                 total_tokens=total_tokens,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
+                response_time_seconds=round(response_time_seconds, 3),
                 total_cost=total_cost,
+                job_url=(context or {}).get("job_url", ""),
+                job_title=(context or {}).get("job_title", ""),
+                company_name=(context or {}).get("company_name", ""),
             )
             logger.debug(f"Log entry created: {log_entry}")
         except KeyError as e:
@@ -364,9 +377,11 @@ class LoggerChatModel:
     possible errors such as rate limit exceeded or network errors.
     """
 
-    def __init__(self, llm: GeminiModel):
+    def __init__(self, llm: GeminiModel, context_provider=None, call_listener=None):
         self.llm = llm
         self.llm_logger = LLMLogger()
+        self.context_provider = context_provider
+        self.call_listener = call_listener
         logger.info(f"LoggerChatModel successfully initialized, LLM: {llm}")
 
     def __call__(self, messages: List[Dict[str, str]]) -> str:
@@ -378,13 +393,28 @@ class LoggerChatModel:
             try:
                 logger.info("Attempting LLM call")
 
+                started_at = time.perf_counter()
                 reply = self.llm.invoke(messages)
+                response_time_seconds = time.perf_counter() - started_at
                 logger.debug(f"Response from LLM: {reply}")
 
                 parsed_reply = self.parse_llmresult(reply)
                 logger.info(f"Successfully parsed LLM result: {parsed_reply}")
 
-                self.llm_logger.log_request(prompts=messages, parsed_reply=parsed_reply)
+                context = self.context_provider() if self.context_provider else {}
+                self.llm_logger.log_request(
+                    prompts=messages,
+                    parsed_reply=parsed_reply,
+                    response_time_seconds=response_time_seconds,
+                    context=context,
+                )
+
+                if self.call_listener:
+                    self.call_listener(
+                        response_time_seconds=response_time_seconds,
+                        parsed_reply=parsed_reply,
+                        context=context,
+                    )
 
                 return reply
 
@@ -512,8 +542,16 @@ class GPTAnswerer:
 
     def __init__(self, llm_api_key: str = None, llm_proxy: str = None, llm_api_url: str = None):
         self.job = None
+        self.job_readable = ""
+        self.current_job_context = {"job_url": "", "job_title": "", "company_name": ""}
+        self.job_llm_time_seconds: Dict[str, float] = {}
+        self._job_llm_lock = threading.Lock()
         self.ai_adapter = AIAdapter(llm_api_key, llm_proxy, llm_api_url)
-        self.llm_cheap = LoggerChatModel(self.ai_adapter)
+        self.llm_cheap = LoggerChatModel(
+            self.ai_adapter,
+            context_provider=self._get_llm_context,
+            call_listener=self._record_llm_call,
+        )
         self.resume_template_dir = Path(RESUME_DIR) / "templates"
         self.chains = {
             "parse_resume": self._create_pydantic_chain(
@@ -589,9 +627,61 @@ class GPTAnswerer:
         self.resume_structured = resume_structured
         self.resume_readable = resume_readable
 
+    def _set_current_job_context(self, job: Dict[str, Any] | None) -> None:
+        if not job:
+            self.current_job_context = {"job_url": "", "job_title": "", "company_name": ""}
+            return
+
+        job_url = str(job.get("url") or "")
+        self.current_job_context = {
+            "job_url": job_url,
+            "job_title": job.get("job_title") or job.get("title") or "",
+            "company_name": job.get("company_name") or "",
+        }
+        if job_url:
+            with self._job_llm_lock:
+                self.job_llm_time_seconds.setdefault(job_url, 0.0)
+
+    def _get_llm_context(self) -> Dict[str, str]:
+        return dict(self.current_job_context)
+
+    def _record_llm_call(
+        self,
+        response_time_seconds: float,
+        parsed_reply: Dict[str, Dict],
+        context: Dict[str, str] | None = None,
+    ) -> None:
+        job_context = context or {}
+        job_url = job_context.get("job_url", "")
+        if not job_url:
+            return
+
+        with self._job_llm_lock:
+            total_time = self.job_llm_time_seconds.get(job_url, 0.0) + response_time_seconds
+            self.job_llm_time_seconds[job_url] = total_time
+
+        emit_event(
+            "llm_call_completed",
+            f"LLM call completed for {job_context.get('job_title') or 'job'}",
+            url=job_url,
+            job_title=job_context.get("job_title"),
+            company_name=job_context.get("company_name"),
+            response_time_seconds=round(response_time_seconds, 3),
+            total_job_llm_time_seconds=round(total_time, 3),
+            input_tokens=parsed_reply.get("usage_metadata", {}).get("input_tokens", 0),
+            output_tokens=parsed_reply.get("usage_metadata", {}).get("output_tokens", 0),
+            total_tokens=parsed_reply.get("usage_metadata", {}).get("total_tokens", 0),
+            model_name=parsed_reply.get("response_metadata", {}).get("model_name", ""),
+        )
+
+    def get_job_llm_time_seconds(self, job_url: str) -> float:
+        with self._job_llm_lock:
+            return round(self.job_llm_time_seconds.get(job_url, 0.0), 3)
+
     def set_job(self, job: Dict[str, Any], is_test: bool = False) -> None:
         """Add job description."""
         self.job = job
+        self._set_current_job_context(job)
         text = transform_vacancy_data(job)
         if is_test:
             self.job_readable = text
@@ -702,7 +792,15 @@ class GPTAnswerer:
         logger.debug(f"Raw output for numeric question: {output}")
         if output.lower() == "no info":
             return output
-        output = self._extract_number_from_string(output)
+        try:
+            output = self._extract_number_from_string(output)
+        except ValueError:
+            logger.warning(
+                "LLM returned a non-numeric answer for numeric question '%s': %s",
+                question,
+                output,
+            )
+            return "no info"
         logger.info(f"Extracted number: {output}")
         return output
 
@@ -782,6 +880,7 @@ class GPTAnswerer:
         """
         chain = self.chains["job_is_interesting"]
         job_description = transform_vacancy_data(job)
+        self._set_current_job_context(job)
         try:
             output = chain.invoke(
                 {
