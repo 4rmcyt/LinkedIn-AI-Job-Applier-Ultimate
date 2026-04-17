@@ -36,7 +36,14 @@ INDEED_JOB_TITLE_SELECTOR = "h2.jobTitle a, [data-testid='jobTitle'] a"
 INDEED_COMPANY_SELECTOR = "[data-testid='company-name'], .companyName"
 INDEED_LOCATION_SELECTOR = "[data-testid='text-location'], .companyLocation"
 INDEED_EASY_APPLY_BADGE = "span.iaLabel, [data-testid='ia-badge']"
-INDEED_APPLY_BUTTON = "#indeedApplyButton, [data-testid='indeedApplyButton-test'], .jobsearch-IndeedApplyButton-buttonWrapper"
+INDEED_APPLY_BUTTON = (
+    "span.indeed-apply-status-not-applied button, "
+    "button[aria-label*='Apply with Indeed'], "
+    "button[aria-label*='Indeed Apply'], "
+    "#indeedApplyButton, "
+    "[data-testid='indeedApplyButton-test'], "
+    ".jobsearch-IndeedApplyButton-buttonWrapper"
+)
 INDEED_NEXT_PAGE_SELECTOR = (
     "a[data-testid='pagination-page-next'], nav[role='navigation'] a[aria-label='Next Page']"
 )
@@ -175,7 +182,8 @@ class IndeedJobManager(BaseJobManager):
 
     async def _scroll_left_panel(self) -> None:
         """Scroll the full page to trigger lazy-loading of job cards"""
-        await self.page.evaluate("""
+        await self.page.evaluate(
+            """
             () => new Promise((resolve) => {
                 const distance = document.body.scrollHeight;
                 const durationMs = 2000;
@@ -188,7 +196,8 @@ class IndeedJobManager(BaseJobManager):
                 }
                 requestAnimationFrame(step);
             })
-            """)
+            """
+        )
         await async_pause(1, 2)
         await self.page.evaluate("() => window.scrollTo(0, 0)")
 

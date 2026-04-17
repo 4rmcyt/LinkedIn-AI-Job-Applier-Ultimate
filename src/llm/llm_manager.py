@@ -847,7 +847,7 @@ class GPTAnswerer:
         additional_prompt = "- Specify the following contacts: "
         invoke_dict = {
             "resume": self.resume_readable,
-            "company_name": self.job["company_name"],
+            "company_name": self.job.company_name,
             "job_description": self.job_readable,
         }
         if phone:

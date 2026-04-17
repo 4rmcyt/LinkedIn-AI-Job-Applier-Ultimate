@@ -748,8 +748,9 @@ class LinkedInEasyApplier(BaseEasyApplier):
                     "accept",
                 ]
             ):
-                await element.locator("xpath=.//input[@type='checkbox']").first.click(timeout=1000)
-                logger.debug("Clicked terms of service checkbox")
+                label_el = element.locator("xpath=.//label").first
+                await label_el.click(timeout=1000)
+                logger.debug("Clicked terms of service checkbox/radio")
                 return True
         return False
 
@@ -1013,7 +1014,8 @@ class LinkedInEasyApplier(BaseEasyApplier):
                 question_text = ""
 
             # Extract options text from radio buttons and their labels
-            options = await section.locator(",".join(radio_selectors)).evaluate_all("""els => {
+            options = await section.locator(",".join(radio_selectors)).evaluate_all(
+                """els => {
                     const seen = new Set();
                     return els.reduce((acc, e) => {
                         if (e.id && !seen.has(e.id)) {
@@ -1024,11 +1026,12 @@ class LinkedInEasyApplier(BaseEasyApplier):
                         }
                         return acc;
                     }, []);
-                }""")
+                }"""
+            )
             options = list(dict.fromkeys(options))
 
             if not options:
-                logger.warning("No options extracted from radio buttons, skipping radio question")
+                logger.debug("No options extracted from radio buttons, skipping")
                 return False
 
             existing_answer = None
@@ -1415,7 +1418,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
 
         # First try direct label selection with primary candidate
         try:
-            await element.select_option(label=label_candidates[0])
+            await element.select_option(label=label_candidates[0], timeout=3000)
             return
         except Exception as e:
             logger.warning(f"Failed to select dropdown option '{text}': {e}")
@@ -1671,7 +1674,7 @@ if __name__ == "__main__":
         logger.info("Starting LinkedInEasyApplier test...")
 
         # Test job URL
-        job_url = "https://linkedin.com/jobs/view/4397017085"
+        job_url = "https://www.linkedin.com/jobs/view/4399548757"
         # Initialize Playwright browser
         try:
             browser, context, page = await create_playwright_browser()

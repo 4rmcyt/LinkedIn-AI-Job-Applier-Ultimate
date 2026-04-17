@@ -23,7 +23,14 @@ from src.utils.browser_utils import (
 )
 from src.utils.utils import async_pause, get_first_pdf_file, load_yaml_file, sanitize_text
 
-INDEED_APPLY_BUTTON_SELECTOR = "button#indeedApplyButton, button[data-jk], .ia-IndeedApplyButton"
+INDEED_APPLY_BUTTON_SELECTOR = (
+    "span.indeed-apply-status-not-applied button, "
+    "button[aria-label*='Apply with Indeed'], "
+    "button[aria-label*='Indeed Apply'], "
+    "button#indeedApplyButton, "
+    "button[data-jk], "
+    ".ia-IndeedApplyButton"
+)
 INDEED_APPLY_MODAL_SELECTOR = "div.ia-BasePage, div[data-testid='ia-container']"
 INDEED_NEXT_BUTTON_SELECTOR = "button[data-testid='continue-button'], button[data-testid^='hp-continue-button'], button[data-testid='ia-continueButton'], .ia-BasePage-component button:has-text('Continue'), button:has-text('Review your application'), button:has-text('Continue')"
 INDEED_SUBMIT_BUTTON_SELECTOR = "button[data-testid='ia-submitButton'], button.ia-submitButton, button[data-testid='submit-application-button']"
@@ -463,6 +470,93 @@ class IndeedEasyApplier(BaseEasyApplier):
         except Exception as e:
             logger.error(f"Error handling relevant experience radio cards: {e}", exc_info=True)
             await debug_capture(self.page, "indeed_relevant_experience_radio_error")
+
+    async def _process_form_section(self, section: Any) -> None:
+        if await self._find_and_handle_hierarchical_select(section):
+            logger.debug("Handled hierarchical select question")
+            return
+        await super()._process_form_section(section)
+
+    async def _find_and_handle_hierarchical_select(self, section: Any) -> bool:
+        """Handle Indeed's two-level country → state/province hierarchical select."""
+        country_select = await find_element_safely(
+            section, "select#profile-countryState, select[name='profile-countryState']", timeout=500
+        )
+        if not country_select:
+            return False
+
+        try:
+            personal = {}
+            if self.gpt_answerer and hasattr(self.gpt_answerer, "resume_structured"):
+                personal = self.gpt_answerer.resume_structured.get("personal_information", {})
+
+            country_raw = str(personal.get("country", "") or "").strip()
+            # Map common country names to option values
+            country_value = "US"
+            if country_raw.upper() in ("CA", "CANADA"):
+                country_value = "CA"
+            elif country_raw.upper() in ("US", "USA", "UNITED STATES", "UNITED STATES OF AMERICA"):
+                country_value = "US"
+
+            current_country = await country_select.input_value()
+            if current_country != country_value:
+                await country_select.select_option(value=country_value)
+                await async_pause(0.5, 1)
+                logger.debug(f"Selected country: {country_value}")
+
+            # Find the dependent state dropdown (id starts with 'countryState_')
+            state_select = await find_element_safely(
+                section,
+                f"select#countryState_{country_value}, select[id^='countryState_']",
+                timeout=2000,
+            )
+            if not state_select:
+                logger.debug("No dependent state dropdown found")
+                return True
+
+            current_state = await state_select.input_value()
+            if current_state:
+                logger.debug(f"State already selected: {current_state}")
+                return True
+
+            state_raw = str(personal.get("state_area_region", "") or "").strip()
+            if not state_raw:
+                logger.debug("No state info in resume, skipping state selection")
+                return True
+
+            # Try selecting by value (abbreviation) first, then by label (full name)
+            options = await find_elements_safely(state_select, "option")
+            option_values = [await o.get_attribute("value") or "" for o in options]
+            option_texts = [await get_clean_text(o) for o in options]
+
+            # Exact match on abbreviation
+            for val in option_values:
+                if val and val.upper() == state_raw.upper():
+                    await state_select.select_option(value=val)
+                    logger.debug(f"Selected state by abbreviation: {val}")
+                    return True
+
+            # Match by full text
+            for text in option_texts:
+                if text and text.lower() == state_raw.lower():
+                    await state_select.select_option(label=text)
+                    logger.debug(f"Selected state by label: {text}")
+                    return True
+
+            # Partial match
+            for text in option_texts:
+                if text and (
+                    state_raw.lower() in text.lower() or text.lower() in state_raw.lower()
+                ):
+                    await state_select.select_option(label=text)
+                    logger.debug(f"Selected state by partial match: {text}")
+                    return True
+
+            logger.warning(f"Could not match state '{state_raw}' to any option")
+        except Exception as e:
+            logger.error(f"Error handling hierarchical select: {e}", exc_info=True)
+            await debug_capture(self.page, "indeed_hierarchical_select_error")
+        return True
 
     async def _handle_terms_of_service(self, section: Any) -> bool:
         return False
