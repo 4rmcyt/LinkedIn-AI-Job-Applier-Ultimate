@@ -53,9 +53,7 @@ class LinkedInJobManager(BaseJobManager):
         self.llm_agent_component = None
         self.resume_generator_manager = None
         self.pause_checker = None
-        self.jobs_no_info = (
-            []
-        )  # vacancies to which applications were not sent due to missing information
+        self.jobs_no_info = []  # vacancies to which applications were not sent due to missing information
         self.job_key_skills = []  # key skills according to employer's opinion
         self.interesting_jobs = []
         self.page_num = 0
@@ -276,13 +274,14 @@ class LinkedInJobManager(BaseJobManager):
                 # update the list of required skills for the vacancy and save job info to file
                 # only if the vacancy was scored and considered interesting
                 if int(score) > 0:
-                    # set the vacancy to answerer
-                    if COLLECT_INFO_MODE is False:
-                        self.llm_answerer_component.set_job(job.model_dump())
                     # extract skills from the vacancy
                     job.skills = self._extract_skills_from_vacancy(job)
                     self._update_skill_stat(self.job_key_skills)
-                    self._save_interesting_job(job, score, reasoning)
+                    # set the vacancy to answerer
+                    if COLLECT_INFO_MODE is True:
+                        self._save_interesting_job(job, score, reasoning)
+                    else:
+                        self.llm_answerer_component.set_job(job.model_dump())
 
                 if COLLECT_INFO_MODE:
                     logger.info(

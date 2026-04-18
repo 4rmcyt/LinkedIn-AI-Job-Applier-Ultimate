@@ -8,11 +8,11 @@ from threading import Lock
 
 import dotenv
 
-# TODO: Check COLLECT_INFO_MODE for LinkedIn
-# TODO: Check COLLECT_INFO_MODE for Indeed
-
 # TODO: EASY_APPLY_ONLY_MODE = False for Indeed
 # TODO: EASY_APPLY_ONLY_MODE = False for LinkedIn
+
+# TODO: Check dashboard for both Indeed and LinkedIn
+# TODO: Check pause/resume functionality
 
 # TODO: Create tests for Indeed
 

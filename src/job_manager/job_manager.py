@@ -409,7 +409,7 @@ class BaseJobManager(ABC):
             url=job.url,
         )
         self.applies_num += 1
-        if result != "Limit":
+        if result != "Limit" and COLLECT_INFO_MODE is False:
             self._save_company(job, apply_result, {"url": job.url})
         if result == "Success":
             self.success_applies_num += 1
