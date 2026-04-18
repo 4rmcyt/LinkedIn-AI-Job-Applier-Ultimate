@@ -85,6 +85,7 @@ class BaseJobManager(ABC):
 
     def _extract_skills_from_vacancy(self, job: Job) -> List[str]:
         """Extract skills from vacancy"""
+        logger.info(f"Extracting skills from vacancy: {job.job_title}")
         skills = self.llm_answerer_component.extract_skills_from_vacancy(job.job_description)
         self.job_key_skills = skills
         return str(skills).replace("[", "").replace("]", "").replace("'", "").replace('"', "")
@@ -347,6 +348,7 @@ class BaseJobManager(ABC):
         except FileNotFoundError:
             self.resume_recommendations = ""
         if not self.resume_recommendations:
+            logger.info("Generating resume improvement recommendations")
             self.resume_recommendations = (
                 self.llm_answerer_component.resume_improvement_recommendations()
             )

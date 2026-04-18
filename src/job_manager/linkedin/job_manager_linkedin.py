@@ -54,9 +54,7 @@ class LinkedInJobManager(BaseJobManager):
         self.llm_agent_component = None
         self.resume_generator_manager = None
         self.pause_checker = None
-        self.jobs_no_info = (
-            []
-        )  # vacancies to which applications were not sent due to missing information
+        self.jobs_no_info = []  # vacancies to which applications were not sent due to missing information
         self.job_key_skills = []  # key skills according to employer's opinion
         self.interesting_jobs = []
         self.page_num = 0
@@ -207,64 +205,45 @@ class LinkedInJobManager(BaseJobManager):
 
     async def apply_job(self, vacancy: Dict[str, Any]) -> str:
         """Send applications to all employers on the page (async)"""
-        self.easy_applier_component = LinkedInEasyApplier(
-            self.page,
-            self.llm_answerer_component,
-            self.resume_anonymizer,
-            self.resume_generator_manager,
-            self.pause_checker,
-            Path(OUTPUT_DIR_LINKEDIN) / "answers.yaml",
-            RESUME_DIR,
-            COVER_LETTER_DIR,
-            TEST_MODE,
-        )
-
         # Open vacancy in a new window/tab
-        self._new_page = await self.page.context.new_page()
-        self._original_page = self.page
-        self.page = self._new_page
-        self.easy_applier_component.set_page(self.page)
+        new_page = await self.page.context.new_page()
 
         # Navigate to job page
         try:
-            await self.page.goto(vacancy["url"])
+            await new_page.goto(vacancy["url"], wait_until="domcontentloaded")
             logger.info(f"Navigated to job URL: {vacancy['url']}")
             await async_pause(3, 4)
-        except Exception as e:
-            logger.error(f"Failed to navigate to job URL: {vacancy['url']}, error: {e}")
-            await debug_capture(self._new_page, "navigate_job_error")
-            await self._new_page.close()
-            await async_pause()
-            self.page = self._original_page
-            self.easy_applier_component.set_page(self.page)
-            return "Error"
 
-        # scrape the vacancy
-        job = await self._get_detailed_job_description()
-        minimum_job_time = time.time() + MINIMUM_WAIT_TIME_SEC
-        company_name = job.company_name
-        company_job_title = job.job_title
-        logger.info(f"Found a vacancy {company_job_title}")
-        # if the vacancy has not been seen yet and the company is not in the blacklist
-        # - start the process of applying to the vacancy
-        if not job.is_valid_for_application():
-            reason = "Job is not valid for application. Reason: "
-            if not job.job_title:
-                reason += "Job is empty\n"
-            elif not job.company_name:
-                reason += "Company name is empty\n"
-            elif not job.url:
-                reason += "URL is empty\n"
-            if not job.job_description:
-                reason += "Job description is empty\n"
-            apply_result = "Skip", reason
-            logger.warning(f"Job is not valid for application, skipping:\n{reason}")
-            await async_pause(1, 2)
-        elif self._is_blacklisted(sanitize_text(company_name)):
-            apply_result = "Skip", "Vacancy in the blacklist"
-            logger.warning("Vacancy in the blacklist, skipping")
-            await async_pause(1, 2)
-        else:
+            # scrape the vacancy
+            job = await self._get_detailed_job_description()
+            minimum_job_time = time.time() + MINIMUM_WAIT_TIME_SEC
+            company_name = job.company_name
+            company_job_title = job.job_title
+            logger.info(f"Found a vacancy {company_job_title}")
+            # if the vacancy has not been seen yet and the company is not in the blacklist
+            # - start the process of applying to the vacancy
+            if not job.is_valid_for_application():
+                reason = "Job is not valid for application. Reason: "
+                if not job.job_title:
+                    reason += "Job is empty\n"
+                elif not job.company_name:
+                    reason += "Company name is empty\n"
+                elif not job.url:
+                    reason += "URL is empty\n"
+                if not job.job_description:
+                    reason += "Job description is empty\n"
+                apply_result = "Skip", reason
+                logger.warning(f"Job is not valid for application, skipping:\n{reason}")
+                await async_pause(1, 2)
+                await self._handle_apply_result(apply_result, job, "")
+                return "Error"
+
+            if self._is_blacklisted(sanitize_text(company_name)):
+                apply_result = "Skip", "Vacancy in the blacklist"
+                logger.warning("Vacancy in the blacklist, skipping")
+                await async_pause(1, 2)
+                return "Skip"
+
             is_seen, reason = self._job_is_already_seen(job)
             if is_seen:
                 apply_result = "Skip", reason
@@ -285,98 +264,89 @@ class LinkedInJobManager(BaseJobManager):
                         score,
                         reasoning,
                     ) = self.llm_answerer_component.job_is_interesting(job.model_dump())
-                if job_is_interesting:
+                if not job_is_interesting:
+                    logger.info(
+                        f"Skipping uninteresting job: {job.job_title} at {job.company_name}"
+                    )
+                    return "Skip"
+                # update the list of required skills for the vacancy and save job info to file
+                # only if the vacancy was scored and considered interesting
+                if int(score) > 0:
+                    # set the vacancy to answerer
+                    if COLLECT_INFO_MODE is False:
+                        self.llm_answerer_component.set_job(job.model_dump())
                     # extract skills from the vacancy
                     job.skills = self._extract_skills_from_vacancy(job)
-                    # set the vacancy to answerer
-                    self.llm_answerer_component.set_job(job.model_dump())
-                    # update the list of required skills for the vacancy and save job info to file
-                    # only if the vacancy was scored and considered interesting
-                    if int(score) > 0:
-                        self._update_skill_stat(self.job_key_skills)
-                        self._save_interesting_job(job, score, reasoning)
-                # apply to the vacancy only if it's interesting
-                if job_is_interesting:
-                    if EASY_APPLY_ONLY_MODE is False and COLLECT_INFO_MODE is False:
-                        apply_url = await self._check_apply_button()
-                        if apply_url:
-                            if TEST_MODE is False:
-                                apply_result = await self.llm_agent_component.apply_to_job(
-                                    apply_url
-                                )
-                            else:
-                                apply_result = "Skip", "Test mode"
+                    self._update_skill_stat(self.job_key_skills)
+                    self._save_interesting_job(job, score, reasoning)
+
+                if COLLECT_INFO_MODE:
+                    logger.info(
+                        "We are in the mode of collecting skill statistics or searching for "
+                        "interesting jobs - do not apply to the vacancy"
+                    )
+                    return "Ok"
+
+                if EASY_APPLY_ONLY_MODE is False:
+                    apply_url = await self._check_apply_button()
+                    if apply_url:
+                        if TEST_MODE:
+                            apply_result = "Skip", "Test mode"
                         else:
-                            apply_result = await self.easy_apply(job)
+                            apply_result = await self.llm_agent_component.apply_to_job(apply_url)
                     else:
                         apply_result = await self.easy_apply(job)
-                    result, reason = apply_result
-                    # if the vacancy is skipped for the reason of missing information, add it to the list of vacancies,
-                    # information about which will then be sent to the client
-                    if result == "Skip" and reason.startswith("Could not"):
-                        self._collect_job_info(
-                            company_job_title, company_name, vacancy["url"], reason
-                        )
-                elif job_is_interesting is None:
-                    apply_result = "Error", "Error calling LLM."
                 else:
-                    apply_result = "Skip", "Vacancy is not interesting"
-                    logger.debug("Vacancy is not interesting, skipping")
-        # Switch back to the original window
-        await self._new_page.close()
-        await async_pause()
-        self.page = self._original_page
-        self.easy_applier_component.set_page(self.page)
-        # if we are in one of the information collection modes - do not track vacancy application statistics
-        if COLLECT_INFO_MODE is True:
-            return "OK"
-        result = self.get_apply_result(apply_result, job, vacancy, minimum_job_time)
-        return result
+                    apply_result = await self.easy_apply(job)
+                # if the vacancy is skipped for the reason of missing information, add it to the list of vacancies,
+                # information about which will then be sent to the client
+                result, reason = apply_result
+                if result == "Skip" and reason.startswith("Could not"):
+                    self._collect_job_info(company_job_title, company_name, job.url, reason)
+            self._handle_apply_result(apply_result, job)
+            if self.success_applies_num >= self.max_applies_num:
+                logger.info(
+                    f"The maximum number of applications has been reached: "
+                    f"{self.success_applies_num}/{self.max_applies_num}"
+                )
+                return "Limit"
+            return result
+        finally:
+            # if the page was processed faster than the minimum time -
+            # wait until this time is over
+            time_left = int(minimum_job_time - time.time())
+            if time_left > 0:
+                async_pause(time_left, time_left + 5)
+            await new_page.close()
+            await self.page.bring_to_front()
 
     async def easy_apply(self, job: Job) -> Tuple[str, str]:
         """Apply to the vacancy using LinkedIn Easy Apply functionality (async)"""
-        # set the vacancy to answerer and agent for evaluation
-        try:
-            if COLLECT_INFO_MODE is True:
-                # if we are in the mode of collecting information for interesting jobs and skill statistics -
-                # do not apply to the vacancy, only save gathered information to files
-                logger.info(
-                    "We are in the mode of collecting skill statistics or searching for interesting jobs - do not apply to the vacancy"
-                )
-            else:
-                # Use LinkedIn Easy Apply functionality
-                apply_result = await self.easy_applier_component.apply_to_job(job)
-                if apply_result[0] == "Success":
-                    logger.info(
-                        f"Successfully applied to the vacancy of the company {job.company_name}"
-                    )
-                elif apply_result[0] == "Limit":
-                    logger.warning("Reached the limit of applications")
-                    return "Limit", ""
-                else:
-                    logger.warning(
-                        f"Skipping the vacancy of the company {job.company_name} for the reason: {apply_result[1]}"
-                    )
-                    return apply_result
-            await async_pause()
-        except Exception as e:
-            tb_str = traceback.format_exc()
-            logger.error(
-                f"Unknown error on the page {job.url} during applying to the vacancy {job.job_title} of the company {job.company_name}\n{tb_str}"
-            )
-            await debug_capture(self.page, "easy_apply_error")
-            return "Error", str(e)
-        return "Success", ""
+        easy_applier_component = LinkedInEasyApplier(
+            self.page,
+            self.llm_answerer_component,
+            self.resume_anonymizer,
+            self.resume_generator_manager,
+            self.pause_checker,
+            Path(OUTPUT_DIR_LINKEDIN) / "answers.yaml",
+            RESUME_DIR,
+            COVER_LETTER_DIR,
+            TEST_MODE,
+        )
+        easy_applier_component.set_page(self.page)
+        return await easy_applier_component.apply_to_job(job)
 
-    def get_apply_result(
-        self,
-        apply_result: Tuple[str, str],
-        job: Job,
-        vacancy: Dict[str, Any],
-        minimum_job_time: float,
-    ) -> Tuple[str, str]:
+    def _handle_apply_result(self, apply_result: Tuple[str, str], job: Job) -> None:
         """Get the apply result"""
         result, _ = apply_result
+        emit_event(
+            "job_result",
+            f"Job result: {result}",
+            result=result.lower(),
+            job_title=job.job_title,
+            company_name=job.company_name,
+            url=job.url,
+        )
         # increase the counters of all applications and successful applications
         self.applies_num += 1
         if result == "Success":
@@ -386,35 +356,10 @@ class LinkedInJobManager(BaseJobManager):
             self.cache.total_applies_num = self.total_applies_num
             self.cache.update_last_apply()
             self._write_the_last_search_time()
-            logger.info(
-                f"Number of vacancies, on which successfully applied: {self.success_applies_num}"
-            )
-            logger.info(f"Total number of successful applications: {self.total_applies_num}")
-        if result != "Limit":
-            self._save_company(job, apply_result, vacancy)
-        emit_event(
-            "job_result",
-            f"Job result: {result}",
-            result=result.lower(),
-            job_title=job.job_title,
-            company_name=job.company_name,
-            url=job.url,
-        )
-        # if the page was processed faster than the minimum time -
-        # wait until this time is over
-        time_left = int(minimum_job_time - time.time())
-        if time_left > 0:
-            async_pause(time_left, time_left + 5)
-        # if we hit the limit on vacancies - stop applying
-        if result == "Limit":
-            return "Limit"
-        stop_reason = ""
-        if self.success_applies_num >= self.max_applies_num:
-            stop_reason = f"The maximum number of applications has been reached: {self.success_applies_num}/{self.max_applies_num}"
-        if stop_reason:
-            logger.info(stop_reason)
-            return "Limit"
-        return result
+        elif result != "Limit":
+            self._save_company(job, result, {"url": job.url})
+        elif result == "Error":
+            self.error_num += 1
 
     async def send_report(self, result: str) -> None:
         """

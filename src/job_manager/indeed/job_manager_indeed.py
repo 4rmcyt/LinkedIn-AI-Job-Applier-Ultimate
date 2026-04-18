@@ -213,110 +213,98 @@ class IndeedJobManager(BaseJobManager):
 
     async def apply_job(self, vacancy: Any) -> str:
         """Process a single Indeed job card"""
+        job = await self._extract_job_from_card(vacancy)
+        if job is None:
+            return "Skip"
+
+        already_seen, reason = self._job_is_already_seen(job)
+        if already_seen:
+            logger.info(
+                f"Skipping already seen job: {job.job_title} at {job.company_name} ({reason})"
+            )
+            return "Skip"
+
+        if self.search_component.is_job_blacklisted(job.job_title, job.company_name, job.location):
+            logger.info(f"Skipping blacklisted job: {job.job_title} at {job.company_name}")
+            return "Skip"
+
+        if job.apply_method != "easy_apply" and EASY_APPLY_ONLY_MODE and not COLLECT_INFO_MODE:
+            logger.info(f"Skipping external apply job: {job.job_title} at {job.company_name}")
+            return "Skip"
+
+        minimum_job_time = time.time() + MINIMUM_WAIT_TIME_SEC
+        new_page = await self.page.context.new_page()
         try:
-            job = await self._extract_job_from_card(vacancy)
-            if job is None:
-                return "skipped"
+            await new_page.goto(job.url, wait_until="domcontentloaded")
+            await async_pause(1, 2)
+            job.job_description = await self._extract_job_description_from_page(new_page)
+            job.company_description = await self._extract_company_description(new_page)
 
-            already_seen, reason = self._job_is_already_seen(job)
-            if already_seen:
+            if MONKEY_MODE is True and COLLECT_INFO_MODE is False:
+                job_is_interesting = True
+                score, reasoning = 0, "Monkey mode"
                 logger.info(
-                    f"Skipping already seen job: {job.job_title} at {job.company_name} ({reason})"
+                    "Monkey mode is enabled and Collect info mode is disabled, applying to all vacancies"
                 )
-                return "skipped"
+            else:
+                interest_result = self.llm_answerer_component.job_is_interesting(job.model_dump())
+                if interest_result is None:
+                    apply_result = ("Error", "Error while determining if job is interesting")
+                    await self._handle_apply_result(apply_result, job)
+                    return "Error"
+                job_is_interesting, score, reasoning = interest_result
 
-            if self.search_component.is_job_blacklisted(
-                job.job_title, job.company_name, job.location
-            ):
-                logger.info(f"Skipping blacklisted job: {job.job_title} at {job.company_name}")
-                return "skipped"
-
-            if job.apply_method != "easy_apply" and EASY_APPLY_ONLY_MODE and not COLLECT_INFO_MODE:
-                logger.info(f"Skipping external apply job: {job.job_title} at {job.company_name}")
-                return "skipped"
-
-            minimum_job_time = time.time() + MINIMUM_WAIT_TIME_SEC
-            new_page = await self.page.context.new_page()
-            try:
-                await new_page.goto(job.url, wait_until="domcontentloaded")
-                await async_pause(1, 2)
-                job.job_description = await self._extract_job_description_from_page(new_page)
-                job.company_description = await self._extract_company_description(new_page)
-
-                if MONKEY_MODE is True and COLLECT_INFO_MODE is False:
-                    job_is_interesting = True
-                    score, reasoning = 0, "Monkey mode"
-                    logger.info(
-                        "Monkey mode is enabled and Collect info mode is disabled, applying to all vacancies"
-                    )
-                else:
-                    interest_result = self.llm_answerer_component.job_is_interesting(
-                        job.model_dump()
-                    )
-                    if interest_result is None:
-                        await self._handle_apply_result("error", job, "")
-                        return "error"
-                    job_is_interesting, score, reasoning = interest_result
-
-                if not job_is_interesting:
-                    logger.info(
-                        f"Skipping uninteresting job: {job.job_title} at {job.company_name}"
-                    )
-                    return "skipped"
-
+            if not job_is_interesting:
+                logger.info(f"Skipping uninteresting job: {job.job_title} at {job.company_name}")
+                return "Skip"
+            # update the list of required skills for the vacancy and save job info to file
+            # only if the vacancy was scored and considered interesting
+            if int(score) > 0:
+                # set the vacancy to answerer
+                if COLLECT_INFO_MODE is False:
+                    self.llm_answerer_component.set_job(job.model_dump())
+                # extract skills from the vacancy
                 job.skills = self._extract_skills_from_vacancy(job)
-                self.llm_answerer_component.set_job(job.model_dump())
-                if int(score) > 0:
-                    self._update_skill_stat(self.job_key_skills)
-                    self._save_interesting_job(job, score, reasoning)
+                self._update_skill_stat(self.job_key_skills)
+                self._save_interesting_job(job, score, reasoning)
 
-                if COLLECT_INFO_MODE:
-                    logger.info(
-                        "We are in the mode of collecting skill statistics or searching for "
-                        "interesting jobs - do not apply to the vacancy"
-                    )
-                    return "OK"
+            if COLLECT_INFO_MODE:
+                logger.info(
+                    "We are in the mode of collecting skill statistics or searching for "
+                    "interesting jobs - do not apply to the vacancy"
+                )
+                return "Ok"
 
-                if not EASY_APPLY_ONLY_MODE and job.apply_method == "external":
-                    if TEST_MODE:
-                        result, cover_letter = "skipped", ""
-                    else:
-                        result, cover_letter = await self.llm_agent_component.apply_to_job(job.url)
+            if not EASY_APPLY_ONLY_MODE and job.apply_method == "external":
+                if TEST_MODE:
+                    apply_result = "Skip", "Test mode"
                 else:
-                    result, cover_letter = await self.easy_apply(job, new_page)
+                    apply_result = await self.llm_agent_component.apply_to_job(job.url)
+            else:
+                apply_result = await self.easy_apply(job, new_page)
 
-                if result == "Skip" and cover_letter.startswith("Could not"):
-                    self._collect_job_info(job.job_title, job.company_name, job.url, cover_letter)
-                await self._handle_apply_result(result, job, cover_letter)
-                if self.success_applies_num >= self.max_applies_num:
-                    logger.info(
-                        f"The maximum number of applications has been reached: "
-                        f"{self.success_applies_num}/{self.max_applies_num}"
-                    )
-                    return "Limit"
-                return result
-            finally:
-                time_left = int(minimum_job_time - time.time())
-                if time_left > 0:
-                    await async_pause(time_left, time_left + 1)
-                await new_page.close()
-                await self.page.bring_to_front()
-
-        except Exception as e:
-            logger.error(f"Error in apply_job: {e}", exc_info=True)
-            await debug_capture(self.page, "apply_job_error")
-            self.error_num += 1
-            return "error"
+            result, reason = apply_result
+            if result == "Skip" and reason.startswith("Could not"):
+                self._collect_job_info(job.job_title, job.company_name, job.url, reason)
+            await self._handle_apply_result(result, job)
+            if self.success_applies_num >= self.max_applies_num:
+                logger.info(
+                    f"The maximum number of applications has been reached: "
+                    f"{self.success_applies_num}/{self.max_applies_num}"
+                )
+                return "Limit"
+            return result
+        finally:
+            # if the page was processed faster than the minimum time -
+            # wait until this time is over
+            time_left = int(minimum_job_time - time.time())
+            if time_left > 0:
+                await async_pause(time_left, time_left + 1)
+            await new_page.close()
+            await self.page.bring_to_front()
 
     async def easy_apply(self, job: Job, page: Any = None) -> Tuple[str, str]:
         """Delegate application to IndeedEasyApplier"""
-        if COLLECT_INFO_MODE:
-            logger.info(
-                "We are in the mode of collecting skill statistics or searching for "
-                "interesting jobs - do not apply to the vacancy"
-            )
-            return "Skip", ""
-
         easy_applier = IndeedEasyApplier(
             page=page,
             gpt_answerer=self.llm_answerer_component,
@@ -505,9 +493,9 @@ class IndeedJobManager(BaseJobManager):
             await debug_capture(self.page, "next_page_error")
             return False
 
-    async def _handle_apply_result(self, result: str, job: Job, cover_letter: str) -> None:
+    async def _handle_apply_result(self, apply_result: Tuple[str, str], job: Job) -> None:
         """Save job result to the appropriate YAML file"""
-        self._save_company(job, result, {"url": job.url})
+        result, _ = apply_result
         emit_event(
             "job_result",
             f"Job result: {result}",
@@ -516,14 +504,16 @@ class IndeedJobManager(BaseJobManager):
             company_name=job.company_name,
             url=job.url,
         )
-
-        if result == "success":
-            self.applies_num += 1
+        # increase the counters of all applications and successful applications
+        self.applies_num += 1
+        if result == "Success":
             self.success_applies_num += 1
             self.total_applies_num += 1
             self.cache.success_applies_num = self.success_applies_num
             self.cache.total_applies_num = self.total_applies_num
             self.cache.update_last_apply()
             self._write_the_last_search_time()
-        elif result == "error":
+        elif result != "Limit":
+            self._save_company(job, result, {"url": job.url})
+        elif result == "Error":
             self.error_num += 1
