@@ -44,32 +44,32 @@ class BaseSearchCustomizer(ABC):
         self.location_blacklist = parameters.get("location_blacklist", [])
         logger.info(f"{self.__class__.__name__} parameters successfully set")
 
+    def is_job_blacklisted(self, job_title: str, company_name: str, job_location: str) -> bool:
+        """Return True if this job should be skipped based on blacklists"""
+        title_lower = job_title.lower()
+        company_lower = company_name.lower()
+        location_lower = job_location.lower()
 
-def is_job_blacklisted(self, job_title: str, company_name: str, job_location: str) -> bool:
-    """Return True if this job should be skipped based on blacklists"""
-    title_lower = job_title.lower()
-    company_lower = company_name.lower()
-    location_lower = job_location.lower()
+        for blacklisted in self.title_blacklist:
+            if blacklisted.lower() in title_lower:
+                logger.info(f"Job '{job_title}' skipped - title blacklisted: {blacklisted}")
+                return True
 
-    for blacklisted in self.title_blacklist:
-        if blacklisted.lower() in title_lower:
-            logger.info(f"Job '{job_title}' skipped - title blacklisted: {blacklisted}")
-            return True
+        for blacklisted in self.company_blacklist:
+            if blacklisted.lower() in company_lower:
+                logger.info(f"Job at '{company_name}' skipped - company blacklisted: {blacklisted}")
+                return True
 
-    for blacklisted in self.company_blacklist:
-        if blacklisted.lower() in company_lower:
-            logger.info(f"Job at '{company_name}' skipped - company blacklisted: {blacklisted}")
-            return True
+        for blacklisted in self.location_blacklist:
+            if blacklisted.lower() in location_lower:
+                logger.info(
+                    f"Job in '{job_location}' skipped - location blacklisted: {blacklisted}"
+                )
+                return True
 
-    for blacklisted in self.location_blacklist:
-        if blacklisted.lower() in location_lower:
-            logger.info(f"Job in '{job_location}' skipped - location blacklisted: {blacklisted}")
-            return True
+        return False
 
-    return False
-
-
-@abstractmethod
-async def set_search_params(self) -> None:
-    """Navigate to and configure the job search page"""
-    pass
+    @abstractmethod
+    async def set_search_params(self) -> None:
+        """Navigate to and configure the job search page"""
+        pass

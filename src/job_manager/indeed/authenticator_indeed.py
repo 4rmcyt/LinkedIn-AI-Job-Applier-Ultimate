@@ -33,15 +33,15 @@ class IndeedAuthenticator(BaseAuthenticator):
                 logger.warning("Redirected to login page, user not authorized")
                 return False
 
-            signed_in_element = await find_element_safely(
-                self.page, "[data-gnav-element-name='SignIn']", timeout=5000
+            account_menu = await find_element_safely(
+                self.page, "[data-gnav-element-name='AccountMenu']", timeout=5000
             )
-            if signed_in_element:
-                logger.warning("Sign-in button visible, user is not logged in")
-                return False
+            if account_menu:
+                logger.info("Account menu found, user is logged into Indeed")
+                return True
 
-            logger.info("User appears to be logged into Indeed")
-            return True
+            logger.warning("Account menu not found, user is not logged in")
+            return False
 
         except Exception as e:
             logger.error(f"Error checking Indeed authorization status: {e}")
