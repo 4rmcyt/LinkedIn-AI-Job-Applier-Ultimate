@@ -54,7 +54,9 @@ class LinkedInJobManager(BaseJobManager):
         self.llm_agent_component = None
         self.resume_generator_manager = None
         self.pause_checker = None
-        self.jobs_no_info = []  # vacancies to which applications were not sent due to missing information
+        self.jobs_no_info = (
+            []
+        )  # vacancies to which applications were not sent due to missing information
         self.job_key_skills = []  # key skills according to employer's opinion
         self.interesting_jobs = []
         self.page_num = 0
@@ -205,6 +207,7 @@ class LinkedInJobManager(BaseJobManager):
 
     async def apply_job(self, vacancy: Dict[str, Any]) -> str:
         """Send applications to all employers on the page (async)"""
+        minimum_job_time = time.time() + MINIMUM_WAIT_TIME_SEC
         # Open vacancy in a new window/tab
         new_page = await self.page.context.new_page()
 
@@ -216,7 +219,6 @@ class LinkedInJobManager(BaseJobManager):
 
             # scrape the vacancy
             job = await self._get_detailed_job_description()
-            minimum_job_time = time.time() + MINIMUM_WAIT_TIME_SEC
             company_name = job.company_name
             company_job_title = job.job_title
             logger.info(f"Found a vacancy {company_job_title}")
@@ -235,7 +237,7 @@ class LinkedInJobManager(BaseJobManager):
                 apply_result = "Skip", reason
                 logger.warning(f"Job is not valid for application, skipping:\n{reason}")
                 await async_pause(1, 2)
-                await self._handle_apply_result(apply_result, job, "")
+                await self._handle_apply_result(apply_result, job)
                 return "Error"
 
             if self._is_blacklisted(sanitize_text(company_name)):
@@ -303,7 +305,8 @@ class LinkedInJobManager(BaseJobManager):
                 result, reason = apply_result
                 if result == "Skip" and reason.startswith("Could not"):
                     self._collect_job_info(company_job_title, company_name, job.url, reason)
-            self._handle_apply_result(apply_result, job)
+            result, _ = apply_result
+            await self._handle_apply_result(apply_result, job)
             if self.success_applies_num >= self.max_applies_num:
                 logger.info(
                     f"The maximum number of applications has been reached: "
@@ -316,7 +319,7 @@ class LinkedInJobManager(BaseJobManager):
             # wait until this time is over
             time_left = int(minimum_job_time - time.time())
             if time_left > 0:
-                async_pause(time_left, time_left + 5)
+                await async_pause(time_left, time_left + 5)
             await new_page.close()
             await self.page.bring_to_front()
 
@@ -336,7 +339,7 @@ class LinkedInJobManager(BaseJobManager):
         easy_applier_component.set_page(self.page)
         return await easy_applier_component.apply_to_job(job)
 
-    def _handle_apply_result(self, apply_result: Tuple[str, str], job: Job) -> None:
+    async def _handle_apply_result(self, apply_result: Tuple[str, str], job: Job) -> None:
         """Get the apply result"""
         result, _ = apply_result
         emit_event(
@@ -356,10 +359,11 @@ class LinkedInJobManager(BaseJobManager):
             self.cache.total_applies_num = self.total_applies_num
             self.cache.update_last_apply()
             self._write_the_last_search_time()
-        elif result != "Limit":
-            self._save_company(job, result, {"url": job.url})
         elif result == "Error":
             self.error_num += 1
+            self._save_company(job, apply_result, {"url": job.url})
+        elif result != "Limit":
+            self._save_company(job, apply_result, {"url": job.url})
 
     async def send_report(self, result: str) -> None:
         """

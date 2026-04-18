@@ -286,7 +286,7 @@ class IndeedJobManager(BaseJobManager):
             result, reason = apply_result
             if result == "Skip" and reason.startswith("Could not"):
                 self._collect_job_info(job.job_title, job.company_name, job.url, reason)
-            await self._handle_apply_result(result, job)
+            await self._handle_apply_result(apply_result, job)
             if self.success_applies_num >= self.max_applies_num:
                 logger.info(
                     f"The maximum number of applications has been reached: "
@@ -513,7 +513,8 @@ class IndeedJobManager(BaseJobManager):
             self.cache.total_applies_num = self.total_applies_num
             self.cache.update_last_apply()
             self._write_the_last_search_time()
-        elif result != "Limit":
-            self._save_company(job, result, {"url": job.url})
         elif result == "Error":
             self.error_num += 1
+            self._save_company(job, apply_result, {"url": job.url})
+        elif result != "Limit":
+            self._save_company(job, apply_result, {"url": job.url})
