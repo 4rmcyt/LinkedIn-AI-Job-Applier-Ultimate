@@ -244,6 +244,7 @@ class LinkedInJobManager(BaseJobManager):
                 apply_result = "Skip", "Vacancy in the blacklist"
                 logger.warning("Vacancy in the blacklist, skipping")
                 await async_pause(1, 2)
+                await self._handle_apply_result(apply_result, job)
                 return "Skip"
 
             is_seen, reason = self._job_is_already_seen(job)
@@ -270,6 +271,7 @@ class LinkedInJobManager(BaseJobManager):
                     logger.info(
                         f"Skipping uninteresting job: {job.job_title} at {job.company_name}"
                     )
+                    await self._handle_apply_result(("Skip", reasoning), job)
                     return "Skip"
                 # update the list of required skills for the vacancy and save job info to file
                 # only if the vacancy was scored and considered interesting

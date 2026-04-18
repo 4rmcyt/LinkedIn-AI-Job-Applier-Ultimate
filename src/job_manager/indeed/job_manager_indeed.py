@@ -222,14 +222,17 @@ class IndeedJobManager(BaseJobManager):
             logger.info(
                 f"Skipping already seen job: {job.job_title} at {job.company_name} ({reason})"
             )
+            await self._handle_apply_result(("Skip", reason), job)
             return "Skip"
 
         if self.search_component.is_job_blacklisted(job.job_title, job.company_name, job.location):
             logger.info(f"Skipping blacklisted job: {job.job_title} at {job.company_name}")
+            await self._handle_apply_result(("Skip", "Vacancy in the blacklist"), job)
             return "Skip"
 
         if job.apply_method != "easy_apply" and EASY_APPLY_ONLY_MODE and not COLLECT_INFO_MODE:
             logger.info(f"Skipping external apply job: {job.job_title} at {job.company_name}")
+            await self._handle_apply_result(("Skip", "External apply not allowed"), job)
             return "Skip"
 
         minimum_job_time = time.time() + MINIMUM_WAIT_TIME_SEC
@@ -256,6 +259,7 @@ class IndeedJobManager(BaseJobManager):
 
             if not job_is_interesting:
                 logger.info(f"Skipping uninteresting job: {job.job_title} at {job.company_name}")
+                await self._handle_apply_result(("Skip", reasoning), job)
                 return "Skip"
             # update the list of required skills for the vacancy and save job info to file
             # only if the vacancy was scored and considered interesting
