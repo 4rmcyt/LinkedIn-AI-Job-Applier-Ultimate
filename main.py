@@ -14,7 +14,12 @@ import dotenv
 # TODO: Check dashboard for both Indeed and LinkedIn
 # TODO: Check pause/resume functionality
 
-# TODO: Create tests for Indeed
+# TODO: Record a video of the bot working on Indeed
+# TODO: Record a video of the bot working on LinkedIn
+
+# TODO: Create tests for Indeed, acutalize tests for LinkedIn
+
+# TODO: Create a tutorial video for the bot
 
 
 # Try to import pynput for keyboard control (optional, not available in Docker)
