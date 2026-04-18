@@ -21,7 +21,6 @@ from src.dashboard.runtime import StopRequested, emit_event
 from src.job_manager.job_manager import BaseJobManager
 from src.job_manager.linkedin.easy_applier_linkedin import LinkedInEasyApplier
 from src.pydantic_models.job_models import Job
-from src.telegram.telegram_manager import TelegramReportSender
 from src.utils.browser_utils import (
     debug_capture,
     find_element_safely,
@@ -47,7 +46,7 @@ class LinkedInJobManager(BaseJobManager):
     ):
         logger.info("Initializing LinkedInJobManager")
         self.page = page
-        self.linkedin_email = linkedin_email
+        self.email = linkedin_email
         self.resume_anonymizer = resume_anonymizer
         self.search_component = search_component
         self.llm_answerer_component = None
@@ -342,31 +341,6 @@ class LinkedInJobManager(BaseJobManager):
         )
         easy_applier_component.set_page(self.page)
         return await easy_applier_component.apply_to_job(job)
-
-    async def send_report(self, result: str) -> None:
-        """
-        After the resume sending is completed, send a report, which will contain
-        the number of vacancies, on which the applications were sent, the list of vacancies,
-        on which the application was not sent for some reason,
-        as well as recommendations for improving the resume
-        """
-        # if the search was successful - send a report about the work done
-        if not (TEST_MODE is True or COLLECT_INFO_MODE is True) and result != "Error":
-            # if at least one vacancy was sent successfully since the start
-            # write the time of the last search and send a report
-            if self.previous_apply_number < self.success_applies_num:
-                logger.info("Sending a report about the work done in Telegram")
-                bot = TelegramReportSender()
-                await bot.send_telegram_report(
-                    self.linkedin_email,
-                    self.resume,
-                    self.success_applies_num,
-                    self.jobs_no_info,
-                    self.skill_stat,
-                    self.resume_recommendations,
-                    self.resume_anonymizer,
-                )
-                self._write_the_last_search_time()
 
     async def _scroll_to_load_jobs(self):
         """Scroll the job results container to load all job listings (async)"""

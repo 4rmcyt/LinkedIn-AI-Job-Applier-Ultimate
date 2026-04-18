@@ -7,11 +7,12 @@ from typing import Any, Dict, List, Tuple
 
 import yaml
 
-from config.app_config import COLLECT_INFO_MODE, JOB_SITE, MAX_APPLIES_NUM
+from config.app_config import COLLECT_INFO_MODE, JOB_SITE, MAX_APPLIES_NUM, TEST_MODE
 from config.constants import OUTPUT_DIR_INDEED, OUTPUT_DIR_LINKEDIN
 from config.logger_config import logger
 from src.dashboard.runtime import emit_event
 from src.pydantic_models.job_models import Job, JobInfo, JobManagerCache
+from src.telegram.telegram_manager import TelegramReportSender
 from src.utils.utils import sanitize_text, save_yaml_file
 
 OUTPUT_DIR = OUTPUT_DIR_LINKEDIN if JOB_SITE == "linkedin" else OUTPUT_DIR_INDEED
@@ -29,10 +30,6 @@ class BaseJobManager(ABC):
 
     @abstractmethod
     def easy_apply(self, job: Job) -> Tuple[str, str]:
-        pass
-
-    @abstractmethod
-    def send_report(self, result: str) -> None:
         pass
 
     @staticmethod
@@ -377,6 +374,28 @@ class BaseJobManager(ABC):
         ).total_seconds() >= 60 * 60 * 24 or self.previous_apply_number > 0:
             return True
         return False
+
+    async def send_report(self, result: str) -> None:
+        """Send Telegram report after the application run completes"""
+        if TEST_MODE or COLLECT_INFO_MODE or result == "Error":
+            return
+        if self.previous_apply_number >= self.success_applies_num:
+            return
+        try:
+            logger.info("Sending a report about the work done in Telegram")
+            bot = TelegramReportSender()
+            await bot.send_telegram_report(
+                self.email,
+                self.resume,
+                self.success_applies_num,
+                self.jobs_no_info,
+                self.skill_stat,
+                self.resume_recommendations,
+                self.resume_anonymizer,
+            )
+            self._write_the_last_search_time()
+        except Exception as e:
+            logger.warning(f"Failed to send Telegram report: {e}")
 
     async def _handle_apply_result(self, apply_result: Tuple[str, str], job: Job) -> None:
         """Handle the result of a job application attempt"""

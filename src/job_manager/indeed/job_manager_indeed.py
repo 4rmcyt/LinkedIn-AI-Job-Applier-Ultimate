@@ -20,7 +20,6 @@ from src.dashboard.runtime import StopRequested, emit_event
 from src.job_manager.indeed.easy_applier_indeed import IndeedEasyApplier
 from src.job_manager.job_manager import BaseJobManager
 from src.pydantic_models.job_models import Job
-from src.telegram.telegram_manager import TelegramReportSender
 from src.utils.browser_utils import (
     debug_capture,
     find_element_safely,
@@ -321,28 +320,6 @@ class IndeedJobManager(BaseJobManager):
             test_mode=TEST_MODE,
         )
         return await easy_applier.apply_to_job(job)
-
-    async def send_report(self, result: str) -> None:
-        """Send Telegram report with full details matching LinkedIn report format"""
-        if TEST_MODE or COLLECT_INFO_MODE or result == "Error":
-            return
-        if self.previous_apply_number >= self.success_applies_num:
-            return
-        try:
-            logger.info("Sending a report about the work done in Telegram")
-            bot = TelegramReportSender()
-            await bot.send_telegram_report(
-                self.email,
-                self.resume,
-                self.success_applies_num,
-                self.jobs_no_info,
-                self.skill_stat,
-                self.resume_recommendations,
-                self.resume_anonymizer,
-            )
-            self._write_the_last_search_time()
-        except Exception as e:
-            logger.warning(f"Failed to send Telegram report: {e}")
 
     # ------------------------------------------------------------------
     # Internal helpers
