@@ -496,29 +496,3 @@ class IndeedJobManager(BaseJobManager):
             logger.warning(f"Could not navigate to next page: {e}")
             await debug_capture(self.page, "next_page_error")
             return False
-
-    async def _handle_apply_result(self, apply_result: Tuple[str, str], job: Job) -> None:
-        """Save job result to the appropriate YAML file"""
-        result, _ = apply_result
-        emit_event(
-            "job_result",
-            f"Job result: {result}",
-            result=result.lower(),
-            job_title=job.job_title,
-            company_name=job.company_name,
-            url=job.url,
-        )
-        # increase the counters of all applications and successful applications
-        self.applies_num += 1
-        if result == "Success":
-            self.success_applies_num += 1
-            self.total_applies_num += 1
-            self.cache.success_applies_num = self.success_applies_num
-            self.cache.total_applies_num = self.total_applies_num
-            self.cache.update_last_apply()
-            self._write_the_last_search_time()
-        elif result == "Error":
-            self.error_num += 1
-            self._save_company(job, apply_result, {"url": job.url})
-        elif result != "Limit":
-            self._save_company(job, apply_result, {"url": job.url})

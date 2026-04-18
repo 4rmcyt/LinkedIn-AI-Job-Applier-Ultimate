@@ -209,8 +209,9 @@ class LinkedInJobManager(BaseJobManager):
         """Send applications to all employers on the page (async)"""
         minimum_job_time = time.time() + MINIMUM_WAIT_TIME_SEC
         # Open vacancy in a new window/tab
+        original_page = self.page
         new_page = await self.page.context.new_page()
-
+        self.page = new_page
         # Navigate to job page
         try:
             await new_page.goto(vacancy["url"], wait_until="domcontentloaded")
@@ -323,6 +324,7 @@ class LinkedInJobManager(BaseJobManager):
             if time_left > 0:
                 await async_pause(time_left, time_left + 5)
             await new_page.close()
+            self.page = original_page
             await self.page.bring_to_front()
 
     async def easy_apply(self, job: Job) -> Tuple[str, str]:
@@ -340,32 +342,6 @@ class LinkedInJobManager(BaseJobManager):
         )
         easy_applier_component.set_page(self.page)
         return await easy_applier_component.apply_to_job(job)
-
-    async def _handle_apply_result(self, apply_result: Tuple[str, str], job: Job) -> None:
-        """Get the apply result"""
-        result, _ = apply_result
-        emit_event(
-            "job_result",
-            f"Job result: {result}",
-            result=result.lower(),
-            job_title=job.job_title,
-            company_name=job.company_name,
-            url=job.url,
-        )
-        # increase the counters of all applications and successful applications
-        self.applies_num += 1
-        if result == "Success":
-            self.success_applies_num += 1
-            self.total_applies_num += 1
-            self.cache.success_applies_num = self.success_applies_num
-            self.cache.total_applies_num = self.total_applies_num
-            self.cache.update_last_apply()
-            self._write_the_last_search_time()
-        elif result == "Error":
-            self.error_num += 1
-            self._save_company(job, apply_result, {"url": job.url})
-        elif result != "Limit":
-            self._save_company(job, apply_result, {"url": job.url})
 
     async def send_report(self, result: str) -> None:
         """

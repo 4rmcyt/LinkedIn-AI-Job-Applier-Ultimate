@@ -10,6 +10,7 @@ import yaml
 from config.app_config import COLLECT_INFO_MODE, JOB_SITE, MAX_APPLIES_NUM
 from config.constants import OUTPUT_DIR_INDEED, OUTPUT_DIR_LINKEDIN
 from config.logger_config import logger
+from src.dashboard.runtime import emit_event
 from src.pydantic_models.job_models import Job, JobInfo, JobManagerCache
 from src.utils.utils import sanitize_text, save_yaml_file
 
@@ -376,6 +377,30 @@ class BaseJobManager(ABC):
         ).total_seconds() >= 60 * 60 * 24 or self.previous_apply_number > 0:
             return True
         return False
+
+    async def _handle_apply_result(self, apply_result: Tuple[str, str], job: Job) -> None:
+        """Handle the result of a job application attempt"""
+        result, _ = apply_result
+        emit_event(
+            "job_result",
+            f"Job result: {result}",
+            result=result.lower(),
+            job_title=job.job_title,
+            company_name=job.company_name,
+            url=job.url,
+        )
+        self.applies_num += 1
+        if result != "Limit":
+            self._save_company(job, apply_result, {"url": job.url})
+        if result == "Success":
+            self.success_applies_num += 1
+            self.total_applies_num += 1
+            self.cache.success_applies_num = self.success_applies_num
+            self.cache.total_applies_num = self.total_applies_num
+            self.cache.update_last_apply()
+            self._write_the_last_search_time()
+        elif result == "Error":
+            self.error_num += 1
 
     def _write_the_last_search_time(self) -> None:
         """Write the time of the last job search"""
