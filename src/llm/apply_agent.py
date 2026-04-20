@@ -40,7 +40,10 @@ class ApplyAgent:
                 f"Browser storage state file not found at {self.browser_storage_state}. "
                 "Continuing without persisted cookies/localStorage."
             )
-        self.browser = Browser(headless=HEADLESS_MODE, storage_state=storage_state)
+        self.storage_state = storage_state
+
+    def _create_browser(self) -> Browser:
+        return Browser(headless=HEADLESS_MODE, storage_state=self.storage_state)
 
     def select_model_type(self, model_type: str, llm_api_url: str) -> None:
         """Select the model to use."""
@@ -146,17 +149,21 @@ class ApplyAgent:
 
         available_file_paths = [resume_pdf_path]
 
-        self.agent = Agent(
-            task=task,
-            browser=self.browser,
-            llm=self.llm,
-            tools=tools,
-            use_vision=False,
-            use_thinking=False,
-            save_conversation_path=Path(LOG_DIR).absolute() / "apply_agent_conversation",
-            available_file_paths=available_file_paths,
-        )
-        await self.agent.run()
+        browser = self._create_browser()
+        try:
+            self.agent = Agent(
+                task=task,
+                browser=browser,
+                llm=self.llm,
+                tools=tools,
+                use_vision=False,
+                use_thinking=False,
+                save_conversation_path=Path(LOG_DIR).absolute() / "apply_agent_conversation",
+                available_file_paths=available_file_paths,
+            )
+            await self.agent.run()
+        finally:
+            await browser.stop()
 
         self._log_token_usage(task)
         emit_event("agent_apply_completed", "External apply agent completed", url=job_url)

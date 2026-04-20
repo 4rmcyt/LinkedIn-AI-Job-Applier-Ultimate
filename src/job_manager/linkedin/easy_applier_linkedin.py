@@ -261,7 +261,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
         logger.debug("Searching for 'Continue Applying' button")
         continue_applying_button = await find_element_safely(
             self.page,
-            '//button[contains(@class, "artdeco-button--primary") and contains(., "Continue applying")]',
+            '//*[contains(., "Continue applying") and (self::button or self::a)]',
             "xpath",
         )
         if continue_applying_button:
@@ -1036,7 +1036,8 @@ class LinkedInEasyApplier(BaseEasyApplier):
                 question_text = ""
 
             # Extract options text from radio buttons and their labels
-            options = await section.locator(",".join(radio_selectors)).evaluate_all("""els => {
+            options = await section.locator(",".join(radio_selectors)).evaluate_all(
+                """els => {
                     const seen = new Set();
                     return els.reduce((acc, e) => {
                         if (e.id && !seen.has(e.id)) {
@@ -1047,7 +1048,8 @@ class LinkedInEasyApplier(BaseEasyApplier):
                         }
                         return acc;
                     }, []);
-                }""")
+                }"""
+            )
             options = list(dict.fromkeys(options))
 
             if not options:

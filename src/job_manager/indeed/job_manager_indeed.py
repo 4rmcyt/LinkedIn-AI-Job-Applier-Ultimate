@@ -193,7 +193,8 @@ class IndeedJobManager(BaseJobManager):
 
     async def _scroll_left_panel(self) -> None:
         """Scroll the full page to trigger lazy-loading of job cards"""
-        await self.page.evaluate("""
+        await self.page.evaluate(
+            """
             () => new Promise((resolve) => {
                 const distance = document.body.scrollHeight;
                 const durationMs = 2000;
@@ -206,7 +207,8 @@ class IndeedJobManager(BaseJobManager):
                 }
                 requestAnimationFrame(step);
             })
-            """)
+            """
+        )
         await async_pause(1, 2)
         await self.page.evaluate("() => window.scrollTo(0, 0)")
 
@@ -283,7 +285,8 @@ class IndeedJobManager(BaseJobManager):
                 if TEST_MODE:
                     apply_result = "Skip", "Test mode"
                 else:
-                    apply_result = await self.llm_agent_component.apply_to_job(job.url)
+                    apply_url = await self._get_button_link(new_page)
+                    apply_result = await self.llm_agent_component.apply_to_job(apply_url)
             else:
                 apply_result = await self.easy_apply(job, new_page)
 
@@ -435,6 +438,34 @@ class IndeedJobManager(BaseJobManager):
             except Exception:
                 continue
         logger.debug("Could not extract company description from Indeed page")
+        return ""
+
+    async def _get_button_link(self, page: Any) -> str:
+        """Click the external apply button and return the URL it opens in a new tab."""
+        apply_selectors = [
+            "a[data-testid='applyButton']",
+            "a[aria-label*='Apply on']",
+            ".ia-BasePage-applyButton",
+            "a[data-jk][href*='apply']",
+        ]
+        for selector in apply_selectors:
+            try:
+                elements = await find_elements_safely(page, selector)
+                for button in elements:
+                    if not (await button.is_visible() and await button.is_enabled()):
+                        continue
+                    async with page.context.expect_page() as new_page_info:
+                        await button.click(timeout=3000)
+                    new_page = await new_page_info.value
+                    await async_pause()
+                    link = new_page.url
+                    await new_page.close()
+                    logger.debug(f"External apply link obtained: {link}")
+                    return link
+            except Exception as e:
+                logger.debug(f"Failed to get external apply link with selector {selector!r}: {e}")
+                continue
+        logger.warning("Could not find external apply button on Indeed job page")
         return ""
 
     async def _dismiss_overlays(self) -> None:

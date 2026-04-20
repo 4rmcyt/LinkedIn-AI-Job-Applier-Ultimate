@@ -684,12 +684,16 @@ class LinkedInJobManager(BaseJobManager):
     async def _check_apply_button(self) -> str:
         """Check if the apply button is present and return the URL of the apply button (async).
         If no apply button is found, return an empty string."""
+        easy_apply_selectors = ['//a[contains(@aria-label, "Easy Apply")]']
+        for selector in easy_apply_selectors:
+            easy_apply_buttons = await find_elements_safely(self.page, selector, "xpath")
+            if len(easy_apply_buttons) > 0:
+                return ""
         apply_selectors = [
             '//a[contains(., "Apply")]',
         ]
         for selector in apply_selectors:
             apply_buttons = await find_elements_safely(self.page, selector, "xpath")
-
             if len(apply_buttons) > 0:
                 return await self._get_button_link(apply_buttons)
         return None
@@ -704,6 +708,19 @@ class LinkedInJobManager(BaseJobManager):
                 async with self.page.context.expect_page() as new_page_info:
                     logger.debug("Clicking apply button")
                     await button.first.click(timeout=1000)
+                    # Handle "Job search safety reminder" dialog if it appears
+                    await async_pause()
+                    continue_btn = await find_element_safely(
+                        self.page,
+                        '//*[contains(., "Continue applying") and (self::button or self::a)]',
+                        "xpath",
+                    )
+                    if continue_btn:
+                        logger.debug(
+                            "Safety reminder dialog detected, clicking 'Continue applying'"
+                        )
+                        await continue_btn.click(timeout=1000)
+                        await async_pause()
                 new_page = await new_page_info.value
                 await async_pause()
                 link = new_page.url
