@@ -62,13 +62,6 @@ class GeminiModel(AIModel):
             temperature=TEMPERATURE,
             thinking_level="minimal",
             safety_settings={
-                HarmCategory.HARM_CATEGORY_UNSPECIFIED: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_DEROGATORY: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_TOXICITY: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_VIOLENCE: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_SEXUAL: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_MEDICAL: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_DANGEROUS: HarmBlockThreshold.BLOCK_NONE,
                 HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
                 HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
                 HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
@@ -847,7 +840,11 @@ class GPTAnswerer:
         additional_prompt = "- Specify the following contacts: "
         invoke_dict = {
             "resume": self.resume_readable,
-            "company_name": self.job.company_name,
+            "company_name": (
+                self.job.get("company_name", "")
+                if isinstance(self.job, dict)
+                else self.job.company_name
+            ),
             "job_description": self.job_readable,
         }
         if phone:

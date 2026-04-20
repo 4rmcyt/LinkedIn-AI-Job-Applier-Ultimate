@@ -142,6 +142,9 @@ class TestLinkedInAuthenticatorLogin:
         mock_locator.count.return_value = 0  # No saved profile
         # Make locator() a non-async method that returns the mock_locator
         mock_page.locator = MagicMock(return_value=mock_locator)
+        # get_by_role is synchronous in Playwright; override AsyncMock default
+        mock_page.get_by_role = MagicMock()
+        mock_page.get_by_role.return_value.click = AsyncMock()
 
         auth = LinkedInAuthenticator(page=mock_page)
         auth.email = "test@example.com"
@@ -151,13 +154,12 @@ class TestLinkedInAuthenticatorLogin:
             patch(
                 "src.job_manager.linkedin.authenticator_linkedin.safe_fill", new_callable=AsyncMock
             ) as mock_fill,
-            patch(
-                "src.job_manager.linkedin.authenticator_linkedin.safe_click", new_callable=AsyncMock
-            ) as mock_click,
+            patch.object(
+                auth, "try_continue_with_saved_account", new_callable=AsyncMock, return_value=False
+            ),
             patch.object(auth, "check_login_success", new_callable=AsyncMock) as mock_check,
         ):
             mock_fill.return_value = True
-            mock_click.return_value = True
             mock_check.return_value = True
 
             result = await auth.enter_credentials()
@@ -165,7 +167,6 @@ class TestLinkedInAuthenticatorLogin:
             assert result is True
             # Should fill both email and password
             assert mock_fill.call_count == 2
-            mock_click.assert_called_once()
             mock_check.assert_called_once()
 
     @pytest.mark.asyncio
@@ -185,20 +186,16 @@ class TestLinkedInAuthenticatorLogin:
             patch(
                 "src.job_manager.linkedin.authenticator_linkedin.safe_fill", new_callable=AsyncMock
             ) as mock_fill,
-            patch(
-                "src.job_manager.linkedin.authenticator_linkedin.safe_click", new_callable=AsyncMock
-            ) as mock_click,
-            patch.object(auth, "check_login_success", new_callable=AsyncMock) as mock_check,
+            patch.object(
+                auth, "try_continue_with_saved_account", new_callable=AsyncMock, return_value=True
+            ),
+            patch.object(auth, "check_login_success", new_callable=AsyncMock, return_value=True),
         ):
-            mock_fill.return_value = True
-            mock_click.return_value = True
-            mock_check.return_value = True
-
             result = await auth.enter_credentials()
 
             assert result is True
-            # Should only fill password (not email since profile exists)
-            assert mock_fill.call_count == 1
+            # No form fill when saved account is used
+            assert mock_fill.call_count == 0
 
     @pytest.mark.asyncio
     async def test_enter_credentials_email_fill_failure(self):
@@ -253,6 +250,11 @@ class TestLinkedInAuthenticatorLogin:
         mock_locator.count.return_value = 0
         # Make locator() a non-async method that returns the mock_locator
         mock_page.locator = MagicMock(return_value=mock_locator)
+        # get_by_role is synchronous in Playwright; make click raise to simulate missing button
+        mock_page.get_by_role = MagicMock()
+        mock_page.get_by_role.return_value.click = AsyncMock(
+            side_effect=Exception("button not found")
+        )
 
         auth = LinkedInAuthenticator(page=mock_page)
         auth.email = "test@example.com"
@@ -262,12 +264,11 @@ class TestLinkedInAuthenticatorLogin:
             patch(
                 "src.job_manager.linkedin.authenticator_linkedin.safe_fill", new_callable=AsyncMock
             ) as mock_fill,
-            patch(
-                "src.job_manager.linkedin.authenticator_linkedin.safe_click", new_callable=AsyncMock
-            ) as mock_click,
+            patch.object(
+                auth, "try_continue_with_saved_account", new_callable=AsyncMock, return_value=False
+            ),
         ):
             mock_fill.return_value = True
-            mock_click.return_value = False  # All login button clicks fail
 
             result = await auth.enter_credentials()
 
@@ -511,6 +512,9 @@ class TestAuthenticatorIntegration:
         mock_locator.count.return_value = 0
         # Make locator() a non-async method that returns the mock_locator
         mock_page.locator = MagicMock(return_value=mock_locator)
+        # get_by_role is synchronous in Playwright
+        mock_page.get_by_role = MagicMock()
+        mock_page.get_by_role.return_value.click = AsyncMock()
 
         auth = LinkedInAuthenticator(page=mock_page)
         auth.set_parameters("test@example.com", "password123")
@@ -523,15 +527,15 @@ class TestAuthenticatorIntegration:
             patch(
                 "src.job_manager.linkedin.authenticator_linkedin.safe_fill", new_callable=AsyncMock
             ) as mock_fill,
-            patch(
-                "src.job_manager.linkedin.authenticator_linkedin.safe_click", new_callable=AsyncMock
-            ) as mock_click,
+            patch.object(
+                auth, "try_continue_with_saved_account", new_callable=AsyncMock, return_value=False
+            ),
+            patch.object(auth, "check_login_success", new_callable=AsyncMock, return_value=True),
         ):
             # First is_logged_in check returns False (not logged in)
             # After login, feed element is found
             mock_find.side_effect = [None, MagicMock()]
             mock_fill.return_value = True
-            mock_click.return_value = True
 
             result = await auth.start()
 

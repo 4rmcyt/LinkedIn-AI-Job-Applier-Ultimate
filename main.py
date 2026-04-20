@@ -8,16 +8,13 @@ from threading import Lock
 
 import dotenv
 
-# TODO: EASY_APPLY_ONLY_MODE = False for Indeed
-# TODO: EASY_APPLY_ONLY_MODE = False for LinkedIn
-
 # TODO: Check dashboard for both Indeed and LinkedIn
-# TODO: Check pause/resume functionality
 
 # TODO: Record a video of the bot working on Indeed
 # TODO: Record a video of the bot working on LinkedIn
 
-# TODO: Create tests for Indeed, acutalize tests for LinkedIn
+# TODO: Create tests for Indeed
+# TODO: test_enter_credentials_password_fill_failure - too slow
 
 # TODO: Create a tutorial video for the bot
 

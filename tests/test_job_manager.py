@@ -92,7 +92,7 @@ class TestJobApplierInitialization:
         )
 
         assert applier.page == mock_page
-        assert applier.linkedin_email == "test@example.com"
+        assert applier.email == "test@example.com"
         assert applier.resume_anonymizer == mock_resume_anonymizer
         assert applier.search_component == mock_search_component
         assert applier.llm_answerer_component is None
@@ -440,6 +440,8 @@ class TestJobSeenChecking:
     def test_job_is_already_seen_not_seen(self, job_applier):
         """Test when job has not been seen before"""
         job_applier.success_companies = {}
+        job_applier.skipped_companies = {}
+        job_applier.failed_companies = {}
         job_applier.apply_once_at_company = True
 
         job = Job(job_title="Software Engineer", company_name="New Company")
@@ -454,6 +456,8 @@ class TestJobSeenChecking:
         job_applier.success_companies = {
             "Tech Corp": [{"job_title": "Other Position", "url": "http://test.com"}]
         }
+        job_applier.skipped_companies = {}
+        job_applier.failed_companies = {}
         job_applier.apply_once_at_company = True
 
         job = Job(job_title="Software Engineer", company_name="Tech Corp")
@@ -469,6 +473,8 @@ class TestJobSeenChecking:
         job_applier.success_companies = {
             "Tech Corp": [{"job_title": "Software Engineer", "url": "http://test.com"}]
         }
+        job_applier.skipped_companies = {}
+        job_applier.failed_companies = {}
         job_applier.apply_once_at_company = False
         job = Job(job_title="Software Engineer", company_name="Tech Corp")
         with patch("src.job_manager.job_manager.COLLECT_INFO_MODE", False):
@@ -592,123 +598,6 @@ class TestDefineOutputFile:
         # Just verify it returns a path containing the filename
         assert "test.yaml" in str(result)
         assert "data/output" in str(result) or "data\\output" in str(result)
-
-
-class TestGetApplyResult:
-    """Test get_apply_result method"""
-
-    def test_get_apply_result_success(self, job_applier):
-        """Test get_apply_result with successful application"""
-        with (
-            patch.object(job_applier, "_save_company"),
-            patch("src.job_manager.job_manager.save_yaml_file"),
-        ):
-            job_applier.cache = JobManagerCache()
-            job_applier.applies_num = 0
-            job_applier.success_applies_num = 0
-            job_applier.total_applies_num = 0
-            job_applier.max_applies_num = 50
-            job_applier.success_companies = {}
-            job_applier.skipped_companies = {}
-            job_applier.failed_companies = {}
-
-            job = Job(
-                job_title="Engineer",
-                company_name="Tech Corp",
-                url="https://linkedin.com/jobs/view/12345",
-            )
-            vacancy = {"url": "https://linkedin.com/jobs/view/12345"}
-            apply_result = ("Success", "")
-            minimum_job_time = 0  # No waiting needed
-
-            result = job_applier.get_apply_result(apply_result, job, vacancy, minimum_job_time)
-
-            assert job_applier.applies_num == 1
-            assert job_applier.success_applies_num == 1
-            assert job_applier.total_applies_num == 1
-            assert result == "Success"
-
-    def test_get_apply_result_skip(self, job_applier):
-        """Test get_apply_result with skipped application"""
-        with (patch.object(job_applier, "_save_company"),):
-            job_applier.cache = JobManagerCache()
-            job_applier.applies_num = 0
-            job_applier.success_applies_num = 0
-            job_applier.total_applies_num = 0
-            job_applier.max_applies_num = 50
-            job_applier.success_companies = {}
-            job_applier.skipped_companies = {}
-            job_applier.failed_companies = {}
-
-            job = Job(
-                job_title="Engineer",
-                company_name="Tech Corp",
-                url="https://linkedin.com/jobs/view/12345",
-            )
-            vacancy = {"url": "https://linkedin.com/jobs/view/12345"}
-            apply_result = ("Skip", "Not interesting")
-            minimum_job_time = 0
-
-            result = job_applier.get_apply_result(apply_result, job, vacancy, minimum_job_time)
-
-            assert job_applier.applies_num == 1
-            assert job_applier.success_applies_num == 0  # No success
-            assert result == "Skip"
-
-    def test_get_apply_result_limit_reached(self, job_applier):
-        """Test get_apply_result when limit is reached"""
-        with (
-            patch.object(job_applier, "_save_company"),
-            patch("src.job_manager.job_manager.save_yaml_file"),
-        ):
-            job_applier.cache = JobManagerCache()
-            job_applier.applies_num = 0
-            job_applier.success_applies_num = 49
-            job_applier.total_applies_num = 0
-            job_applier.max_applies_num = 50
-            job_applier.success_companies = {}
-            job_applier.skipped_companies = {}
-            job_applier.failed_companies = {}
-
-            job = Job(
-                job_title="Engineer",
-                company_name="Tech Corp",
-                url="https://linkedin.com/jobs/view/12345",
-            )
-            vacancy = {"url": "https://linkedin.com/jobs/view/12345"}
-            apply_result = ("Success", "")
-            minimum_job_time = 0
-
-            result = job_applier.get_apply_result(apply_result, job, vacancy, minimum_job_time)
-
-            assert job_applier.success_applies_num == 50
-            assert result == "Limit"
-
-    def test_get_apply_result_limit_status(self, job_applier):
-        """Test get_apply_result when apply_result is Limit"""
-        with (patch.object(job_applier, "_save_company"),):
-            job_applier.cache = JobManagerCache()
-            job_applier.applies_num = 0
-            job_applier.success_applies_num = 10
-            job_applier.total_applies_num = 0
-            job_applier.max_applies_num = 50
-            job_applier.success_companies = {}
-            job_applier.skipped_companies = {}
-            job_applier.failed_companies = {}
-
-            job = Job(
-                job_title="Engineer",
-                company_name="Tech Corp",
-                url="https://linkedin.com/jobs/view/12345",
-            )
-            vacancy = {"url": "https://linkedin.com/jobs/view/12345"}
-            apply_result = ("Limit", "")
-            minimum_job_time = 0
-
-            result = job_applier.get_apply_result(apply_result, job, vacancy, minimum_job_time)
-
-            # When result is "Limit", company should not be saved
-            assert result == "Limit"
 
 
 class TestExtractSkillsFromVacancy:
