@@ -53,7 +53,9 @@ class LinkedInJobManager(BaseJobManager):
         self.llm_agent_component = None
         self.resume_generator_manager = None
         self.pause_checker = None
-        self.jobs_no_info = []  # vacancies to which applications were not sent due to missing information
+        self.jobs_no_info = (
+            []
+        )  # vacancies to which applications were not sent due to missing information
         self.job_key_skills = []  # key skills according to employer's opinion
         self.interesting_jobs = []
         self.page_num = 0
@@ -477,6 +479,23 @@ class LinkedInJobManager(BaseJobManager):
                             return text
                 except Exception:
                     continue
+
+        # Fallback: extract from "Set alert for similar jobs" paragraph
+        # Format: "Job Title, Company Name, State, Country"
+        alert_xpath = (
+            "//h2[contains(text(), 'Set alert for similar jobs')]/following-sibling::div[1]//p"
+        )
+        elements = await find_elements_safely(self.page, alert_xpath, "xpath")
+        for element in elements:
+            try:
+                text = await get_clean_text(element)
+                if text:
+                    parts = [p.strip() for p in text.split(",")]
+                    if len(parts) >= 2 and parts[1]:
+                        logger.debug(f"Found company name '{parts[1]}' from alert section")
+                        return parts[1]
+            except Exception:
+                continue
 
         logger.debug("Could not extract company name from job page")
         return None
