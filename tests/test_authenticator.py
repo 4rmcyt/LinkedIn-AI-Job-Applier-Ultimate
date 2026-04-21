@@ -154,6 +154,10 @@ class TestLinkedInAuthenticatorLogin:
             patch(
                 "src.job_manager.linkedin.authenticator_linkedin.safe_fill", new_callable=AsyncMock
             ) as mock_fill,
+            patch(
+                "src.job_manager.linkedin.authenticator_linkedin.async_pause",
+                new_callable=AsyncMock,
+            ),
             patch.object(
                 auth, "try_continue_with_saved_account", new_callable=AsyncMock, return_value=False
             ),
@@ -210,9 +214,14 @@ class TestLinkedInAuthenticatorLogin:
         auth.email = "test@example.com"
         auth.password = "password123"
 
-        with patch(
-            "src.job_manager.linkedin.authenticator_linkedin.safe_fill", new_callable=AsyncMock
-        ) as mock_fill:
+        with (
+            patch(
+                "src.job_manager.linkedin.authenticator_linkedin.safe_fill", new_callable=AsyncMock
+            ) as mock_fill,
+            patch.object(
+                auth, "try_continue_with_saved_account", new_callable=AsyncMock, return_value=False
+            ),
+        ):
             mock_fill.return_value = False  # Email fill fails
 
             result = await auth.enter_credentials()
@@ -232,9 +241,14 @@ class TestLinkedInAuthenticatorLogin:
         auth.email = "test@example.com"
         auth.password = "password123"
 
-        with patch(
-            "src.job_manager.linkedin.authenticator_linkedin.safe_fill", new_callable=AsyncMock
-        ) as mock_fill:
+        with (
+            patch(
+                "src.job_manager.linkedin.authenticator_linkedin.safe_fill", new_callable=AsyncMock
+            ) as mock_fill,
+            patch.object(
+                auth, "try_continue_with_saved_account", new_callable=AsyncMock, return_value=False
+            ),
+        ):
             # Email succeeds, password fails
             mock_fill.side_effect = [True, False]
 
@@ -527,6 +541,10 @@ class TestAuthenticatorIntegration:
             patch(
                 "src.job_manager.linkedin.authenticator_linkedin.safe_fill", new_callable=AsyncMock
             ) as mock_fill,
+            patch(
+                "src.job_manager.linkedin.authenticator_linkedin.async_pause",
+                new_callable=AsyncMock,
+            ),
             patch.object(
                 auth, "try_continue_with_saved_account", new_callable=AsyncMock, return_value=False
             ),

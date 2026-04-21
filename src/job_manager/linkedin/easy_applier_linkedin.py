@@ -1580,7 +1580,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
             # Find the textbox/textarea to correct within this section
             target_input: Any | None = None
             all_inputs_loc = section.locator(
-                "input[type='text'], textarea, .artdeco-text-input--input, xpath=.//input | .//textarea"
+                "input[type='text'], textarea, .artdeco-text-input--input"
             )
             vis_indices = await all_inputs_loc.evaluate_all(
                 "els => els.map((e, i) => e.offsetParent !== null ? i : -1).filter(i => i >= 0)"

@@ -215,6 +215,11 @@ class TestTelegramReportSender:
         # No longer need to patch module constants as they are loaded from env
         yield
 
+    @pytest.fixture(autouse=True)
+    def mock_sleep(self):
+        with patch("src.telegram.telegram_manager.asyncio.sleep", new_callable=AsyncMock):
+            yield
+
     def test_init(self, mock_env, mock_config):
         """Test TelegramReportSender initialization"""
         with patch("src.telegram.telegram_manager.Bot") as mock_bot_class:

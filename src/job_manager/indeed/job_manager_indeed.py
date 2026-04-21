@@ -337,7 +337,7 @@ class IndeedJobManager(BaseJobManager):
                 return None
             title = await title_el.text_content() or ""
             jk = await title_el.get_attribute("data-jk") or ""
-            if "".join(sorted(jk)) == "0123456789abcdef":
+            if "0123456789abcdef" in "".join(sorted(jk)):
                 return None
             if jk:
                 # Use the canonical viewjob URL so the same job always maps to the
