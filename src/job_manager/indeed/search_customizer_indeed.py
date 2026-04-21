@@ -92,9 +92,15 @@ class IndeedSearchCustomizer(BaseSearchCustomizer):
         if not await distance_btn.is_visible():
             return
         logger.info("Distance filter button found, selecting max distance")
+        await async_pause(1, 1.5)
         await distance_btn.click()
-        listbox = self.page.locator('ul[aria-label="Distance options"]')
-        await listbox.wait_for(state="visible")
+        listbox = self.page.locator('ul[aria-label="Distance options"], ul[role="listbox"]')
+        try:
+            await listbox.first.wait_for(state="visible", timeout=10000)
+            listbox = listbox.first
+        except Exception:
+            logger.warning("Distance options listbox not found, skipping distance filter")
+            return
         options = listbox.locator('li[role="option"]')
         count = await options.count()
         if count > 0:
