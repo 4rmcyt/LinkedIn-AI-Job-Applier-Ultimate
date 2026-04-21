@@ -8,8 +8,6 @@ from threading import Lock
 
 import dotenv
 
-# TODO: Check dashboard for both Indeed and LinkedIn
-
 # TODO: Create tests for Indeed
 # TODO: Create tests for LinkedIn
 
