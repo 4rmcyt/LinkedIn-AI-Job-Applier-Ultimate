@@ -7,18 +7,13 @@ import yaml
 from playwright.async_api import Locator, Page
 
 from config.logger_config import logger
-from src.job_manager.linkedin.authenticator import LinkedInAuthenticator
+from src.job_manager.linkedin.authenticator_linkedin import LinkedInAuthenticator
 from src.pydantic_models.config_models import ConnectionSearcherConfig
-from src.utils.browser_utils import (
-    async_pause,
-    create_playwright_browser,
-    pause,
-    save_browser_session,
-)
+from src.utils.browser_utils import async_pause, create_playwright_browser, save_browser_session
 
 
 class ConnectionSearcher:
-    def __init__(self, config_path: str = "config/connection_searcher_config.yaml"):
+    def __init__(self, config_path: str = "config/linkedin_connection_searcher_config.yaml"):
         self.config = self._load_config(config_path)
         self.secrets = self._load_secrets()
         # Expanded keywords that indicate an open networker

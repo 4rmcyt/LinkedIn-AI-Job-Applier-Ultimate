@@ -255,8 +255,8 @@ This project enhances the original codebase with several powerful new features:
     - Provide your API key in `.env` as `llm_api_key`. Optionally set `llm_proxy`.
     - Model pricing used in reports is taken from an internal map for common models; others fall back to default per-token prices.
 
-4.  **Connection Searcher Settings (`config/connection_searcher_config.yaml`):**
-    Copy this file from `examples/config/connection_searcher_config.yaml` and fine tune the automated networking tool behaviour in this file.
+4.  **Connection Searcher Settings (`config/linkedin_connection_searcher_config.yaml`):**
+    Copy this file from `examples/config/linkedin_connection_searcher_config.yaml` and fine tune the automated networking tool behaviour in this file.
     *   `main_search_words`: Keywords like "Open Networker" or "LION" used to find networking-oriented profiles.
     *   `additional_search_words`: Keywords to narrow down the search to your specific field (e.g., "ai", "ml", "data science").
     The bot will search for every combination of these words and attempt to connect with users whose profiles indicate they are open networkers (while intelligently skipping those profiles where the keywords appear only in "mutual connections").
@@ -395,12 +395,12 @@ If you want a more detailed dashboard guide, see `docs/dashboard.md`.
 To run the networking tool that finds and connects with Open Networkers:
 
 ```bash
-python connection_searcher.py
+python linkedin_connection_searcher.py
 ```
 
-This tool will use the settings in `config/connection_searcher_config.yaml` to search for potential connections on LinkedIn and send invitations automatically.
+This tool will use the settings in `config/linkedin_connection_searcher_config.yaml` to search for potential connections on LinkedIn and send invitations automatically.
 
-Bot uses main keywords like "Open Networker" or "LION" to find people who are open for networking. You can also set your own additional keywords in `config/connection_searcher_config.yaml` file to search for specific people (e.g. if you are ML Engineer - you can add "ml" or "data science" keywords to search for another ML Engineers). The bot will search for every combination of main and additional keywords and attempt to connect with users whose profiles indicate they are open networkers (while intelligently skipping those profiles where the keywords only appear in "mutual connections").
+Bot uses main keywords like "Open Networker" or "LION" to find people who are open for networking. You can also set your own additional keywords in `config/linkedin_connection_searcher_config.yaml` file to search for specific people (e.g. if you are ML Engineer - you can add "ml" or "data science" keywords to search for another ML Engineers). The bot will search for every combination of main and additional keywords and attempt to connect with users whose profiles indicate they are open networkers (while intelligently skipping those profiles where the keywords only appear in "mutual connections").
 
 ## 💵 Vacancy application cost
 
