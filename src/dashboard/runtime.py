@@ -446,6 +446,20 @@ def check_for_stop_request() -> None:
         raise StopRequested("Dashboard requested stop")
 
 
+def _signal_process_tree(pid: int, sig: int) -> None:
+    try:
+        pgid = os.getpgid(pid)
+    except OSError:
+        pgid = pid
+    try:
+        os.killpg(pgid, sig)
+    except OSError:
+        try:
+            os.kill(pid, sig)
+        except OSError:
+            pass
+
+
 def terminate_running_process() -> bool:
     process_info = get_process_info()
     pid = process_info.get("pid")
@@ -453,7 +467,7 @@ def terminate_running_process() -> bool:
         clear_process_info()
         return False
     update_control_state(stop_requested=True)
-    os.kill(pid, signal.SIGTERM)
+    _signal_process_tree(pid, signal.SIGTERM)
     clear_process_info()
     emit_event("run_stopped", "Bot process terminated by dashboard")
     update_snapshot(run_status="stopped", finished_at=_now_iso(), current_job=None)

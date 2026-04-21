@@ -1,6 +1,5 @@
 import asyncio
 import json
-import os
 import signal
 from contextlib import asynccontextmanager
 from typing import Any, Dict
@@ -28,6 +27,7 @@ from src.dashboard.data_service import (
 from src.dashboard.runtime import (
     LATEST_SCREENSHOT_FILE,
     ROOT_DIR,
+    _signal_process_tree,
     get_process_info,
     is_process_running,
     latest_event_position,
@@ -64,10 +64,7 @@ async def lifespan(app: FastAPI):
             if not is_process_running(pid):
                 break
         else:
-            try:
-                os.kill(pid, signal.SIGKILL)
-            except OSError:
-                pass
+            _signal_process_tree(pid, signal.SIGKILL)
 
 
 app = FastAPI(title=f"{SITE_NAME} AI Job Applier Dashboard", lifespan=lifespan)
