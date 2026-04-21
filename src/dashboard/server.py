@@ -1,5 +1,8 @@
 import asyncio
 import json
+import os
+import signal
+from contextlib import asynccontextmanager
 from typing import Any, Dict
 
 from fastapi import FastAPI, HTTPException, Query
@@ -25,6 +28,8 @@ from src.dashboard.data_service import (
 from src.dashboard.runtime import (
     LATEST_SCREENSHOT_FILE,
     ROOT_DIR,
+    get_process_info,
+    is_process_running,
     latest_event_position,
     read_events_since,
     read_events_since_for_run,
@@ -48,7 +53,24 @@ class AppConfigPayload(BaseModel):
     config: Dict[str, Any]
 
 
-app = FastAPI(title=f"{SITE_NAME} AI Job Applier Dashboard")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    pid = get_process_info().get("pid")
+    terminate_running_process()
+    if pid:
+        for _ in range(10):
+            await asyncio.sleep(0.5)
+            if not is_process_running(pid):
+                break
+        else:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except OSError:
+                pass
+
+
+app = FastAPI(title=f"{SITE_NAME} AI Job Applier Dashboard", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 

@@ -359,16 +359,12 @@ def start_bot_process() -> Dict[str, Any]:
     env = os.environ.copy()
     env["DASHBOARD_RUN_ID"] = run_id
 
-    stdout_file = BOT_STDOUT_FILE.open("a", encoding="utf-8")
     process = subprocess.Popen(
         ["uv", "run", "python", "main.py"],
         cwd=ROOT_DIR,
         env=env,
-        stdout=stdout_file,
-        stderr=subprocess.STDOUT,
         start_new_session=True,
     )
-    stdout_file.close()
 
     process_info = {"pid": process.pid, "run_id": run_id, "started_at": _now_iso()}
     set_process_info(process_info)
@@ -456,6 +452,7 @@ def terminate_running_process() -> bool:
     if not is_process_running(pid):
         clear_process_info()
         return False
+    update_control_state(stop_requested=True)
     os.kill(pid, signal.SIGTERM)
     clear_process_info()
     emit_event("run_stopped", "Bot process terminated by dashboard")
