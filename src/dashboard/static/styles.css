@@ -1,13 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  --bg: #0e1018;
-  --surface: rgba(255, 255, 255, 0.05);
-  --surface-2: rgba(255, 255, 255, 0.08);
+  --bg: #0c0e15;
+  --surface: rgba(255, 255, 255, 0.03);
+  --surface-2: rgba(255, 255, 255, 0.05);
   --border: rgba(255, 255, 255, 0.07);
   --border-bright: rgba(255, 255, 255, 0.16);
-  --text: #e2e8f0;
-  --muted: #475569;
+  --text: #f1f5f9;
+  --muted: #7a8fa5;
   --accent: #38bdf8;
   --accent-dim: rgba(56, 189, 248, 0.12);
   --accent-glow: rgba(56, 189, 248, 0.18);
@@ -128,7 +128,7 @@ button:disabled {
 
 /* ── PANEL ───────────────────────────────────────── */
 .panel {
-  background: rgba(20, 24, 38, 0.85);
+  background: #1a1f30;
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 1.2rem 1.4rem;
