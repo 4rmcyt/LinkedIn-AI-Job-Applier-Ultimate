@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.job_manager.indeed.authenticator_indeed import IndeedAuthenticator
 from src.job_manager.linkedin.authenticator_linkedin import LinkedInAuthenticator
 
 
@@ -449,6 +450,124 @@ class TestCheckLoginSuccess:
         assert result is False
 
 
+class TestTryContinueWithSavedAccount:
+    """Tests for try_continue_with_saved_account method"""
+
+    def _make_locator(self, count=0, url_after_click="https://www.linkedin.com/feed/"):
+        mock_locator = AsyncMock()
+        mock_locator.count.return_value = count
+        mock_locator.first = mock_locator
+        return mock_locator
+
+    @pytest.mark.asyncio
+    async def test_no_saved_accounts_found(self):
+        """Returns False when no saved account buttons are present"""
+        mock_page = AsyncMock()
+        mock_locator = self._make_locator(count=0)
+        mock_page.locator = MagicMock(return_value=mock_locator)
+        mock_page.locator.return_value.first = mock_locator
+
+        auth = LinkedInAuthenticator(page=mock_page)
+        auth.email = "user@example.com"
+
+        result = await auth.try_continue_with_saved_account()
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_saved_account_click_leads_to_feed(self):
+        """Returns True when clicking saved account navigates away from login"""
+        mock_page = AsyncMock()
+        mock_locator = AsyncMock()
+        mock_locator.count.return_value = 1
+        mock_locator.first = mock_locator
+        mock_page.locator = MagicMock(return_value=mock_locator)
+
+        mock_page.url = "https://www.linkedin.com/feed/"
+
+        auth = LinkedInAuthenticator(page=mock_page)
+        auth.email = "user@example.com"
+
+        with patch(
+            "src.job_manager.linkedin.authenticator_linkedin.async_pause", new_callable=AsyncMock
+        ):
+            result = await auth.try_continue_with_saved_account()
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_saved_account_click_leads_to_password_prompt(self):
+        """Returns False when clicking saved account leads to a password prompt"""
+        mock_page = AsyncMock()
+
+        domain_locator = AsyncMock()
+        domain_locator.count.return_value = 1
+        domain_locator.first = domain_locator
+
+        password_locator = AsyncMock()
+        password_locator.count.return_value = 1
+
+        def locator_factory(selector):
+            if "#password" in selector:
+                return password_locator
+            return domain_locator
+
+        mock_page.locator = MagicMock(side_effect=locator_factory)
+        mock_page.url = "https://www.linkedin.com/login"
+
+        auth = LinkedInAuthenticator(page=mock_page)
+        auth.email = "user@example.com"
+
+        with patch(
+            "src.job_manager.linkedin.authenticator_linkedin.async_pause", new_callable=AsyncMock
+        ):
+            result = await auth.try_continue_with_saved_account()
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_saved_account_click_raises_tries_next_selector(self):
+        """Continues to next selector when click raises an exception"""
+        mock_page = AsyncMock()
+
+        failing_locator = AsyncMock()
+        failing_locator.count.return_value = 1
+        failing_locator.first = failing_locator
+        failing_locator.click = AsyncMock(side_effect=Exception("click failed"))
+
+        mock_page.locator = MagicMock(return_value=failing_locator)
+        mock_page.url = "https://www.linkedin.com/login"
+
+        auth = LinkedInAuthenticator(page=mock_page)
+        auth.email = "user@example.com"
+
+        with patch(
+            "src.job_manager.linkedin.authenticator_linkedin.async_pause", new_callable=AsyncMock
+        ):
+            result = await auth.try_continue_with_saved_account()
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_no_email_set_skips_domain_selector(self):
+        """When email is None, domain-based selector is skipped"""
+        mock_page = AsyncMock()
+        mock_locator = AsyncMock()
+        mock_locator.count.return_value = 0
+        mock_locator.first = mock_locator
+        mock_page.locator = MagicMock(return_value=mock_locator)
+
+        auth = LinkedInAuthenticator(page=mock_page)
+        auth.email = None
+
+        result = await auth.try_continue_with_saved_account()
+
+        assert result is False
+        # Ensure no domain-specific selector (has-text('<domain>')) was used
+        for call in mock_page.locator.call_args_list:
+            assert "example.com" not in call.args[0]
+
+
 class TestAuthenticatorStart:
     """Tests for the main start method"""
 
@@ -584,3 +703,346 @@ class TestAuthenticatorIntegration:
             assert result is True
             # Should not attempt to fill credentials
             mock_fill.assert_not_called()
+
+
+class TestIndeedAuthenticatorInit:
+    def test_init_without_page(self):
+        auth = IndeedAuthenticator()
+
+        assert auth.page is None
+        assert auth.email is None
+        assert auth.password is None
+
+    def test_init_with_page(self):
+        mock_page = MagicMock()
+        auth = IndeedAuthenticator(page=mock_page)
+
+        assert auth.page == mock_page
+
+    def test_set_parameters(self):
+        auth = IndeedAuthenticator()
+        auth.set_parameters("user@example.com", "pass123")
+
+        assert auth.email == "user@example.com"
+        assert auth.password == "pass123"
+
+
+class TestIndeedIsLoggedIn:
+    @pytest.mark.asyncio
+    async def test_logged_in_account_menu_found(self):
+        mock_page = AsyncMock()
+        mock_page.url = "https://www.indeed.com/"
+
+        with patch(
+            "src.job_manager.indeed.authenticator_indeed.find_element_safely",
+            new_callable=AsyncMock,
+            return_value=MagicMock(),
+        ):
+            auth = IndeedAuthenticator(page=mock_page)
+            result = await auth.is_logged_in()
+
+        assert result is True
+        mock_page.goto.assert_called_once_with(
+            IndeedAuthenticator.INDEED_HOME_URL, wait_until="domcontentloaded"
+        )
+
+    @pytest.mark.asyncio
+    async def test_redirected_to_login(self):
+        mock_page = AsyncMock()
+        mock_page.url = "https://secure.indeed.com/account/login"
+
+        auth = IndeedAuthenticator(page=mock_page)
+        result = await auth.is_logged_in()
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_redirected_to_signin(self):
+        mock_page = AsyncMock()
+        mock_page.url = "https://www.indeed.com/signin"
+
+        auth = IndeedAuthenticator(page=mock_page)
+        result = await auth.is_logged_in()
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_account_menu_not_found(self):
+        mock_page = AsyncMock()
+        mock_page.url = "https://www.indeed.com/"
+
+        with patch(
+            "src.job_manager.indeed.authenticator_indeed.find_element_safely",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            auth = IndeedAuthenticator(page=mock_page)
+            result = await auth.is_logged_in()
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_exception_returns_false(self):
+        mock_page = AsyncMock()
+        mock_page.goto.side_effect = Exception("Network error")
+
+        auth = IndeedAuthenticator(page=mock_page)
+        result = await auth.is_logged_in()
+
+        assert result is False
+
+
+class TestIndeedHandleLogin:
+    @pytest.mark.asyncio
+    async def test_handle_login_success(self):
+        mock_page = AsyncMock()
+        auth = IndeedAuthenticator(page=mock_page)
+        auth.email = "user@example.com"
+
+        with (
+            patch.object(auth, "enter_credentials", new_callable=AsyncMock, return_value=True),
+            patch(
+                "src.job_manager.indeed.authenticator_indeed.async_pause", new_callable=AsyncMock
+            ),
+        ):
+            result = await auth.handle_login()
+
+        assert result is True
+        mock_page.goto.assert_called_once_with(IndeedAuthenticator.INDEED_LOGIN_URL)
+
+    @pytest.mark.asyncio
+    async def test_handle_login_navigation_fails(self):
+        mock_page = AsyncMock()
+        mock_page.goto.side_effect = Exception("Navigation failed")
+
+        auth = IndeedAuthenticator(page=mock_page)
+        result = await auth.handle_login()
+
+        assert result is False
+
+
+class TestIndeedEnterCredentials:
+    @pytest.mark.asyncio
+    async def test_enter_credentials_success(self):
+        mock_page = AsyncMock()
+        auth = IndeedAuthenticator(page=mock_page)
+        auth.email = "user@example.com"
+
+        with (
+            patch(
+                "src.job_manager.indeed.authenticator_indeed.safe_fill",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "src.job_manager.indeed.authenticator_indeed.safe_click",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "src.job_manager.indeed.authenticator_indeed.async_pause", new_callable=AsyncMock
+            ),
+            patch.object(auth, "check_login_success", new_callable=AsyncMock, return_value=True),
+        ):
+            result = await auth.enter_credentials()
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_enter_credentials_email_fill_fails(self):
+        mock_page = AsyncMock()
+        auth = IndeedAuthenticator(page=mock_page)
+        auth.email = "user@example.com"
+
+        with patch(
+            "src.job_manager.indeed.authenticator_indeed.safe_fill",
+            new_callable=AsyncMock,
+            return_value=False,
+        ):
+            result = await auth.enter_credentials()
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_enter_credentials_exception(self):
+        mock_page = AsyncMock()
+        auth = IndeedAuthenticator(page=mock_page)
+        auth.email = "user@example.com"
+
+        with patch(
+            "src.job_manager.indeed.authenticator_indeed.safe_fill",
+            new_callable=AsyncMock,
+            side_effect=Exception("fill error"),
+        ):
+            result = await auth.enter_credentials()
+
+        assert result is False
+
+
+class TestIndeedCheckLoginSuccess:
+    @pytest.mark.asyncio
+    async def test_success_on_jobs_url(self):
+        mock_page = AsyncMock()
+        mock_page.url = "https://www.indeed.com/jobs?q=python"
+
+        with patch(
+            "src.job_manager.indeed.authenticator_indeed.find_element_safely",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            auth = IndeedAuthenticator(page=mock_page)
+            result = await auth.check_login_success()
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_success_on_myjobs_url(self):
+        mock_page = AsyncMock()
+        mock_page.url = "https://www.indeed.com/myjobs"
+
+        with patch(
+            "src.job_manager.indeed.authenticator_indeed.find_element_safely",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            auth = IndeedAuthenticator(page=mock_page)
+            result = await auth.check_login_success()
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_success_blocked_when_signin_button_still_present(self):
+        """Reaching a success URL but sign-in button still visible means not logged in yet."""
+        mock_page = AsyncMock()
+        mock_page.url = "https://www.indeed.com/jobs?q=python"
+
+        with (
+            patch(
+                "src.job_manager.indeed.authenticator_indeed.find_element_safely",
+                new_callable=AsyncMock,
+                return_value=MagicMock(),
+            ),
+            patch(
+                "src.job_manager.indeed.authenticator_indeed.async_pause", new_callable=AsyncMock
+            ),
+        ):
+            auth = IndeedAuthenticator(page=mock_page)
+            result = await auth.check_login_success()
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_login_error_message_detected(self):
+        mock_page = AsyncMock()
+        mock_page.url = "https://www.indeed.com/login"
+
+        mock_error_locator = AsyncMock()
+        mock_error_locator.count.return_value = 1
+        mock_error_locator.first.text_content.return_value = "Invalid email or password"
+        mock_page.locator = MagicMock(return_value=mock_error_locator)
+
+        with patch(
+            "src.job_manager.indeed.authenticator_indeed.async_pause", new_callable=AsyncMock
+        ):
+            auth = IndeedAuthenticator(page=mock_page)
+            result = await auth.check_login_success()
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_challenge_url_waits(self):
+        mock_page = AsyncMock()
+
+        urls = ["https://www.indeed.com/challenge/captcha", "https://www.indeed.com/jobs?q=dev"]
+        url_index = [0]
+
+        def get_url():
+            idx = url_index[0]
+            url = urls[min(idx, len(urls) - 1)]
+            url_index[0] += 1
+            return url
+
+        type(mock_page).url = property(lambda self: get_url())
+
+        with (
+            patch(
+                "src.job_manager.indeed.authenticator_indeed.find_element_safely",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "src.job_manager.indeed.authenticator_indeed.async_pause", new_callable=AsyncMock
+            ),
+        ):
+            auth = IndeedAuthenticator(page=mock_page)
+            result = await auth.check_login_success()
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_timeout_on_login_page(self):
+        mock_page = AsyncMock()
+        mock_page.url = "https://www.indeed.com/login"
+
+        mock_locator = AsyncMock()
+        mock_locator.count.return_value = 0
+        mock_page.locator = MagicMock(return_value=mock_locator)
+
+        with patch(
+            "src.job_manager.indeed.authenticator_indeed.async_pause", new_callable=AsyncMock
+        ):
+            auth = IndeedAuthenticator(page=mock_page)
+            result = await auth.check_login_success()
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_exception_returns_false(self):
+        mock_page = AsyncMock()
+        type(mock_page).url = property(lambda self: (_ for _ in ()).throw(Exception("URL error")))
+
+        auth = IndeedAuthenticator(page=mock_page)
+        result = await auth.check_login_success()
+
+        assert result is False
+
+
+class TestIndeedAuthenticatorStart:
+    @pytest.mark.asyncio
+    async def test_start_already_logged_in(self):
+        mock_page = AsyncMock()
+        auth = IndeedAuthenticator(page=mock_page)
+        auth.set_parameters("user@example.com")
+
+        with patch.object(auth, "is_logged_in", new_callable=AsyncMock, return_value=True):
+            result = await auth.start()
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_start_needs_login_succeeds(self):
+        mock_page = AsyncMock()
+        auth = IndeedAuthenticator(page=mock_page)
+        auth.set_parameters("user@example.com")
+
+        with (
+            patch.object(auth, "is_logged_in", new_callable=AsyncMock, return_value=False),
+            patch.object(auth, "handle_login", new_callable=AsyncMock, return_value=True),
+        ):
+            result = await auth.start()
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_start_login_fails(self):
+        mock_page = AsyncMock()
+        auth = IndeedAuthenticator(page=mock_page)
+        auth.set_parameters("user@example.com")
+
+        with (
+            patch.object(auth, "is_logged_in", new_callable=AsyncMock, return_value=False),
+            patch.object(auth, "handle_login", new_callable=AsyncMock, return_value=False),
+        ):
+            result = await auth.start()
+
+        assert result is False

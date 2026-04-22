@@ -8,9 +8,6 @@ from threading import Lock
 
 import dotenv
 
-# TODO: Create tests for Indeed
-# TODO: Create tests for LinkedIn
-
 # TODO: Create a tutorial video for the bot
 
 # TODO: move project to document DB like MongoDB
