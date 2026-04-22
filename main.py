@@ -13,6 +13,8 @@ import dotenv
 
 # TODO: Create a tutorial video for the bot
 
+# TODO: move project to document DB like MongoDB
+
 
 # Try to import pynput for keyboard control (optional, not available in Docker)
 try:
