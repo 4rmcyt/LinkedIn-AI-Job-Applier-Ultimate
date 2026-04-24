@@ -91,6 +91,7 @@ Primary log files:
 - `logs/llm_api_calls.yaml` - LLM request, token, and cost tracking
 
 Additional runtime outputs:
+- `data/debug/` - screenshots, HTML captures, and Playwright traces for debugging selector and interaction failures
 - `data/output/` - `success.yaml`, `failed.yaml`, `skipped.yaml`, `interesting_jobs.yaml`, `skill_stat.yaml`, `last_run.yaml`, `resume_recommendations.txt`
 
 If `DEBUG_MODE = True`, also inspect:
