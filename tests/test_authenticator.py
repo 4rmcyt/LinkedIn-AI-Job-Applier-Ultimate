@@ -102,7 +102,8 @@ class TestLinkedInAuthenticatorLogin:
         mock_page.url = "https://www.linkedin.com/authwall"
 
         with patch(
-            "src.job_manager.authenticator.find_element_safely", new_callable=AsyncMock
+            "src.job_manager.linkedin.authenticator_linkedin.find_element_safely",
+            new_callable=AsyncMock,
         ) as mock_find:
             mock_find.return_value = None
 
@@ -168,6 +169,7 @@ class TestLinkedInAuthenticatorLogin:
         auth.password = "password123"
 
         with (
+            patch.object(auth, "_is_authenticated_page", new_callable=AsyncMock, return_value=False),
             patch(
                 "src.job_manager.linkedin.authenticator_linkedin.safe_fill", new_callable=AsyncMock
             ) as mock_fill,
@@ -180,7 +182,6 @@ class TestLinkedInAuthenticatorLogin:
             ),
             patch.object(auth, "check_login_success", new_callable=AsyncMock) as mock_check,
         ):
-            mock_auth_page.return_value = False
             mock_fill.return_value = True
             mock_check.return_value = True
 
@@ -205,6 +206,7 @@ class TestLinkedInAuthenticatorLogin:
         auth.password = "password123"
 
         with (
+            patch.object(auth, "_is_authenticated_page", new_callable=AsyncMock, return_value=False),
             patch(
                 "src.job_manager.linkedin.authenticator_linkedin.safe_fill", new_callable=AsyncMock
             ) as mock_fill,
@@ -300,7 +302,6 @@ class TestLinkedInAuthenticatorLogin:
                 auth, "try_continue_with_saved_account", new_callable=AsyncMock, return_value=False
             ),
         ):
-            mock_auth_page.return_value = False
             mock_fill.return_value = True
 
             result = await auth.enter_credentials()
@@ -316,7 +317,10 @@ class TestLinkedInAuthenticatorLogin:
 
         with (
             patch.object(auth, "_is_authenticated_page", new_callable=AsyncMock) as mock_auth_page,
-            patch("src.job_manager.authenticator.safe_fill", new_callable=AsyncMock) as mock_fill,
+            patch(
+                "src.job_manager.linkedin.authenticator_linkedin.safe_fill",
+                new_callable=AsyncMock,
+            ) as mock_fill,
         ):
             mock_auth_page.return_value = True
 
