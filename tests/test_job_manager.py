@@ -463,6 +463,36 @@ class TestCompanyManagement:
             job_applier._save_company(job, apply_result, vacancy)
 
             assert "Tech Corp" in job_applier.skipped_companies
+            saved_job = job_applier.skipped_companies["Tech Corp"][0]
+            assert saved_job["company_name"] == "Tech Corp"
+
+    def test_save_company_persists_evaluation_metadata(self, job_applier):
+        with patch.object(job_applier, "_save_company_to_yaml"):
+            job_applier.success_companies = {}
+            job_applier.skipped_companies = {}
+            job_applier.failed_companies = {}
+
+            job = Job(
+                job_title="Software Engineer",
+                company_name="Tech Corp",
+                url="https://linkedin.com/jobs/view/12345",
+            )
+
+            job_applier._save_company(
+                job,
+                ("Skip", "Not interesting"),
+                {"url": "https://linkedin.com/jobs/view/12345"},
+                evaluation={
+                    "interest_score": 42,
+                    "interest_reason": "Mismatch with role target",
+                    "skills": ["Python", "Leadership"],
+                },
+            )
+
+            saved_job = job_applier.skipped_companies["Tech Corp"][0]
+            assert saved_job["interest_score"] == 42
+            assert saved_job["interest_reason"] == "Mismatch with role target"
+            assert saved_job["skills"] == ["Python", "Leadership"]
 
     def test_save_company_skip_does_not_duplicate_existing_entry(self, job_applier):
         """Test duplicate skipped vacancies are not appended again"""
@@ -824,6 +854,39 @@ class TestHandleApplyResult:
         assert job_applier.success_applies_num == 1
         assert job_applier.total_applies_num == 1
         assert job_applier.error_num == 0
+
+    @pytest.mark.asyncio
+    async def test_handle_apply_result_passes_evaluation_to_save_company(self, job_applier):
+        job_applier.applies_num = 0
+        job_applier.success_applies_num = 0
+        job_applier.total_applies_num = 0
+        job_applier.error_num = 0
+        job_applier.cache = JobManagerCache()
+
+        job = Job(
+            job_title="Software Engineer",
+            company_name="Tech Corp",
+            url="https://linkedin.com/jobs/view/1",
+        )
+
+        with (
+            patch("src.job_manager.job_manager.emit_event"),
+            patch("src.job_manager.job_manager.COLLECT_INFO_MODE", False),
+            patch.object(job_applier, "_save_company") as mock_save,
+            patch.object(job_applier, "_write_the_last_search_time"),
+        ):
+            await job_applier._handle_apply_result(
+                ("Success", ""),
+                job,
+                evaluation={"interest_score": 88, "interest_reason": "Strong fit", "skills": ["Python"]},
+            )
+
+        mock_save.assert_called_once_with(
+            job,
+            ("Success", ""),
+            {"url": job.url},
+            evaluation={"interest_score": 88, "interest_reason": "Strong fit", "skills": ["Python"]},
+        )
 
     @pytest.mark.asyncio
     async def test_handle_apply_result_error(self, job_applier):

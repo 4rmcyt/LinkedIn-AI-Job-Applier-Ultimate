@@ -207,6 +207,7 @@ class LinkedInJobManager(BaseJobManager):
     async def apply_job(self, vacancy: Dict[str, Any]) -> str:
         """Send applications to all employers on the page (async)"""
         minimum_job_time = time.time() + MINIMUM_WAIT_TIME_SEC
+        evaluation = {"interest_score": None, "interest_reason": None, "skills": None}
         # Open vacancy in a new window/tab
         original_page = self.page
         new_page = await self.page.context.new_page()
@@ -267,17 +268,20 @@ class LinkedInJobManager(BaseJobManager):
                         score,
                         reasoning,
                     ) = self.llm_answerer_component.job_is_interesting(job.model_dump())
+                evaluation["interest_score"] = int(score) if score is not None else None
+                evaluation["interest_reason"] = reasoning
                 if not job_is_interesting:
                     logger.info(
                         f"Skipping uninteresting job: {job.job_title} at {job.company_name}"
                     )
-                    await self._handle_apply_result(("Skip", reasoning), job)
+                    await self._handle_apply_result(("Skip", reasoning), job, evaluation=evaluation)
                     return "Skip"
                 # update the list of required skills for the vacancy and save job info to file
                 # only if the vacancy was scored and considered interesting
                 if int(score) > 0:
                     # extract skills from the vacancy
                     job.skills = self._extract_skills_from_vacancy(job)
+                    evaluation["skills"] = self.job_key_skills
                     self._update_skill_stat(self.job_key_skills)
                     # set the vacancy to answerer
                     if COLLECT_INFO_MODE is True:
@@ -309,7 +313,7 @@ class LinkedInJobManager(BaseJobManager):
                 if result == "Skip" and reason.startswith("Could not"):
                     self._collect_job_info(company_job_title, company_name, job.url, reason)
             result, _ = apply_result
-            await self._handle_apply_result(apply_result, job)
+            await self._handle_apply_result(apply_result, job, evaluation=evaluation)
             if self.success_applies_num >= self.max_applies_num:
                 logger.info(
                     f"The maximum number of applications has been reached: "

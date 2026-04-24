@@ -118,11 +118,13 @@ class BaseJobManager(ABC):
         job: Job,
         apply_result: Tuple[str, str],
         vacancy: Dict[str, Any],
+        evaluation: Dict[str, Any] | None = None,
     ) -> None:
         """Determine in which category to save the company and save it to the corresponding YAML file"""
         company_name = job.company_name
         company_job_title = job.job_title
         result, reason = apply_result
+        evaluation = evaluation or {}
 
         if result == "Success":
             companies = self.success_companies
@@ -139,8 +141,12 @@ class BaseJobManager(ABC):
         try:
             job_info = JobInfo(
                 job_title=company_job_title,
+                company_name=company_name,
                 url=vacancy["url"],
                 skip_reason=reason,
+                skills=evaluation.get("skills"),
+                interest_score=evaluation.get("interest_score"),
+                interest_reason=evaluation.get("interest_reason"),
                 llm_time_seconds=(
                     self.llm_answerer_component.get_job_llm_time_seconds(vacancy["url"])
                     if self.llm_answerer_component
@@ -417,7 +423,12 @@ class BaseJobManager(ABC):
         except Exception as e:
             logger.warning(f"Failed to send Telegram report: {e}")
 
-    async def _handle_apply_result(self, apply_result: Tuple[str, str], job: Job) -> None:
+    async def _handle_apply_result(
+        self,
+        apply_result: Tuple[str, str],
+        job: Job,
+        evaluation: Dict[str, Any] | None = None,
+    ) -> None:
         """Handle the result of a job application attempt"""
         result, _ = apply_result
         emit_event(
@@ -430,7 +441,7 @@ class BaseJobManager(ABC):
         )
         self.applies_num += 1
         if result != "Limit" and COLLECT_INFO_MODE is False:
-            self._save_company(job, apply_result, {"url": job.url})
+            self._save_company(job, apply_result, {"url": job.url}, evaluation=evaluation)
         if result == "Success":
             self.success_applies_num += 1
             self.total_applies_num += 1

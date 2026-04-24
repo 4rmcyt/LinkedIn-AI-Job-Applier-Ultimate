@@ -253,6 +253,8 @@ class JobInfo(BaseModel):
     @classmethod
     def validate_interest_score(cls, v):
         """Validate interest score"""
+        if v is None:
+            return v
         if isinstance(v, str):
             if not v.isdigit():
                 raise ValueError("Interest score must be a number")
