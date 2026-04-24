@@ -1,4 +1,4 @@
-"""This module is used to run the LinkedIn bot"""
+"""This module is used to run the LinkedIn/Indeed bot"""
 
 import asyncio
 import os
@@ -8,26 +8,40 @@ from threading import Lock
 
 import dotenv
 
+# TODO: Create a tutorial video for the bot
+
+# TODO: move project to document DB like MongoDB
+
+
 # Try to import pynput for keyboard control (optional, not available in Docker)
 try:
     from pynput import keyboard as pynput_kb
 
     PYNPUT_AVAILABLE = True
-except (ImportError, Exception) as e:
+except (ImportError, Exception):
     PYNPUT_AVAILABLE = False
     pynput_kb = None
 
-from config.app_config import RESTART_EVERY_DAY
+from config.app_config import JOB_SITE, RESTART_EVERY_DAY
 from config.constants import BROWSER_STORAGE_STATE, RESUME_DIR, SEARCH_CONFIG_FILE
 from config.logger_config import logger
 from src.dashboard.runtime import StopRequested, emit_event, get_control_state
-from src.job_manager.authenticator import LinkedInAuthenticator
 
-# Commented out hh.ru specific imports - will be used later
+if JOB_SITE == "indeed":
+    from src.job_manager.indeed.authenticator_indeed import IndeedAuthenticator as Authenticator
+    from src.job_manager.indeed.job_manager_indeed import IndeedJobManager as LinkedInJobManager
+    from src.job_manager.indeed.search_customizer_indeed import (
+        IndeedSearchCustomizer as SearchCustomizer,
+    )
+else:
+    from src.job_manager.linkedin.authenticator_linkedin import (
+        LinkedInAuthenticator as Authenticator,
+    )
+    from src.job_manager.linkedin.job_manager_linkedin import LinkedInJobManager
+    from src.job_manager.linkedin.search_customizer_linkedin import SearchCustomizer
+
 from src.job_manager.bot_facade import BotFacade
-from src.job_manager.job_manager import JobApplier
 from src.job_manager.resume_anonymizer import ResumeAnonymizer
-from src.job_manager.search_customizer import SearchCustomizer
 from src.llm.apply_agent import ApplyAgent
 from src.llm.llm_manager import GPTAnswerer
 from src.pydantic_models.config_models import SearchConfig, Secrets
@@ -35,15 +49,9 @@ from src.pydantic_models.prompt_models import ResumeStructure
 from src.resume_builder.resume_generator import ResumeGenerator
 from src.resume_builder.resume_manager import ResumeManager
 from src.resume_builder.style_manager import StyleManager
-from src.utils.browser_utils import create_playwright_browser, save_browser_session
-# Local runtime patch: keep fork-specific shutdown handling isolated to one module.
+from src.utils.browser_utils import create_playwright_browser, save_browser_session, stop_tracing
 from src.utils.runtime_control import (
-    BrowserClosedError,
-    GracefulShutdownRequested,
-    attach_browser_close_watchers,
-    countdown_before_restart,
     register_shutdown_handlers,
-    run_with_runtime_guards,
     runtime_controller,
     sleep_with_shutdown,
 )
@@ -89,19 +97,20 @@ class ConfigValidator:
 
     @staticmethod
     def validate_secrets() -> dict:
-        """Check for LinkedIn secret keys"""
+        """Check for required secret keys based on active JOB_SITE"""
         secrets = {**dotenv.dotenv_values(".env")}
         try:
-            # Check for required LinkedIn credentials
-            required_keys = ["linkedin_email", "linkedin_password"]
-            missing_keys = [key for key in required_keys if key not in secrets or not secrets[key]]
+            if JOB_SITE == "indeed":
+                required_keys = ["indeed_email"]
+            else:
+                required_keys = ["linkedin_email", "linkedin_password"]
 
+            missing_keys = [key for key in required_keys if not secrets.get(key)]
             if missing_keys:
                 raise ValueError(f"Missing required keys: {', '.join(missing_keys)}")
 
-            # Still validate with Pydantic if we have the full secrets structure
             secrets_config = Secrets(**secrets)
-            logger.debug("LinkedIn secrets validated successfully.")
+            logger.debug(f"{JOB_SITE} secrets validated successfully.")
             return secrets_config.model_dump()
         except Exception as e:
             raise ConfigError(f"Secrets validation error: {str(e)}")
@@ -188,9 +197,6 @@ async def check_pause():
     """Check if execution is paused and wait if needed"""
     global last_dashboard_pause_state, paused
 
-    if runtime_controller.is_shutdown_requested():
-        raise GracefulShutdownRequested("Shutdown requested")
-
     control = get_control_state()
     effective_paused = paused or control.get("pause_requested", False)
 
@@ -207,8 +213,6 @@ async def check_pause():
         last_dashboard_pause_state = effective_paused
 
     while paused or get_control_state().get("pause_requested", False):
-        if runtime_controller.is_shutdown_requested():
-            raise GracefulShutdownRequested("Shutdown requested")
         if get_control_state().get("stop_requested"):
             raise StopRequested("Dashboard requested stop")
         await asyncio.sleep(0.5)
@@ -226,21 +230,17 @@ async def create_and_run_bot(
 ):
     """Start LinkedIn bot (async)"""
     logger.info("Initializing LinkedIn bot...")
-    runtime_controller.begin_run()
     emit_event(
         "run_started",
         "LinkedIn bot run started",
         positions=search_config.get("positions", []),
         locations=search_config.get("locations", []),
     )
-    browser = context = page = None
-    browser_closed = None
 
     # Initialize browser Playwright based on configuration
     try:
         browser, context, page = await create_playwright_browser()
         # Local runtime patch: detect manual browser closure and recover cleanly.
-        browser_closed = attach_browser_close_watchers(browser, context, page)
         logger.info("Playwright browser initialized successfully")
         emit_event("browser_initialized", "Playwright browser initialized")
 
@@ -251,13 +251,19 @@ async def create_and_run_bot(
         raise RuntimeError(f"Failed to initialize browser: {e}")
 
     try:
-        # Initialize LinkedIn authenticator
-        authenticator = LinkedInAuthenticator(page)
-        linkedin_email = secrets["linkedin_email"]
-        linkedin_password = secrets["linkedin_password"]
-        authenticator.set_parameters(linkedin_email, linkedin_password)
+        # Resolve credentials based on active site
+        if JOB_SITE == "indeed":
+            site_email = secrets["indeed_email"]
+            site_password = None
+        else:
+            site_email = secrets["linkedin_email"]
+            site_password = secrets["linkedin_password"]
 
-        # Attempt LinkedIn login
+        # Initialize authenticator
+        authenticator = Authenticator(page)
+        authenticator.set_parameters(site_email, site_password)
+
+        # Attempt login
         login_success = await authenticator.start()
         if login_success:
             await save_browser_session(context)
@@ -275,8 +281,10 @@ async def create_and_run_bot(
         llm_api_url = secrets.get("llm_api_url")
         llm_answerer_component = GPTAnswerer(llm_api_key, llm_proxy, llm_api_url)
         llm_agent_component = ApplyAgent(
-            llm_api_key, BROWSER_STORAGE_STATE, llm_api_url, linkedin_email
+            llm_api_key, BROWSER_STORAGE_STATE, llm_api_url, site_email
         )
+
+        linkedin_email = site_email  # kept for LinkedInJobManager constructor compatibility
 
         if not resume_structured:
             resume_structured = llm_answerer_component.parse_resume(resume_text)
@@ -294,22 +302,28 @@ async def create_and_run_bot(
         resume_generator = ResumeGenerator(llm_answerer_component, resume_anonymizer)
         resume_generator_manager = ResumeManager(llm_api_key, style_manager, resume_generator)
 
-        if not READY_MADE_RESUME.resolve().is_file():
+        if not READY_MADE_RESUME.resolve().is_file() and not os.environ.get("DASHBOARD_RUN_ID"):
             resume_generator_manager.choose_style()
 
         # Set search component
         search_component = SearchCustomizer(page)
 
         # Set apply component
-        apply_component = JobApplier(page, linkedin_email, resume_anonymizer, search_component)
+        apply_component = LinkedInJobManager(
+            page, linkedin_email, resume_anonymizer, search_component
+        )
 
         # Set bot facade
         bot = BotFacade(resume_anonymizer, search_component, apply_component, llm_agent_component)
         bot.set_parameters(search_config)
         bot.set_pause_checker(check_pause)
 
-        # Check if the last search was less than a day ago
-        if RESTART_EVERY_DAY and not apply_component.check_the_last_search_time():
+        # Check if the last search was less than a day ago (LinkedIn only)
+        if (
+            RESTART_EVERY_DAY
+            and JOB_SITE == "linkedin"
+            and not apply_component.check_the_last_search_time()
+        ):
             logger.warning(
                 "Last search was less than a day ago, finishing work. If you want to restart the search, delete the file data/output/last_run.yaml file"
             )
@@ -318,8 +332,8 @@ async def create_and_run_bot(
             )
             return True
 
-        # Validate structured resume and prompt user if needed
-        if not validate_and_prompt_resume_completion(
+        # Validate structured resume and prompt user if needed (skip when launched from dashboard)
+        if not os.environ.get("DASHBOARD_RUN_ID") and not validate_and_prompt_resume_completion(
             resume_structured, RESUME_STRUCTURED_FILE, RESUME_TEXT_FILE
         ):
             logger.info("User chose to exit and complete resume information")
@@ -331,7 +345,7 @@ async def create_and_run_bot(
         bot.set_resume(resume_structured, resume_text, resume_text_anonymized)
         if not READY_MADE_RESUME.resolve().is_file():
             bot.set_resume_generator(resume_generator_manager)
-        await run_with_runtime_guards(bot, browser_closed)
+        await bot.start_apply()
         emit_event("run_completed", "LinkedIn bot run completed successfully")
 
     finally:
@@ -340,10 +354,14 @@ async def create_and_run_bot(
         try:
             if context is not None:
                 await save_browser_session(context)
+                await stop_tracing(context)
+            # Close Playwright browser (browser is None when using persistent context)
             if browser is not None:
                 await browser.close()
-                logger.info("Playwright browser closed")
-                emit_event("browser_closed", "Playwright browser closed")
+            elif context is not None:
+                await context.close()
+            logger.info("Playwright browser closed")
+            emit_event("browser_closed", "Playwright browser closed")
 
         except Exception as e:
             logger.warning(f"Error during browser cleanup: {e}")
@@ -360,12 +378,15 @@ def main() -> None:
 
     while True:
         should_exit = False
-        should_restart = False
         try:
             # create output folder if it doesn't exist
             data = Path("data")
             output_folder = data / "output"
             output_folder.mkdir(exist_ok=True)
+            linkedin_output_folder = output_folder / "linkedin"
+            linkedin_output_folder.mkdir(exist_ok=True)
+            indeed_output_folder = output_folder / "indeed"
+            indeed_output_folder.mkdir(exist_ok=True)
 
             # validate config files
             config_validator = ConfigValidator()
@@ -379,14 +400,21 @@ def main() -> None:
                     f"Can't find neither resume text file {RESUME_TEXT_FILE} nor resume structured file {RESUME_STRUCTURED_FILE}"
                 )
 
-            logger.info("Starting LinkedIn Job Applier...")
+            logger.info(f"Starting {JOB_SITE.capitalize()} Job Applier...")
             logger.info(f"Search config loaded with {len(search_config)} parameters")
 
-            # Run LinkedIn bot (async)
             asyncio.run(create_and_run_bot(search_config, secrets, resume_text, resume_structured))
-            logger.info("LinkedIn bot completed successfully")
-            if not RESTART_EVERY_DAY:
-                should_exit = True
+            logger.info(f"{JOB_SITE.capitalize()} bot completed successfully")
+
+        except StopRequested as stop_requested:
+            logger.warning(str(stop_requested))
+            emit_event("run_stopped", "Run stopped gracefully by dashboard")
+            should_exit = True
+
+        except StopRequested as stop_requested:
+            logger.warning(str(stop_requested))
+            emit_event("run_stopped", "Run stopped gracefully by dashboard")
+            should_exit = True
 
         except StopRequested as stop_requested:
             logger.warning(str(stop_requested))
@@ -400,18 +428,6 @@ def main() -> None:
             tb_str = traceback.format_exc()
             logger.error(f"File not found: {str(fnf)}\n{tb_str}")
             emit_event("run_failed", "Required file was not found", error=str(fnf))
-        # Local runtime patch: custom runtime exceptions stay grouped here for easy rebasing.
-        except BrowserClosedError as bce:
-            logger.warning(str(bce))
-            should_restart = countdown_before_restart()
-            should_exit = not should_restart
-        except GracefulShutdownRequested:
-            logger.info("Graceful shutdown requested. Exiting after cleanup.")
-            should_exit = True
-        except KeyboardInterrupt:
-            runtime_controller.request_shutdown("keyboard interrupt")
-            logger.info("Interrupted by user. Exiting after cleanup.")
-            should_exit = True
         except RuntimeError as re:
             tb_str = traceback.format_exc()
             logger.error(f"Runtime error: {str(re)}\n{tb_str}")
@@ -422,11 +438,8 @@ def main() -> None:
             emit_event("run_failed", "Unhandled exception", error=str(e))
         finally:
             logger.info("Program completed")
-            if should_restart:
-                logger.info("Restarting after browser closure")
-            elif should_exit:
-                logger.info("Exiting program")
-            elif RESTART_EVERY_DAY:
+            # Wait 1 hour total before next run
+            if RESTART_EVERY_DAY and not should_exit:
                 logger.info("Waiting 1 hour before next run")
                 # Local runtime patch: make the daily wait interruptible.
                 if not asyncio.run(sleep_with_shutdown(3600)):

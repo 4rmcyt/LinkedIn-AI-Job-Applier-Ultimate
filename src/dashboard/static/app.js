@@ -509,11 +509,19 @@ function startEventStream() {
   });
 }
 
+async function refreshMeta() {
+  const meta = await fetchJson("/api/meta");
+  const siteName = meta.site_name || "AI";
+  document.title = `${siteName} AI Job Applier Dashboard`;
+  const eyebrow = document.getElementById("site-eyebrow");
+  if (eyebrow) eyebrow.textContent = `${siteName} AI Job Applier`;
+}
+
 async function init() {
   selectedRunId = getInitialSelectedRunId();
   await wireControls();
   wireFilters();
-  await Promise.all([refreshSummary(), refreshLive(), refreshJobs(), refreshConfig(), refreshRuns()]);
+  await Promise.all([refreshMeta(), refreshSummary(), refreshLive(), refreshJobs(), refreshConfig(), refreshRuns()]);
   if (selectedRunId) {
     await selectRun(selectedRunId);
   } else {

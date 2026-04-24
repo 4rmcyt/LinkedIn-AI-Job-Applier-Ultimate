@@ -77,7 +77,10 @@ class TestConfigValidator:
             "tg_token": "telegram_token_123",
         }
 
-        with patch("dotenv.dotenv_values", return_value=mock_secrets):
+        with (
+            patch("dotenv.dotenv_values", return_value=mock_secrets),
+            patch("main.JOB_SITE", "linkedin"),
+        ):
             validator = ConfigValidator()
             result = validator.validate_secrets()
 
@@ -91,7 +94,10 @@ class TestConfigValidator:
             "linkedin_password": "securepass123",
         }
 
-        with patch("dotenv.dotenv_values", return_value=mock_secrets):
+        with (
+            patch("dotenv.dotenv_values", return_value=mock_secrets),
+            patch("main.JOB_SITE", "linkedin"),
+        ):
             validator = ConfigValidator()
 
             with pytest.raises(ConfigError, match="Missing required keys: linkedin_email"):
@@ -103,7 +109,10 @@ class TestConfigValidator:
             "linkedin_email": "test@example.com",
         }
 
-        with patch("dotenv.dotenv_values", return_value=mock_secrets):
+        with (
+            patch("dotenv.dotenv_values", return_value=mock_secrets),
+            patch("main.JOB_SITE", "linkedin"),
+        ):
             validator = ConfigValidator()
 
             with pytest.raises(ConfigError, match="Missing required keys: linkedin_password"):
@@ -113,7 +122,10 @@ class TestConfigValidator:
         """Test validation fails when multiple required keys are missing"""
         mock_secrets = {}
 
-        with patch("dotenv.dotenv_values", return_value=mock_secrets):
+        with (
+            patch("dotenv.dotenv_values", return_value=mock_secrets),
+            patch("main.JOB_SITE", "linkedin"),
+        ):
             validator = ConfigValidator()
 
             with pytest.raises(
@@ -128,7 +140,10 @@ class TestConfigValidator:
             "linkedin_password": "securepass123",
         }
 
-        with patch("dotenv.dotenv_values", return_value=mock_secrets):
+        with (
+            patch("dotenv.dotenv_values", return_value=mock_secrets),
+            patch("main.JOB_SITE", "linkedin"),
+        ):
             validator = ConfigValidator()
 
             with pytest.raises(ConfigError, match="Missing required keys: linkedin_email"):
@@ -296,7 +311,8 @@ class TestCreateAndRunBot:
                 return_value=(mock_browser, mock_context, mock_page),
             ),
             patch("main.save_browser_session", new_callable=AsyncMock),
-            patch("main.LinkedInAuthenticator", return_value=mock_authenticator),
+            patch("main.Authenticator", return_value=mock_authenticator),
+            patch("main.JOB_SITE", "linkedin"),
         ):
             result = await create_and_run_bot(search_config, secrets, "", {})
 
@@ -383,7 +399,7 @@ class TestCreateAndRunBot:
                 return_value=(mock_browser, mock_context, mock_page),
             ),
             patch("main.save_browser_session", new_callable=AsyncMock),
-            patch("main.LinkedInAuthenticator", return_value=mock_authenticator),
+            patch("main.Authenticator", return_value=mock_authenticator),
             patch("main.GPTAnswerer", return_value=mock_gpt_answerer),
             patch("main.ApplyAgent", return_value=mock_apply_agent),
             patch("main.ResumeAnonymizer", return_value=mock_resume_anonymizer),
@@ -391,10 +407,11 @@ class TestCreateAndRunBot:
             patch("main.ResumeGenerator", return_value=mock_resume_generator),
             patch("main.ResumeManager", return_value=mock_resume_manager),
             patch("main.SearchCustomizer", return_value=mock_search_component),
-            patch("main.JobApplier", return_value=mock_apply_component),
+            patch("main.LinkedInJobManager", return_value=mock_apply_component),
             patch("main.BotFacade", return_value=mock_bot_facade),
             patch("main.validate_and_prompt_resume_completion", return_value=True),
             patch("main.READY_MADE_RESUME", mock_resume_file),
+            patch("main.JOB_SITE", "linkedin"),
         ):
             await create_and_run_bot(search_config, secrets, resume_text, resume_structured)
 
@@ -501,7 +518,7 @@ class TestCreateAndRunBot:
                 return_value=(mock_browser, mock_context, mock_page),
             ),
             patch("main.save_browser_session", new_callable=AsyncMock),
-            patch("main.LinkedInAuthenticator", return_value=mock_authenticator),
+            patch("main.Authenticator", return_value=mock_authenticator),
             patch("main.GPTAnswerer", return_value=mock_gpt_answerer),
             patch("main.ApplyAgent", return_value=mock_apply_agent),
             patch("main.ResumeAnonymizer", return_value=mock_resume_anonymizer),
@@ -509,11 +526,12 @@ class TestCreateAndRunBot:
             patch("main.ResumeGenerator", return_value=mock_resume_generator),
             patch("main.ResumeManager", return_value=mock_resume_manager),
             patch("main.SearchCustomizer", return_value=mock_search_component),
-            patch("main.JobApplier", return_value=mock_apply_component),
+            patch("main.LinkedInJobManager", return_value=mock_apply_component),
             patch("main.BotFacade", return_value=mock_bot_facade),
             patch("main.save_yaml_file") as mock_save_yaml,
             patch("main.validate_and_prompt_resume_completion", return_value=True),
             patch("main.READY_MADE_RESUME", mock_resume_file),
+            patch("main.JOB_SITE", "linkedin"),
         ):
             await create_and_run_bot(search_config, secrets, resume_text, resume_structured)
 
@@ -601,7 +619,7 @@ class TestCreateAndRunBot:
                 return_value=(mock_browser, mock_context, mock_page),
             ),
             patch("main.save_browser_session", new_callable=AsyncMock),
-            patch("main.LinkedInAuthenticator", return_value=mock_authenticator),
+            patch("main.Authenticator", return_value=mock_authenticator),
             patch("main.GPTAnswerer", return_value=mock_gpt_answerer),
             patch("main.ApplyAgent", return_value=mock_apply_agent),
             patch("main.ResumeAnonymizer", return_value=mock_resume_anonymizer),
@@ -609,10 +627,11 @@ class TestCreateAndRunBot:
             patch("main.ResumeGenerator"),
             patch("main.ResumeManager"),
             patch("main.SearchCustomizer", return_value=mock_search_component),
-            patch("main.JobApplier", return_value=mock_apply_component),
+            patch("main.LinkedInJobManager", return_value=mock_apply_component),
             patch("main.BotFacade", return_value=mock_bot_facade),
             patch("main.READY_MADE_RESUME", mock_resume_file),
             patch("main.RESTART_EVERY_DAY", True),
+            patch("main.JOB_SITE", "linkedin"),
         ):
             result = await create_and_run_bot(search_config, secrets, "", resume_structured)
 
@@ -698,7 +717,7 @@ class TestCreateAndRunBot:
                 return_value=(mock_browser, mock_context, mock_page),
             ),
             patch("main.save_browser_session", new_callable=AsyncMock),
-            patch("main.LinkedInAuthenticator", return_value=mock_authenticator),
+            patch("main.Authenticator", return_value=mock_authenticator),
             patch("main.GPTAnswerer", return_value=mock_gpt_answerer),
             patch("main.ApplyAgent", return_value=mock_apply_agent),
             patch("main.ResumeAnonymizer", return_value=mock_resume_anonymizer),
@@ -706,10 +725,11 @@ class TestCreateAndRunBot:
             patch("main.ResumeGenerator"),
             patch("main.ResumeManager"),
             patch("main.SearchCustomizer", return_value=mock_search_component),
-            patch("main.JobApplier", return_value=mock_apply_component),
+            patch("main.LinkedInJobManager", return_value=mock_apply_component),
             patch("main.BotFacade", return_value=mock_bot_facade),
             patch("main.validate_and_prompt_resume_completion", return_value=False),
             patch("main.READY_MADE_RESUME", mock_resume_file),
+            patch("main.JOB_SITE", "linkedin"),
         ):
             result = await create_and_run_bot(search_config, secrets, "", resume_structured)
 
@@ -798,7 +818,7 @@ class TestCreateAndRunBot:
                 return_value=(mock_browser, mock_context, mock_page),
             ),
             patch("main.save_browser_session", new_callable=AsyncMock),
-            patch("main.LinkedInAuthenticator", return_value=mock_authenticator),
+            patch("main.Authenticator", return_value=mock_authenticator),
             patch("main.GPTAnswerer", return_value=mock_gpt_answerer),
             patch("main.ApplyAgent", return_value=mock_apply_agent),
             patch("main.ResumeAnonymizer", return_value=mock_resume_anonymizer),
@@ -806,10 +826,11 @@ class TestCreateAndRunBot:
             patch("main.ResumeGenerator", return_value=mock_resume_generator),
             patch("main.ResumeManager", return_value=mock_resume_manager),
             patch("main.SearchCustomizer", return_value=mock_search_component),
-            patch("main.JobApplier", return_value=mock_apply_component),
+            patch("main.LinkedInJobManager", return_value=mock_apply_component),
             patch("main.BotFacade", return_value=mock_bot_facade),
             patch("main.validate_and_prompt_resume_completion", return_value=True),
             patch("main.READY_MADE_RESUME", mock_resume_file),
+            patch("main.JOB_SITE", "linkedin"),
         ):
             await create_and_run_bot(search_config, secrets, "", resume_structured)
 
@@ -850,9 +871,10 @@ class TestCreateAndRunBot:
                 return_value=(mock_browser, mock_context, mock_page),
             ),
             patch("main.save_browser_session", new_callable=AsyncMock),
-            patch("main.LinkedInAuthenticator", return_value=mock_authenticator),
+            patch("main.Authenticator", return_value=mock_authenticator),
             patch("main.GPTAnswerer", return_value=mock_gpt_answerer),
             patch("main.ApplyAgent"),
+            patch("main.JOB_SITE", "linkedin"),
         ):
             with pytest.raises(Exception, match="GPT API error"):
                 await create_and_run_bot(search_config, secrets, "", {})
@@ -893,8 +915,8 @@ class TestMain:
 
             main()
 
-            # Verify output folder creation
-            mock_output.mkdir.assert_called_once_with(exist_ok=True)
+            # Verify output folder creation (data / "output" / "linkedin" and "indeed")
+            mock_output.__truediv__.return_value.mkdir.assert_called_with(exist_ok=True)
 
             # Verify config validation
             mock_validator.validate_secrets.assert_called_once()
@@ -989,8 +1011,8 @@ class TestMain:
 
             main()
 
-            # Verify mkdir was called with exist_ok=True
-            mock_output.mkdir.assert_called_once_with(exist_ok=True)
+            # Verify mkdir was called with exist_ok=True (data / "output" / "linkedin" and "indeed")
+            mock_output.__truediv__.return_value.mkdir.assert_called_with(exist_ok=True)
 
     def test_main_logs_search_config_parameters(self):
         """Test main logs search config parameter count"""
@@ -1031,9 +1053,10 @@ class TestMain:
             patch("main.ConfigValidator", return_value=mock_validator),
             patch("main.asyncio.run"),
             patch("main.logger") as mock_logger,
+            patch("main.JOB_SITE", "linkedin"),
         ):
             main()
 
             # Verify completion messages
-            mock_logger.info.assert_any_call("LinkedIn bot completed successfully")
+            mock_logger.info.assert_any_call("Linkedin bot completed successfully")
             mock_logger.info.assert_any_call("Program completed")

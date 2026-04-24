@@ -27,8 +27,8 @@ logger.add(
 # Configuration of logging to a file
 logger.add(
     os.path.join(LOG_DIR, "app.log"),
-    rotation="500 MB",  # Rotate when file reaches 500 MB
-    retention="10 days",  # Keep logs for 10 days
+    rotation="10 MB",  # Rotate when file reaches 500 MB
+    retention="30 days",  # Keep logs for 10 days
     compression="zip",  # Compress rotated logs
     level=minimum_log_level,
     backtrace=True,
@@ -38,7 +38,7 @@ logger.add(
 # Configuration of logging errors to a file
 logger.add(
     os.path.join(LOG_DIR, "error.log"),
-    rotation="100 MB",  # Rotate when file reaches 100 MB
+    rotation="5 MB",  # Rotate when file reaches 100 MB
     retention="30 days",  # Keep error logs longer
     compression="zip",
     level="ERROR",

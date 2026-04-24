@@ -185,7 +185,6 @@ I am a software engineer with 10 years of experience in Swift, Python, C, C++.
 How many years of experience do you have in Python?
 ##Options
 [1-2, 3-5, 6-10, 10+, No info]
-##Answer
 10+
 ```
 ##Example 2
@@ -196,7 +195,6 @@ I am a software engineer with 10 years of experience in Swift, Python, C, C++.
 Why did you come to development?
 ##Options
 [Write your own answer, Your answer]
-##Answer
 No info
 ```
 ##Resume
@@ -236,7 +234,6 @@ I am a software engineer with 10 years of experience in Swift, Python, C, C++.
 Which programming languages do you know?
 ##Options
 [python, C, rust, swift, ruby, C++, C#, go]
-##Answer
 python; C; swift; C++
 ```
 ##Example 2
@@ -247,7 +244,6 @@ I am a software engineer with 10 years of experience in Swift, Python, C, C++.
 Why did you come to development?
 ##Options
 [Write your own answer, Your answer]
-##Answer
 No info
 ```
 ##Resume
@@ -266,6 +262,29 @@ No info
 ```
 {previous_questions}
 ```
+"""
+
+date_question_template = """
+You are a job applicant filling out a date field in an application form.
+Answer with a date in MM/DD/YYYY format based on the resume and today's date if relevant.
+##Resume
+```
+{resume}
+```
+##Question
+```
+{question}
+```
+##Previous Questions
+```
+{previous_questions}
+```
+##Additional Rules
+- Return ONLY the date in MM/DD/YYYY format (e.g. 01/15/2024), nothing else.
+- TAKE INTO ACCOUNT that today's date is {current_date}
+- If the question asks for a start date or availability date, return a date 2–4 weeks from today.
+- If you cannot determine the date from the resume or context, return 'No info'.
+- It's looks like the question is related to the previous questions (e.g. "If yes/no, when?"), use the information from the previous questions.
 """
 
 numeric_question_template = """
@@ -294,7 +313,6 @@ Follow these strategic guidelines when responding experience related questions:
 I had a degree in computer science. I have worked 4 years with MQTT protocol.
 ##Question
 How many years of experience do you have with IoT?
-##Answer
 4
 ```
 ##Example 2
@@ -303,7 +321,6 @@ How many years of experience do you have with IoT?
 I had a degree in computer science.
 ##Question
 How many years of experience do you have with Bash?
-##Answer
 2
 ```
 ##Example 3
@@ -312,7 +329,6 @@ How many years of experience do you have with Bash?
 I am a software engineer with 5 years of experience in Swift and Python. I have worked on an AI project.
 ##Question
 How many years of experience do you have with AI?
-##Answer
 2
 ```
 ##Resume
@@ -374,8 +390,7 @@ that these words must be included).
 """
 
 # Resume builder prompts
-prompt_header = (
-    """
+prompt_header = """
 Act as an HR expert and resume writer specializing in ATS-friendly resumes. Your task is to create a professional and polished header for the resume. The header should:
 
 1. Contact Information: Include your full name, city, state/area/region (if applicable), and country, phone number, email address, LinkedIn profile, and GitHub profile. Exclude any information that is not provided.
@@ -387,13 +402,10 @@ To implement this:
 
 ##My information
   {personal_information}
-"""
-    + prompt_header_template
-)
+""" + prompt_header_template
 
 
-prompt_education = (
-    """
+prompt_education = """
 Act as an HR expert and resume writer with a specialization in creating ATS-friendly resumes. Your task is to articulate the educational background for a resume. For each educational entry, ensure you include:
 
 1. Institution Name and Location: Specify the university or educational institution’s name and location.
@@ -412,13 +424,10 @@ To implement this, follow these steps:
 
 ##Job Description
   {job_description}
-"""
-    + prompt_education_template
-)
+""" + prompt_education_template
 
 
-prompt_working_experience = (
-    """
+prompt_working_experience = """
 Act as an HR expert and resume writer with a specialization in creating ATS-friendly resumes. Your task is to detail the work experience for a resume, tailoring it to match the target job requirements. For each job entry, ensure you include:
 
 1. Company Name and Location: Provide the name of the company and its location.
@@ -438,13 +447,10 @@ To implement this:
 
 ##Job Description
   {job_description}
-"""
-    + prompt_working_experience_template
-)
+""" + prompt_working_experience_template
 
 
-prompt_side_projects = (
-    """
+prompt_side_projects = """
 Act as an HR expert and resume writer with a specialization in creating ATS-friendly resumes. Your task is to highlight notable side projects that are most relevant to the target job. For each project, ensure you include:
 
 1. Project Name and Link: Provide the name of the project and include a link to the GitHub repository or project page.
@@ -462,13 +468,10 @@ To implement this:
 
 ##Job Description
   {job_description}
-"""
-    + prompt_side_projects_template
-)
+""" + prompt_side_projects_template
 
 
-prompt_achievements = (
-    """
+prompt_achievements = """
 Act as an HR expert and resume writer with a specialization in creating ATS-friendly resumes. Your task is to list significant achievements that are most relevant to the target job. For each achievement, ensure you include:
 
 1. Award or Recognition: Clearly state the name of the award, recognition, scholarship, or honor.
@@ -485,13 +488,10 @@ To implement this:
 
 ##Job Description
   {job_description}
-"""
-    + prompt_achievements_template
-)
+""" + prompt_achievements_template
 
 
-prompt_certifications = (
-    """
+prompt_certifications = """
 Act as an HR expert and resume writer with a specialization in creating ATS-friendly resumes. Your task is to list significant certifications that are most relevant to the target job. For each certification, ensure you include:
 
 1. Certification Name: Clearly state the name of the certification.
@@ -508,13 +508,10 @@ To implement this:
 
 ##Job Description
   {job_description}
-"""
-    + prompt_certifications_template
-)
+""" + prompt_certifications_template
 
 
-prompt_additional_skills = (
-    """
+prompt_additional_skills = """
 Act as an HR expert and resume writer with a specialization in creating ATS-friendly resumes. Your task is to list additional skills that are most relevant to the target job. For each skill, ensure you include:
 
 1. Skill Category: Clearly state the category or type of skill.
@@ -534,9 +531,7 @@ To implement this:
 
 ##Job Description
   {job_description}
-"""
-    + prompt_additional_skills_template
-)
+""" + prompt_additional_skills_template
 
 # Prompt for resume improvement recommendations
 resume_improve = """

@@ -17,15 +17,7 @@ def test_get_summary_aggregates_dashboard_outputs(monkeypatch, tmp_path):
 
     _write_yaml(
         output_dir / "success.yaml",
-        {
-            "Acme": [
-                {
-                    "job_title": "CTO",
-                    "url": "https://linkedin.com/jobs/view/1",
-                    "executed_at": "2026-04-15T10:02:00",
-                }
-            ]
-        },
+        {"Acme": [{"job_title": "CTO", "url": "https://linkedin.com/jobs/view/1"}]},
     )
     _write_yaml(
         output_dir / "skipped.yaml",
@@ -340,13 +332,7 @@ def test_get_run_jobs_builds_status_from_events(monkeypatch):
     jobs = data_service.get_run_jobs("run-55")
 
     assert len(jobs) == 2
-    assert any(
-        job["status"] == "applied"
-        and job["interest_score"] == 92
-        and job["llm_time_seconds"] == 1.5
-        and job["executed_at"] == "2026-04-15T10:02:00"
-        for job in jobs
-    )
+    assert any(job["status"] == "applied" and job["interest_score"] == 92 for job in jobs)
     assert any(
         job["status"] == "skipped" and job["skip_reason"] == "Vacancy is not interesting"
         for job in jobs

@@ -1,18 +1,19 @@
 import asyncio
 import os
+import traceback
 
 import dotenv
-import traceback
 import yaml
 from playwright.async_api import Locator, Page
+
 from config.logger_config import logger
-from src.job_manager.authenticator import LinkedInAuthenticator
+from src.job_manager.linkedin.authenticator_linkedin import LinkedInAuthenticator
 from src.pydantic_models.config_models import ConnectionSearcherConfig
-from src.utils.browser_utils import create_playwright_browser, pause, save_browser_session
+from src.utils.browser_utils import async_pause, create_playwright_browser, save_browser_session
 
 
 class ConnectionSearcher:
-    def __init__(self, config_path: str = "config/connection_searcher_config.yaml"):
+    def __init__(self, config_path: str = "config/linkedin_connection_searcher_config.yaml"):
         self.config = self._load_config(config_path)
         self.secrets = self._load_secrets()
         # Expanded keywords that indicate an open networker
@@ -75,9 +76,9 @@ class ConnectionSearcher:
             for main_word in self.config.main_search_words:
                 for add_word in self.config.additional_search_words:
                     logger.info(f"Starting search for: {main_word} + {add_word}")
-                    pause(4, 8)
+                    await async_pause(4, 8)
                     await self._search_and_connect(page, main_word, add_word)
-                    pause(4, 8)
+                    await async_pause(4, 8)
         except Exception as e:
             tb_str = traceback.format_exc()
             logger.error(f"Unknown error: {str(e)}\n{tb_str}")
@@ -93,12 +94,11 @@ class ConnectionSearcher:
                 f"https://www.linkedin.com/search/results/people/?keywords={query}&page={page_num}"
             )
             await page.goto(url)
-            pause(1, 2)  # Allow page to settle
+            await async_pause(1, 2)  # Allow page to settle
 
             # Wait for results or empty state with multiple possible selectors
             result_selectors = [
-                "div[data-view-name='people-search-result']",
-                # "[role='listitem']",
+                "div[role='listitem']",
             ]
             combined_selector = ", ".join(result_selectors)
 
@@ -118,9 +118,9 @@ class ConnectionSearcher:
 
             # Scroll down to load all results
             await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            pause(1, 2)
+            await async_pause(1, 2)
             await page.evaluate("window.scrollTo(0, 0)")
-            pause(1, 2)
+            await async_pause(1, 2)
 
             people = await page.locator(combined_selector).all()
             if not people:
@@ -143,7 +143,7 @@ class ConnectionSearcher:
             if not await next_button.is_visible() or page_num >= 100:
                 logger.info("Reached the end of results or 100th page.")
                 break
-            pause(5, 10)
+            await async_pause(5, 10)
 
     async def _should_connect(self, person: Locator) -> bool:
         # Extract elements and analyze description.
@@ -195,7 +195,7 @@ class ConnectionSearcher:
             more_btn = person.locator("button:has-text('More')")
             if await more_btn.count() > 0 and await more_btn.first.is_visible():
                 await more_btn.first.click()
-                pause(1, 2)
+                await async_pause(1, 2)
                 dropdown_connect = page.locator(
                     "div.artdeco-dropdown__content [aria-label^='Invite'][aria-label$='to connect'], div.artdeco-dropdown__content button:has-text('Connect')"
                 )
@@ -205,7 +205,7 @@ class ConnectionSearcher:
                     await self._handle_invitation_modal(page)
 
     async def _handle_invitation_modal(self, page: Page):
-        pause(1, 2)
+        await async_pause(1, 2)
         # Check for "Add a note to your invitation?" modal
         # 7. Find button with name "Send without a note" and push it.
         send_without_note = page.locator(
@@ -214,15 +214,15 @@ class ConnectionSearcher:
         if await send_without_note.count() > 0 and await send_without_note.first.is_visible():
             await send_without_note.first.click()
             logger.info("Sent invitation without a note.")
-            pause(1, 2)
+            await async_pause(1, 2)
         else:
             # Maybe it sent directly or there is a "Send" button
             send_now = page.locator("button:has-text('Send now'), button[aria-label='Send now']")
             if await send_now.count() > 0 and await send_now.first.is_visible():
                 await send_now.first.click()
                 logger.info("Sent invitation using 'Send now'.")
-                pause(1, 2)
-        pause(5, 10)
+                await async_pause(1, 2)
+        await async_pause(5, 10)
 
 
 if __name__ == "__main__":

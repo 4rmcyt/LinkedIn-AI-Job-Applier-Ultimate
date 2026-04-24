@@ -6,12 +6,13 @@ import threading
 from shutil import copyfile
 from datetime import datetime
 from pathlib import Path
+from shutil import copyfile
 from typing import Any, Dict, List, Tuple
 
-from config.constants import LOG_DIR, OUTPUT_DIR
+from config.constants import LOG_DIR
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-DASHBOARD_DIR = ROOT_DIR / OUTPUT_DIR / "dashboard"
+DASHBOARD_DIR = ROOT_DIR / "data" / "output" / "dashboard"
 SCREENSHOT_DIR = DASHBOARD_DIR / "screenshots"
 EVENTS_FILE = DASHBOARD_DIR / "events.jsonl"
 SNAPSHOT_FILE = DASHBOARD_DIR / "snapshot.json"
@@ -459,13 +460,28 @@ def check_for_stop_request() -> None:
         raise StopRequested("Dashboard requested stop")
 
 
+def _signal_process_tree(pid: int, sig: int) -> None:
+    try:
+        pgid = os.getpgid(pid)
+    except OSError:
+        pgid = pid
+    try:
+        os.killpg(pgid, sig)
+    except OSError:
+        try:
+            os.kill(pid, sig)
+        except OSError:
+            pass
+
+
 def terminate_running_process() -> bool:
     process_info = get_process_info()
     pid = process_info.get("pid")
     if not is_process_running(pid):
         clear_process_info()
         return False
-    os.kill(pid, signal.SIGTERM)
+    update_control_state(stop_requested=True)
+    _signal_process_tree(pid, signal.SIGTERM)
     clear_process_info()
     emit_event("run_stopped", "Bot process terminated by dashboard")
     update_snapshot(run_status="stopped", finished_at=_now_iso(), current_job=None)

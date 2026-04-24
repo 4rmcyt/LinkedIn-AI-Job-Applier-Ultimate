@@ -1,12 +1,15 @@
 import asyncio
 import json
+import signal
+from contextlib import asynccontextmanager
 from typing import Any, Dict
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from config.app_config import JOB_SITE
 from src.dashboard.data_service import (
     get_app_config,
     get_jobs,
@@ -24,6 +27,9 @@ from src.dashboard.data_service import (
 from src.dashboard.runtime import (
     LATEST_SCREENSHOT_FILE,
     ROOT_DIR,
+    _signal_process_tree,
+    get_process_info,
+    is_process_running,
     latest_event_position,
     read_events_since,
     read_events_since_for_run,
@@ -36,6 +42,7 @@ from src.dashboard.runtime import (
 )
 
 STATIC_DIR = ROOT_DIR / "src" / "dashboard" / "static"
+SITE_NAME = "LinkedIn" if JOB_SITE == "linkedin" else "Indeed"
 
 
 class SearchConfigPayload(BaseModel):
@@ -46,7 +53,21 @@ class AppConfigPayload(BaseModel):
     config: Dict[str, Any]
 
 
-app = FastAPI(title="LinkedIn AI Job Applier Dashboard")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    pid = get_process_info().get("pid")
+    terminate_running_process()
+    if pid:
+        for _ in range(10):
+            await asyncio.sleep(0.5)
+            if not is_process_running(pid):
+                break
+        else:
+            _signal_process_tree(pid, signal.SIGKILL)
+
+
+app = FastAPI(title=f"{SITE_NAME} AI Job Applier Dashboard", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
@@ -58,6 +79,11 @@ async def index() -> HTMLResponse:
 @app.get("/runs/{run_id}", response_class=HTMLResponse)
 async def run_detail_page(run_id: str) -> HTMLResponse:
     return HTMLResponse((STATIC_DIR / "index.html").read_text(encoding="utf-8"))
+
+
+@app.get("/api/meta")
+async def meta() -> JSONResponse:
+    return JSONResponse({"site_name": SITE_NAME})
 
 
 @app.get("/api/summary")
@@ -192,9 +218,7 @@ async def screenshot_file(path: str = Query(...)):
 
 
 @app.get("/api/events/stream")
-async def stream_events(
-    request: Request, run_id: str | None = Query(default=None)
-) -> StreamingResponse:
+async def stream_events(run_id: str | None = Query(default=None)) -> StreamingResponse:
     async def event_generator():
         initial = get_live_state()
         if run_id:
@@ -206,19 +230,13 @@ async def stream_events(
         yield f"event: snapshot\ndata: {JSONResponse(content=initial).body.decode('utf-8')}\n\n"
 
         position = latest_event_position()
-        try:
-            while True:
-                if await request.is_disconnected():
-                    break
-
-                if run_id:
-                    events, position = read_events_since_for_run(position, run_id)
-                else:
-                    events, position = read_events_since(position)
-                for event in events:
-                    yield f"event: message\ndata: {JSONResponse(content=event).body.decode('utf-8')}\n\n"
-                await asyncio.sleep(1)
-        except asyncio.CancelledError:
-            return
+        while True:
+            if run_id:
+                events, position = read_events_since_for_run(position, run_id)
+            else:
+                events, position = read_events_since(position)
+            for event in events:
+                yield f"event: message\ndata: {JSONResponse(content=event).body.decode('utf-8')}\n\n"
+            await asyncio.sleep(1)
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

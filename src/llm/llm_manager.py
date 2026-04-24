@@ -65,13 +65,6 @@ class GeminiModel(AIModel):
             temperature=TEMPERATURE,
             thinking_level="minimal",
             safety_settings={
-                HarmCategory.HARM_CATEGORY_UNSPECIFIED: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_DEROGATORY: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_TOXICITY: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_VIOLENCE: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_SEXUAL: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_MEDICAL: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_DANGEROUS: HarmBlockThreshold.BLOCK_NONE,
                 HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
                 HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
                 HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
@@ -561,6 +554,7 @@ class GPTAnswerer:
             "extract_skills_from_vacancy": self._create_chain(prompts.extract_skills_from_vacancy),
             "summarize_job_description": self._create_chain(prompts.summarize_prompt_template),
             "job_is_interesting": self._create_chain(prompts.job_is_interesting),
+            "date_question": self._create_chain(prompts.date_question_template),
             "text_question": self._create_chain(prompts.text_question_answer_template),
             "numeric_question": self._create_chain(prompts.numeric_question_template),
             "text_question_with_error": self._create_chain(
@@ -583,6 +577,8 @@ class GPTAnswerer:
         and return the best option from the list.
         """
         if "no info" in text.lower():
+            return "no info"
+        if not options:
             return "no info"
         logger.info(f"Searching for best match for text: '{text}' in options: {options}")
         distances = [(option, distance(text.lower(), option.lower())) for option in options]
@@ -738,6 +734,21 @@ class GPTAnswerer:
         logger.debug(f"Generated brief description: {output}")
         return output
 
+    def answer_question_date(self, question: str, previous_questions: list[str]) -> str:
+        """Answer a date question and return the result in MM/DD/YYYY format"""
+        current_date = datetime.now().date().strftime("%Y-%m-%d")
+        chain = self.chains["date_question"]
+        output = chain.invoke(
+            {
+                "resume": self.resume_readable,
+                "question": question,
+                "current_date": current_date,
+                "previous_questions": previous_questions,
+            }
+        )
+        logger.debug(f"Date answer: {output}")
+        return output.strip()
+
     def answer_question_textual_wide_range(
         self, question: str, previous_questions: list[str]
     ) -> str:
@@ -806,6 +817,14 @@ class GPTAnswerer:
 
     def _extract_number_from_string(self, output_str: str) -> str:
         """Extract number from string"""
+        stripped = output_str.strip()
+        # If the output looks like a phone number or other formatted number
+        # (starts with + or digit and contains only digits/spaces/hyphens/parens),
+        # return all digits concatenated to preserve the full value.
+        if len(stripped) > 1 and re.match(r"^[+\d][\d\s\-().]*$", stripped):
+            all_digits = re.sub(r"\D", "", stripped)
+            if all_digits:
+                return all_digits
         numbers = re.findall(r"\d+", output_str)
         if numbers:
             return str(numbers[0])
@@ -920,7 +939,11 @@ class GPTAnswerer:
         additional_prompt = "- Specify the following contacts: "
         invoke_dict = {
             "resume": self.resume_readable,
-            "company_name": self.job["company_name"],
+            "company_name": (
+                self.job.get("company_name", "")
+                if isinstance(self.job, dict)
+                else self.job.company_name
+            ),
             "job_description": self.job_readable,
         }
         if phone:

@@ -1,7 +1,9 @@
 # Dummy personal data for anonymization (male)
 DUMMY_PERSONAL_INFO_MALE = {
     "name": "Zorquill Thalaorix",
-    "last_name_2": "Zorquill Thalaorix",
+    "first_name": "Zorquill",
+    "last_name": "Thalaorix",
+    "last_name_2": "Thalaris",
     # "birthday": "03.05.1993",
     "phone": "9335753535",
     "email": "zorquill_thalaorix@gmail.com",
@@ -14,7 +16,9 @@ DUMMY_PERSONAL_INFO_MALE = {
 # Dummy personal data for anonymization (female)
 DUMMY_PERSONAL_INFO_FEMALE = {
     "name": "Zorquillia Thalaorix",
-    "last_name_2": "Zorquillia Thalaorix",
+    "first_name": "Zorquillia",
+    "last_name": "Thalaorix",
+    "last_name_2": "Thalaris",
     # "birthday": "03.05.1993",
     "phone": "9335753535",
     "email": "zorquillia_thalaorix@gmail.com",
@@ -26,13 +30,13 @@ DUMMY_PERSONAL_INFO_FEMALE = {
 
 # Paths to log files and settings
 SEARCH_CONFIG_FILE = "config/search_config.yaml"
-LAST_RUN_FILE = "data/output/last_run.yaml"
-ANSWERS_FILE = "data/output/answers.yaml"
-OUTPUT_DIR = "data/output"
+OUTPUT_DIR_LINKEDIN = "data/output/linkedin"
+OUTPUT_DIR_INDEED = "data/output/indeed"
+DEBUG_DIR = "data/debug"
 LOG_DIR = "logs"
 RESUME_DIR = "data/resumes"
 COVER_LETTER_DIR = "data/cover_letters"
-BROWSER_STORAGE_STATE = "browser_session/linkedin_state.json"
+BROWSER_STORAGE_STATE = "browser_session/browser_state.json"
 APP_CONFIG_FILE = "config/app_config.yaml"
 
 # Default cost per token fallback when model is not in PRICE_DICT

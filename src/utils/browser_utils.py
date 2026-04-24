@@ -4,33 +4,75 @@ import os
 import random
 import re
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
-from playwright.async_api import Browser, BrowserContext, Page, async_playwright
+from config.app_config import HEADLESS_MODE, JOB_SITE
 
-from config.app_config import HEADLESS_MODE
-from config.constants import BROWSER_STORAGE_STATE
+if JOB_SITE == "indeed":
+    from patchright.async_api import Browser, BrowserContext, Page, async_playwright
+else:
+    from playwright.async_api import Browser, BrowserContext, Page, async_playwright
+from config.constants import BROWSER_STORAGE_STATE, DEBUG_DIR
 from config.logger_config import logger
+
+try:  # TODO: add for back compatibility, remove this later
+    from config.app_config import DEBUG_MODE
+except ImportError:
+    DEBUG_MODE = False
+
+
+async def debug_capture(page: Page, label: str) -> None:
+    """Save a screenshot and page HTML to data/debug/ for post-mortem analysis.
+
+    Only runs when DEBUG_MODE=True. Files are timestamped so each failure gets
+    its own pair. Share the .png and .html with Claude to diagnose selector issues.
+    """
+    if not DEBUG_MODE:
+        return
+    try:
+        os.makedirs(DEBUG_DIR, exist_ok=True)
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        safe_label = re.sub(r"[^\w\-]", "_", label)[:60]
+        base = os.path.join(DEBUG_DIR, f"{timestamp}_{safe_label}")
+        await page.screenshot(path=f"{base}.png", full_page=True)
+        html = await page.content()
+        with open(f"{base}.html", "w", encoding="utf-8") as f:
+            f.write(html)
+        logger.debug(f"Debug capture saved: {base}.png / .html")
+    except Exception as e:
+        logger.debug(f"debug_capture failed: {e}")
 
 
 def ensure_playwright_profile() -> str:
     """Ensure Playwright session directory exists"""
     logger.info(f"Ensuring Playwright session directory exists at: {BROWSER_STORAGE_STATE}")
     session_dir = os.path.dirname(BROWSER_STORAGE_STATE)
-    if not os.path.exists(session_dir):
-        os.makedirs(session_dir)
-        logger.debug(f"Created Playwright session directory: {session_dir}")
+    if not os.path.exists(session_dir):  # TODO: add for back compatibility, remove this later
+        session_dir_new = os.path.join(
+            session_dir, "/".join(BROWSER_STORAGE_STATE.split("/")[:-1]) + "/linkedin_state.json"
+        )
+        if not os.path.exists(session_dir_new):
+            os.makedirs(session_dir)
+            logger.debug(f"Created Playwright session directory: {session_dir}")
+            return session_dir_new
     return session_dir
 
 
-def get_playwright_browser_options() -> Dict[str, Any]:
-    """Get Playwright browser launch options with LinkedIn-optimized settings"""
-    logger.info("Configuring Playwright browser options")
-    ensure_playwright_profile()
+async def create_playwright_browser() -> tuple[Browser, BrowserContext, Page]:
+    """Create Playwright browser, context and page asynchronously (PRIMARY METHOD)
 
-    launch_options = {
-        "headless": HEADLESS_MODE,
-        "args": [
+    Uses patchright (Chromium-based) which patches automation detection signals
+    to bypass Cloudflare and other bot detection systems.
+    Session cookies are persisted via browser_state.json.
+    """
+    logger.info("Creating Playwright browser (async)")
+
+    try:
+        ensure_playwright_profile()
+        viewport = {"width": 1920, "height": 1080}
+        storage_state = BROWSER_STORAGE_STATE if os.path.exists(BROWSER_STORAGE_STATE) else None
+
+        args = [
             "--window-position=0,0",
             "--no-sandbox",
             "--disable-dev-shm-usage",
@@ -47,35 +89,35 @@ def get_playwright_browser_options() -> Dict[str, Any]:
             "--disable-autofill",
             "--disable-plugins",
             "--disable-blink-features=AutomationControlled",
-        ],
-        # "ignore_default_args": ["--enable-automation", "--enable-logging"],
-    }
+        ]
 
-    # Context options for session persistence and anti-detection
-    context_options = {
-        "viewport": {"width": 1920, "height": 1080},
-        "screen": {"width": 1920, "height": 1080},
-        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "locale": "en-US",
-        "permissions": ["notifications"],
-        "storage_state": BROWSER_STORAGE_STATE if os.path.exists(BROWSER_STORAGE_STATE) else None,
-    }
-
-    return {"launch_options": launch_options, "context_options": context_options}
-
-
-async def create_playwright_browser() -> tuple[Browser, BrowserContext, Page]:
-    """Create Playwright browser, context and page asynchronously (PRIMARY METHOD)"""
-    logger.info("Creating Playwright browser (async)")
-
-    try:
         playwright = await async_playwright().start()
-        options = get_playwright_browser_options()
+        browser = await playwright.chromium.launch(
+            headless=HEADLESS_MODE,
+            args=args,
+        )
 
-        browser = await playwright.chromium.launch(**options["launch_options"])
-        context = await browser.new_context(**options["context_options"])
+        context = await browser.new_context(
+            viewport=viewport,
+            screen=viewport,
+            storage_state=storage_state,
+            locale="en-US",
+            permissions=["notifications"],
+            extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
+        )
 
         page = await context.new_page()
+
+        context.on(
+            "page",
+            lambda p: asyncio.ensure_future(p.set_viewport_size(viewport)),
+        )
+
+        if DEBUG_MODE:
+            await context.tracing.start(screenshots=True, snapshots=True, sources=True)
+            logger.info(
+                f"Playwright tracing enabled — trace will be saved to {DEBUG_DIR}/trace.zip"
+            )
 
         logger.info("Playwright browser created successfully")
         return browser, context, page
@@ -83,6 +125,24 @@ async def create_playwright_browser() -> tuple[Browser, BrowserContext, Page]:
     except Exception as e:
         logger.error(f"Failed to create Playwright browser: {e}")
         raise
+
+
+async def stop_tracing(context: BrowserContext) -> None:
+    """Stop Playwright tracing and save the trace zip (only when DEBUG_MODE=True).
+
+    Call this in the finally block where you close the browser. The resulting
+    trace.zip can be opened at https://trace.playwright.dev to inspect every
+    action, DOM snapshot, and network request.
+    """
+    if not DEBUG_MODE:
+        return
+    try:
+        os.makedirs(DEBUG_DIR, exist_ok=True)
+        trace_path = os.path.join(DEBUG_DIR, "trace.zip")
+        await context.tracing.stop(path=trace_path)
+        logger.info(f"Playwright trace saved to {trace_path}")
+    except Exception as e:
+        logger.debug(f"stop_tracing failed: {e}")
 
 
 async def save_browser_session(context: BrowserContext) -> None:
@@ -111,6 +171,7 @@ async def safe_click(
 
         if element_count == 0:
             logger.warning(f"Element not found: {selector}")
+            await debug_capture(page, "click_not_found")
             return False
 
         # Select the first matched element (even if multiple)
@@ -128,7 +189,7 @@ async def safe_click(
             # Fall back to attached state if not visible
             await target.wait_for(state="attached", timeout=timeout)
 
-        await target.scroll_into_view_if_needed()
+        await target.scroll_into_view_if_needed(timeout=500)
 
         # Human-like pause before clicking
         pause_time = random.uniform(0.1, 0.3)
@@ -140,6 +201,7 @@ async def safe_click(
 
     except Exception as e:
         logger.warning(f"Failed to click element '{selector}': {e}")
+        await debug_capture(page, "click_failed")
         return False
 
 
@@ -156,7 +218,7 @@ async def safe_fill(
 
         if wait_for_timeout is not None:
             try:
-                await locator.wait_for(state="attached", timeout=wait_for_timeout)
+                await locator.first.wait_for(state="attached", timeout=wait_for_timeout)
             except Exception:
                 return False
 
@@ -164,40 +226,55 @@ async def safe_fill(
 
         if element_count == 0:
             logger.warning(f"No elements found for selector: {selector}")
+            await debug_capture(page, "fill_not_found")
             return False
-
-        # Select the first matched element (even if multiple)
-        target = locator.first if element_count > 1 else locator
 
         if element_count > 1:
             logger.debug(
-                f"Found {element_count} elements for selector '{selector}', using the first match"
+                f"Found {element_count} elements for selector '{selector}', trying each one"
             )
 
-        # Ensure visibility and bring into view
-        try:
-            await target.wait_for(state="visible", timeout=timeout)
-        except Exception:
-            # Fall back to attached state if not visible
-            await target.wait_for(state="attached", timeout=timeout)
+        targets = [locator.nth(i) for i in range(element_count)] if element_count > 1 else [locator]
+        fill_timeout = 2000 if element_count > 1 else timeout
 
-        await target.scroll_into_view_if_needed()
+        for i, target in enumerate(targets):
+            try:
+                try:
+                    await target.wait_for(state="visible", timeout=fill_timeout)
+                except Exception:
+                    await target.wait_for(state="attached", timeout=fill_timeout)
 
-        # Clear then fill
-        try:
-            await target.clear()
-        except Exception:
-            pass
+                await target.scroll_into_view_if_needed(timeout=500)
 
-        pause(1, 2)
+                try:
+                    await target.clear()
+                except Exception:
+                    pass
 
-        await target.fill(text)
+                await async_pause(1, 2)
 
-        logger.debug(f"Successfully filled '{selector}' with text {text}")
-        return True
+                await target.fill(text)
+
+                if "password" in selector:
+                    logger.debug(
+                        f"Successfully filled '{selector}'"
+                        + (f" (element {i})" if element_count > 1 else "")
+                    )
+                else:
+                    logger.debug(
+                        f"Successfully filled '{selector}' with text {text}"
+                        + (f" (element {i})" if element_count > 1 else "")
+                    )
+                return True
+            except Exception as e:
+                if element_count > 1:
+                    logger.debug(f"Element {i} not fillable for '{selector}': {e}, trying next")
+                    continue
+                raise
 
     except Exception as e:
         logger.warning(f"Failed to fill element '{selector}': {e}")
+        await debug_capture(page, "fill_failed")
         return False
 
 
@@ -277,6 +354,48 @@ def pause(low: float = 0.5, high: float = 1) -> None:
     """Hold a random pause between low and high seconds"""
     pause_time = round(random.uniform(low, high), 1)
     time.sleep(pause_time)
+
+
+async def async_pause(low: float = 0.5, high: float = 1) -> None:
+    """Hold a random pause without blocking the asyncio event loop."""
+    pause_time = round(random.uniform(low, high), 1)
+    await asyncio.sleep(pause_time)
+
+
+async def get_current_page_testid(page: Page, testids: list[str]) -> Optional[str]:
+    """Return the first matching data-testid from the given list that is present on the page.
+
+    Useful before clicking a multi-step form's Continue button so that
+    ``wait_for_page_transition`` knows which element to watch for detachment.
+    Returns None when none of the known testids are found (e.g. a generic question page).
+    """
+    for testid in testids:
+        el = await find_element_safely(page, f"[data-testid='{testid}']", timeout=500)
+        if el:
+            return testid
+    return None
+
+
+async def wait_for_page_transition(
+    page: Page, old_testid: Optional[str], timeout: float = 10.0
+) -> None:
+    """Wait until the named page element detaches, confirming a multi-step form advanced.
+
+    Pass the testid returned by ``get_current_page_testid`` before clicking Continue.
+    When *old_testid* is None (generic page with no known testid anchor) this is a no-op;
+    the caller's fixed pause is sufficient.
+    """
+    if not old_testid:
+        return
+    try:
+        await page.wait_for_selector(
+            f"[data-testid='{old_testid}']",
+            state="detached",
+            timeout=int(timeout * 1000),
+        )
+        logger.debug(f"Page transitioned away from '{old_testid}'")
+    except Exception:
+        logger.debug(f"Timed out waiting for '{old_testid}' to detach; proceeding anyway")
 
 
 async def find_element_safely(
@@ -363,20 +482,13 @@ async def get_element_attribute_safely(
     try:
         # Handle Playwright Locator objects
         if hasattr(element, "evaluate"):
-            # Direct Playwright Locator - find child element
             child_locator = element.locator(selector)
-            if await child_locator.count() > 0:
-                return await child_locator.get_attribute(attribute) or ""
         elif hasattr(element, "locator"):
-            # Element wrapper - get locator and find child
-            if callable(element.locator):
-                locator = element.locator()
-            else:
-                locator = element.locator
-            child_locator = locator.locator(selector)
-            if await child_locator.count() > 0:
-                return await child_locator.get_attribute(attribute) or ""
-        return ""
+            parent = element.locator() if callable(element.locator) else element.locator
+            child_locator = parent.locator(selector)
+        else:
+            return ""
+        return await child_locator.first.get_attribute(attribute) or ""
     except Exception as e:
         logger.debug(f"Failed to get attribute {attribute} from element {selector}: {e}")
         return ""
@@ -437,52 +549,48 @@ async def scroll_slowly(
         locator: Element to scroll (PlaywrightElementWrapper or Playwright Locator)
         direction: "down", "up"
         time_to_scroll_sec: Total time to spend scrolling
-        delay: Delay between scroll steps
+        delay: Delay between scroll steps (unused, kept for API compatibility)
 
     Returns:
         bool: True if scrolling was successful, False otherwise
     """
     try:
-        scroll_height = await locator.evaluate("(element) => element.scrollHeight")
-        client_height = await locator.evaluate("(element) => element.clientHeight")
-        distance = scroll_height - client_height
+        result = await locator.evaluate(
+            """
+            (element, args) => new Promise((resolve) => {
+                const scrollHeight = element.scrollHeight;
+                const clientHeight = element.clientHeight;
+                let distance = scrollHeight - clientHeight;
+                if (distance <= 30) { resolve(false); return; }
+                distance += 500;
 
-        # If there's no scrollable content, return early
-        if distance <= 10:
-            logger.debug("Element has no scrollable content or distance is too short")
-            return False
-        else:
-            distance += 300
+                const startTop = element.scrollTop;
+                const durationMs = args.durationMs;
+                const goDown = args.direction === 'down';
+                const target = goDown
+                    ? Math.min(startTop + distance, scrollHeight - clientHeight)
+                    : Math.max(startTop - distance, 0);
 
-        # Calculate number of steps and step size
-        total_steps = int(time_to_scroll_sec / delay)
-        step_size = int(distance / total_steps) if total_steps > 0 else distance
-
-        logger.debug(
-            f"Scrolling {direction}: distance={distance}, steps={total_steps}, step_size={step_size:.2f}"
+                const startTime = performance.now();
+                function step(now) {
+                    const elapsed = now - startTime;
+                    const progress = Math.min(elapsed / durationMs, 1);
+                    element.scrollTop = startTop + (target - startTop) * progress;
+                    if (progress < 1) {
+                        requestAnimationFrame(step);
+                    } else {
+                        resolve(true);
+                    }
+                }
+                requestAnimationFrame(step);
+            })
+            """,
+            {"durationMs": int(time_to_scroll_sec * 1000), "direction": direction},
         )
 
-        # Get current scroll position
-        current_scroll = await locator.evaluate("(element) => element.scrollTop")
-
-        for i in range(total_steps + 1):
-            if direction == "down":
-                target_scroll = current_scroll + (step_size * i)
-                # Don't scroll beyond the maximum
-                target_scroll = min(target_scroll, distance)
-            elif direction == "up":
-                target_scroll = current_scroll - (step_size * i)
-                # Don't scroll above 0
-                target_scroll = max(target_scroll, 0)
-            else:
-                logger.warning(f"Unsupported scroll direction: {direction}")
-                return False
-
-            # Apply the scroll
-            await locator.evaluate(f"(element) => {{ element.scrollTop = {target_scroll}; }}")
-            await asyncio.sleep(delay)
-
-        return True
+        if not result:
+            logger.debug("Element has no scrollable content or distance is too short")
+        return bool(result)
 
     except Exception as e:
         logger.warning(f"Error scrolling element {direction}: {e}")
@@ -518,6 +626,7 @@ async def HTML_to_PDF(FilePath):
 
         # Wait for the page and all network resources to load
         await page.goto(file_url, wait_until="networkidle")
+        logger.info(f"Page loaded: {file_url}")
 
         # Wait for fonts to load
         await page.evaluate(

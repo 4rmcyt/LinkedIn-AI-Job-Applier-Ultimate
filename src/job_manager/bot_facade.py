@@ -39,7 +39,7 @@ class BotFacade:
         logger.info("Initializing BotFacade class")
         self.resume_component = resume_component  # ResumeScraper
         self.search_component = search_component  # SearchCustomizer
-        self.apply_component = apply_component  # JobApplier
+        self.apply_component = apply_component  # JobManager
         self.llm_agent_component = llm_agent_component  # ApplyAgent
         self.state = BotState()
         self.resume = None

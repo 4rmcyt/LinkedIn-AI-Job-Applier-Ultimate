@@ -7,7 +7,7 @@ from browser_use import Agent, Browser, ChatAnthropic, ChatGoogle, ChatOllama, C
 from browser_use.tools.views import UploadFileAction
 
 from config.app_config import APPLY_AGENT_MODEL, HEADLESS_MODE, LLM_MODEL_TYPE
-from config.constants import LOG_DIR, RESUME_DIR, CUSTOM_COST_PER_TOKEN, cost_per_token
+from config.constants import CUSTOM_COST_PER_TOKEN, LOG_DIR, RESUME_DIR, cost_per_token
 from config.logger_config import logger
 from src.dashboard.runtime import emit_event
 from src.pydantic_models.log_models import LLMCall
@@ -20,10 +20,10 @@ class ApplyAgent:
         api_key: str = None,
         browser_storage_state: str = None,
         llm_api_url: str = None,
-        linkedin_email: str = None,
+        user_email: str = None,
     ) -> None:
         self.api_key = api_key
-        self.linkedin_email = linkedin_email
+        self.user_email = user_email
         self.model = APPLY_AGENT_MODEL
         self.model_type = LLM_MODEL_TYPE
         self.llm_api_url = llm_api_url
@@ -40,7 +40,10 @@ class ApplyAgent:
                 f"Browser storage state file not found at {self.browser_storage_state}. "
                 "Continuing without persisted cookies/localStorage."
             )
-        self.browser = Browser(headless=HEADLESS_MODE, storage_state=storage_state)
+        self.storage_state = storage_state
+
+    def _create_browser(self) -> Browser:
+        return Browser(headless=HEADLESS_MODE, storage_state=self.storage_state)
 
     def select_model_type(self, model_type: str, llm_api_url: str) -> None:
         """Select the model to use."""
@@ -90,6 +93,27 @@ class ApplyAgent:
         async def upload_resume(browser_session, index: int = 0):  # noqa: ARG001
             return UploadFileAction(path=resume_pdf_path, index=index)
 
+        browser_storage_state = self.browser_storage_state
+
+        @tools.action(
+            description=(
+                "Call this when the website requires email verification or confirmation "
+                "before you can proceed. This pauses the task and asks the user to verify "
+                "their email, then saves the browser session so the user won't need to "
+                "log in again."
+            )
+        )
+        async def wait_for_email_verification(browser_session):
+            print("\n" + "=" * 60)
+            print("EMAIL VERIFICATION REQUIRED")
+            print("Please check your email and confirm your account.")
+            print("Once done, press Enter to continue...")
+            print("=" * 60 + "\n")
+            await asyncio.get_event_loop().run_in_executor(None, input)
+            await browser_session.export_storage_state(output_path=browser_storage_state)
+            logger.info(f"Browser session saved to {browser_storage_state}")
+            return "User confirmed email verification. Browser session saved. Proceeding with the application."
+
         task = f"""
         - Your goal is to apply to the job at: {job_url}
         - Use the information from my resume (source of truth) and any additional information already present on the page.
@@ -106,9 +130,9 @@ class ApplyAgent:
             - The resume file is available as: {resume_pdf_path}
             - Prefer using the built-in upload_file_to_element action; if the page flow needs it, you can use the upload_resume tool to produce an UploadFileAction.
 
-        - If you are asked to register an account, use my email: {self.linkedin_email} and password: {self.linkedin_email.split("@")[0] + "123456"}
+        - If you are asked to register an account, use my email: {self.user_email} and password: {self.user_email.split("@")[0] + "123456" if self.user_email else "unknown"}
 
-        - If an email verification or confirmation step appears, use my email: {self.linkedin_email}
+        - If an email verification or confirmation step appears, call the wait_for_email_verification tool immediately — do NOT give up or mark the task as failed. After the tool returns, continue the application.
 
         - Before you start, create a step-by-step plan to complete the entire application. Delegate a step for each field/section you encounter.
 
@@ -125,17 +149,21 @@ class ApplyAgent:
 
         available_file_paths = [resume_pdf_path]
 
-        self.agent = Agent(
-            task=task,
-            browser=self.browser,
-            llm=self.llm,
-            tools=tools,
-            use_vision=False,
-            use_thinking=False,
-            save_conversation_path=Path(LOG_DIR).absolute() / "apply_agent_conversation",
-            available_file_paths=available_file_paths,
-        )
-        await self.agent.run()
+        browser = self._create_browser()
+        try:
+            self.agent = Agent(
+                task=task,
+                browser=browser,
+                llm=self.llm,
+                tools=tools,
+                use_vision=False,
+                use_thinking=False,
+                save_conversation_path=Path(LOG_DIR).absolute() / "apply_agent_conversation",
+                available_file_paths=available_file_paths,
+            )
+            await self.agent.run()
+        finally:
+            await browser.stop()
 
         self._log_token_usage(task)
         emit_event("agent_apply_completed", "External apply agent completed", url=job_url)
@@ -221,7 +249,9 @@ if __name__ == "__main__":
                 return False
 
             # Initialize ApplyAgent
-            apply_agent = ApplyAgent(llm_api_key, BROWSER_STORAGE_STATE)
+            apply_agent = ApplyAgent(
+                llm_api_key, BROWSER_STORAGE_STATE, user_email=secrets.get("linkedin_email", "")
+            )
             logger.info("ApplyAgent initialized successfully")
 
             # Load resume data
@@ -248,7 +278,7 @@ if __name__ == "__main__":
             logger.info("Resume and job data set successfully")
 
             # Test the apply_to_job method
-            vacancy_url = "https://topskill.io/jobs/frontend-web-developer-hr1w2"
+            vacancy_url = "https://app.searchwithjack.com/jobs/4372944?utm_source=linkedin-direct-apply-4372944&comet_source=linkedin"
             logger.info(f"Testing ApplyAgent.apply_to_job method with job: {vacancy_url}")
             logger.info("This will open a browser and attempt to apply to the job...")
 

@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 
 import pytest
 
-from src.job_manager.job_manager import JobApplier
+from src.job_manager.linkedin.job_manager_linkedin import LinkedInJobManager
 from src.pydantic_models.job_models import Job, JobManagerCache
 
 # yaml is intentionally not imported to avoid real file I/O in tests
@@ -57,15 +57,18 @@ def mock_file_system():
 
 @pytest.fixture
 def job_applier(mock_page, mock_resume_anonymizer, mock_search_component):
-    """Create a JobApplier instance for testing with mocked file operations"""
+    """Create a LinkedInJobManager instance for testing with mocked file operations"""
     with (
         patch("src.job_manager.job_manager.OUTPUT_DIR", "/mock/output"),
-        patch("src.job_manager.job_manager.LAST_RUN_FILE", Path("/mock/output/last_run.yaml")),
+        patch(
+            "src.job_manager.job_manager.LAST_RUN_FILE",
+            Path("/mock/output/last_run.yaml"),
+        ),
         patch("builtins.open", mock_open()),
         patch("yaml.safe_load", return_value={}),
         patch("yaml.dump", return_value=""),
     ):
-        applier = JobApplier(
+        applier = LinkedInJobManager(
             page=mock_page,
             linkedin_email="test@example.com",
             resume_anonymizer=mock_resume_anonymizer,
@@ -75,13 +78,13 @@ def job_applier(mock_page, mock_resume_anonymizer, mock_search_component):
 
 
 class TestJobApplierInitialization:
-    """Test JobApplier initialization"""
+    """Test LinkedInJobManager initialization"""
 
     def test_init_sets_basic_attributes(
         self, mock_page, mock_resume_anonymizer, mock_search_component
     ):
         """Test that __init__ sets all basic attributes correctly"""
-        applier = JobApplier(
+        applier = LinkedInJobManager(
             page=mock_page,
             linkedin_email="test@example.com",
             resume_anonymizer=mock_resume_anonymizer,
@@ -89,7 +92,7 @@ class TestJobApplierInitialization:
         )
 
         assert applier.page == mock_page
-        assert applier.linkedin_email == "test@example.com"
+        assert applier.email == "test@example.com"
         assert applier.resume_anonymizer == mock_resume_anonymizer
         assert applier.search_component == mock_search_component
         assert applier.llm_answerer_component is None
@@ -762,168 +765,11 @@ class TestDefineOutputFile:
 
     def test_define_output_file(self):
         """Test defining output file path"""
-        result = JobApplier._define_output_file("test.yaml")
+        result = LinkedInJobManager._define_output_file("test.yaml")
 
         # Just verify it returns a path containing the filename
         assert "test.yaml" in str(result)
         assert "data/output" in str(result) or "data\\output" in str(result)
-
-
-class TestGetApplyResult:
-    """Test get_apply_result method"""
-
-    def test_get_apply_result_success(self, job_applier):
-        """Test get_apply_result with successful application"""
-        with (
-            patch.object(job_applier, "_save_company"),
-            patch("src.job_manager.job_manager.save_yaml_file"),
-        ):
-            job_applier.cache = JobManagerCache()
-            job_applier.applies_num = 0
-            job_applier.success_applies_num = 0
-            job_applier.total_applies_num = 0
-            job_applier.max_applies_num = 50
-            job_applier.success_companies = {}
-            job_applier.skipped_companies = {}
-            job_applier.failed_companies = {}
-
-            job = Job(
-                job_title="Engineer",
-                company_name="Tech Corp",
-                url="https://linkedin.com/jobs/view/12345",
-            )
-            vacancy = {"url": "https://linkedin.com/jobs/view/12345"}
-            apply_result = ("Success", "")
-            minimum_job_time = 0  # No waiting needed
-
-            result = job_applier.get_apply_result(apply_result, job, vacancy, minimum_job_time)
-
-            assert job_applier.applies_num == 1
-            assert job_applier.success_applies_num == 1
-            assert job_applier.total_applies_num == 1
-            assert result == "Success"
-
-    def test_get_apply_result_skip(self, job_applier):
-        """Test get_apply_result with skipped application"""
-        with (patch.object(job_applier, "_save_company"),):
-            job_applier.cache = JobManagerCache()
-            job_applier.applies_num = 0
-            job_applier.success_applies_num = 0
-            job_applier.total_applies_num = 0
-            job_applier.max_applies_num = 50
-            job_applier.success_companies = {}
-            job_applier.skipped_companies = {}
-            job_applier.failed_companies = {}
-
-            job = Job(
-                job_title="Engineer",
-                company_name="Tech Corp",
-                url="https://linkedin.com/jobs/view/12345",
-            )
-            vacancy = {"url": "https://linkedin.com/jobs/view/12345"}
-            apply_result = ("Skip", "Not interesting")
-            minimum_job_time = 0
-
-            result = job_applier.get_apply_result(apply_result, job, vacancy, minimum_job_time)
-
-            assert job_applier.applies_num == 1
-            assert job_applier.success_applies_num == 0  # No success
-            assert result == "Skip"
-
-    def test_get_apply_result_limit_reached(self, job_applier):
-        """Test get_apply_result when limit is reached"""
-        with (
-            patch.object(job_applier, "_save_company"),
-            patch("src.job_manager.job_manager.save_yaml_file"),
-        ):
-            job_applier.cache = JobManagerCache()
-            job_applier.applies_num = 0
-            job_applier.success_applies_num = 49
-            job_applier.total_applies_num = 0
-            job_applier.max_applies_num = 50
-            job_applier.success_companies = {}
-            job_applier.skipped_companies = {}
-            job_applier.failed_companies = {}
-
-            job = Job(
-                job_title="Engineer",
-                company_name="Tech Corp",
-                url="https://linkedin.com/jobs/view/12345",
-            )
-            vacancy = {"url": "https://linkedin.com/jobs/view/12345"}
-            apply_result = ("Success", "")
-            minimum_job_time = 0
-
-            result = job_applier.get_apply_result(apply_result, job, vacancy, minimum_job_time)
-
-            assert job_applier.success_applies_num == 50
-            assert result == "Limit"
-
-    def test_get_apply_result_limit_status(self, job_applier):
-        """Test get_apply_result when apply_result is Limit"""
-        with (patch.object(job_applier, "_save_company"),):
-            job_applier.cache = JobManagerCache()
-            job_applier.applies_num = 0
-            job_applier.success_applies_num = 10
-            job_applier.total_applies_num = 0
-            job_applier.max_applies_num = 50
-            job_applier.success_companies = {}
-            job_applier.skipped_companies = {}
-            job_applier.failed_companies = {}
-
-            job = Job(
-                job_title="Engineer",
-                company_name="Tech Corp",
-                url="https://linkedin.com/jobs/view/12345",
-            )
-            vacancy = {"url": "https://linkedin.com/jobs/view/12345"}
-            apply_result = ("Limit", "")
-            minimum_job_time = 0
-
-            result = job_applier.get_apply_result(apply_result, job, vacancy, minimum_job_time)
-
-            # When result is "Limit", company should not be saved
-            assert result == "Limit"
-
-
-class TestApplyModeDetection:
-    """Test external apply vs Easy Apply detection"""
-
-    @pytest.mark.asyncio
-    async def test_check_apply_button_prefers_external_apply_link(self, job_applier):
-        """Test external apply links are detected from company website CTAs"""
-        button = AsyncMock()
-
-        with (
-            patch(
-                "src.job_manager.job_manager.find_elements_safely", new_callable=AsyncMock
-            ) as mock_find_elements,
-            patch.object(job_applier, "_get_button_link", new_callable=AsyncMock) as mock_get_link,
-        ):
-            mock_find_elements.side_effect = [[button]]
-            mock_get_link.return_value = "https://external.example/apply"
-
-            result = await job_applier._check_apply_button()
-
-            assert result == "https://external.example/apply"
-
-    @pytest.mark.asyncio
-    async def test_easy_apply_skips_external_apply_jobs(self, job_applier):
-        """Test Easy Apply path skips jobs that are handled off LinkedIn"""
-        job = Job(
-            job_title="Vice President – Integration & API Platforms",
-            company_name="Al Ghurair",
-            url="https://www.linkedin.com/jobs/view/4359175355",
-        )
-        job_applier.easy_applier_component = AsyncMock()
-
-        with patch.object(job_applier, "_check_apply_button", new_callable=AsyncMock) as mock_check:
-            mock_check.return_value = "https://external.example/apply"
-
-            result = await job_applier.easy_apply(job)
-
-            assert result == ("Skip", "Job uses external apply flow, not LinkedIn Easy Apply")
-            job_applier.easy_applier_component.apply_to_job.assert_not_called()
 
 
 class TestExtractSkillsFromVacancy:
@@ -947,3 +793,333 @@ class TestExtractSkillsFromVacancy:
 
         assert job_applier.job_key_skills == ["Python", "Docker", "Kubernetes"]
         mock_llm_answerer.extract_skills_from_vacancy.assert_called_once_with(job.job_description)
+
+
+class TestHandleApplyResult:
+    """Test _handle_apply_result async method"""
+
+    @pytest.mark.asyncio
+    async def test_handle_apply_result_success(self, job_applier):
+        job_applier.applies_num = 0
+        job_applier.success_applies_num = 0
+        job_applier.total_applies_num = 0
+        job_applier.error_num = 0
+        job_applier.cache = JobManagerCache()
+
+        job = Job(
+            job_title="Software Engineer",
+            company_name="Tech Corp",
+            url="https://linkedin.com/jobs/view/1",
+        )
+
+        with (
+            patch("src.job_manager.job_manager.emit_event"),
+            patch("src.job_manager.job_manager.COLLECT_INFO_MODE", False),
+            patch.object(job_applier, "_save_company"),
+            patch.object(job_applier, "_write_the_last_search_time"),
+        ):
+            await job_applier._handle_apply_result(("Success", ""), job)
+
+        assert job_applier.applies_num == 1
+        assert job_applier.success_applies_num == 1
+        assert job_applier.total_applies_num == 1
+        assert job_applier.error_num == 0
+
+    @pytest.mark.asyncio
+    async def test_handle_apply_result_error(self, job_applier):
+        job_applier.applies_num = 0
+        job_applier.success_applies_num = 0
+        job_applier.total_applies_num = 0
+        job_applier.error_num = 0
+        job_applier.cache = JobManagerCache()
+
+        job = Job(
+            job_title="Software Engineer",
+            company_name="Tech Corp",
+            url="https://linkedin.com/jobs/view/1",
+        )
+
+        with (
+            patch("src.job_manager.job_manager.emit_event"),
+            patch("src.job_manager.job_manager.COLLECT_INFO_MODE", False),
+            patch.object(job_applier, "_save_company"),
+        ):
+            await job_applier._handle_apply_result(("Error", "Form failed"), job)
+
+        assert job_applier.applies_num == 1
+        assert job_applier.error_num == 1
+        assert job_applier.success_applies_num == 0
+
+    @pytest.mark.asyncio
+    async def test_handle_apply_result_limit_does_not_save_company(self, job_applier):
+        job_applier.applies_num = 0
+        job_applier.success_applies_num = 0
+        job_applier.total_applies_num = 0
+        job_applier.error_num = 0
+        job_applier.cache = JobManagerCache()
+
+        job = Job(
+            job_title="Software Engineer",
+            company_name="Tech Corp",
+            url="https://linkedin.com/jobs/view/1",
+        )
+
+        with (
+            patch("src.job_manager.job_manager.emit_event"),
+            patch("src.job_manager.job_manager.COLLECT_INFO_MODE", False),
+            patch.object(job_applier, "_save_company") as mock_save,
+        ):
+            await job_applier._handle_apply_result(("Limit", ""), job)
+
+        mock_save.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_handle_apply_result_collect_info_mode_does_not_save_company(self, job_applier):
+        job_applier.applies_num = 0
+        job_applier.success_applies_num = 0
+        job_applier.total_applies_num = 0
+        job_applier.error_num = 0
+        job_applier.cache = JobManagerCache()
+
+        job = Job(
+            job_title="Software Engineer",
+            company_name="Tech Corp",
+            url="https://linkedin.com/jobs/view/1",
+        )
+
+        with (
+            patch("src.job_manager.job_manager.emit_event"),
+            patch("src.job_manager.job_manager.COLLECT_INFO_MODE", True),
+            patch.object(job_applier, "_save_company") as mock_save,
+        ):
+            await job_applier._handle_apply_result(("Success", ""), job)
+
+        mock_save.assert_not_called()
+
+
+class TestSendReport:
+    """Test send_report async method"""
+
+    @pytest.mark.asyncio
+    async def test_send_report_skipped_in_test_mode(self, job_applier):
+        job_applier.previous_apply_number = 0
+        job_applier.success_applies_num = 5
+
+        with (
+            patch("src.job_manager.job_manager.TEST_MODE", True),
+            patch("src.job_manager.job_manager.COLLECT_INFO_MODE", False),
+            patch("src.telegram.telegram_manager.TelegramReportSender") as mock_bot,
+        ):
+            await job_applier.send_report("Success")
+
+        mock_bot.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_send_report_skipped_in_collect_info_mode(self, job_applier):
+        job_applier.previous_apply_number = 0
+        job_applier.success_applies_num = 5
+
+        with (
+            patch("src.job_manager.job_manager.TEST_MODE", False),
+            patch("src.job_manager.job_manager.COLLECT_INFO_MODE", True),
+            patch("src.telegram.telegram_manager.TelegramReportSender") as mock_bot,
+        ):
+            await job_applier.send_report("Success")
+
+        mock_bot.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_send_report_skipped_on_error_result(self, job_applier):
+        job_applier.previous_apply_number = 0
+        job_applier.success_applies_num = 5
+
+        with (
+            patch("src.job_manager.job_manager.TEST_MODE", False),
+            patch("src.job_manager.job_manager.COLLECT_INFO_MODE", False),
+            patch("src.telegram.telegram_manager.TelegramReportSender") as mock_bot,
+        ):
+            await job_applier.send_report("Error")
+
+        mock_bot.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_send_report_skipped_when_no_new_applies(self, job_applier):
+        job_applier.previous_apply_number = 5
+        job_applier.success_applies_num = 5
+
+        with (
+            patch("src.job_manager.job_manager.TEST_MODE", False),
+            patch("src.job_manager.job_manager.COLLECT_INFO_MODE", False),
+            patch("src.telegram.telegram_manager.TelegramReportSender") as mock_bot,
+        ):
+            await job_applier.send_report("Success")
+
+        mock_bot.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_send_report_sends_when_conditions_met(self, job_applier):
+        job_applier.previous_apply_number = 0
+        job_applier.success_applies_num = 3
+        job_applier.jobs_no_info = []
+        job_applier.skill_stat = {}
+        job_applier.resume = {}
+        job_applier.resume_recommendations = ""
+        job_applier.email = "test@example.com"
+
+        mock_bot_instance = MagicMock()
+        mock_bot_instance.send_telegram_report = AsyncMock()
+
+        with (
+            patch("src.job_manager.job_manager.TEST_MODE", False),
+            patch("src.job_manager.job_manager.COLLECT_INFO_MODE", False),
+            patch(
+                "src.job_manager.job_manager.TelegramReportSender",
+                return_value=mock_bot_instance,
+            ),
+            patch.object(job_applier, "_write_the_last_search_time"),
+        ):
+            await job_applier.send_report("Success")
+
+        mock_bot_instance.send_telegram_report.assert_called_once()
+
+
+class TestResumeImprovementRecommendations:
+    """Test resume_improvement_recommendations method"""
+
+    def test_loads_from_file_if_exists(self, job_applier):
+        job_applier.llm_answerer_component = MagicMock()
+
+        with (
+            patch.object(
+                job_applier, "_define_output_file", return_value=Path("/mock/resume_recs.txt")
+            ),
+            patch("builtins.open", mock_open(read_data="Existing recommendations")),
+        ):
+            job_applier.resume_improvement_recommendations()
+
+        assert job_applier.resume_recommendations == "Existing recommendations"
+        job_applier.llm_answerer_component.resume_improvement_recommendations.assert_not_called()
+
+    def test_generates_if_file_empty(self, job_applier):
+        job_applier.llm_answerer_component = MagicMock()
+        job_applier.llm_answerer_component.resume_improvement_recommendations.return_value = (
+            "New recommendations"
+        )
+        job_applier.resume_anonymizer.deanonymize_text = lambda text: text
+
+        mock_file = mock_open(read_data="")
+        with (
+            patch.object(
+                job_applier, "_define_output_file", return_value=Path("/mock/resume_recs.txt")
+            ),
+            patch("builtins.open", mock_file),
+        ):
+            job_applier.resume_improvement_recommendations()
+
+        assert job_applier.resume_recommendations == "New recommendations"
+        job_applier.llm_answerer_component.resume_improvement_recommendations.assert_called_once()
+
+    def test_generates_if_file_not_found(self, job_applier):
+        job_applier.llm_answerer_component = MagicMock()
+        job_applier.llm_answerer_component.resume_improvement_recommendations.return_value = (
+            "New recommendations"
+        )
+        job_applier.resume_anonymizer.deanonymize_text = lambda text: text
+
+        def open_side_effect(path, mode="r", **kwargs):
+            if "r" in mode:
+                raise FileNotFoundError
+            return mock_open()()
+
+        with (
+            patch.object(
+                job_applier, "_define_output_file", return_value=Path("/mock/resume_recs.txt")
+            ),
+            patch("builtins.open", side_effect=open_side_effect),
+        ):
+            job_applier.resume_improvement_recommendations()
+
+        assert job_applier.resume_recommendations == "New recommendations"
+
+
+class TestCheckLastSearchTimeWithPreviousApply:
+    """Test check_the_last_search_time edge cases"""
+
+    def test_check_too_soon_but_previous_apply_number_nonzero(self, job_applier):
+        """When last run < 24h ago but previous_apply_number > 0, should return True"""
+        recent_time = datetime.now() - timedelta(hours=12)
+        job_applier.cache = JobManagerCache(last_run=recent_time.isoformat())
+        job_applier.previous_apply_number = 3
+
+        result = job_applier.check_the_last_search_time()
+
+        assert result is True
+
+
+class TestJobIsAlreadySeenCollectInfoMode:
+    """Test _job_is_already_seen in COLLECT_INFO_MODE"""
+
+    def test_job_is_already_seen_in_collect_info_mode(self, job_applier):
+        from src.pydantic_models.job_models import JobInfo
+
+        job_applier.interesting_jobs = [
+            JobInfo(job_title="Software Engineer", company_name="Tech Corp")
+        ]
+
+        job = Job(job_title="Software Engineer", company_name="Tech Corp")
+
+        with patch("src.job_manager.job_manager.COLLECT_INFO_MODE", True):
+            is_seen, reason = job_applier._job_is_already_seen(job)
+
+        assert is_seen is True
+        assert "vacancy has already been encountered" in reason
+
+    def test_job_not_seen_in_collect_info_mode(self, job_applier):
+        from src.pydantic_models.job_models import JobInfo
+
+        job_applier.interesting_jobs = [JobInfo(job_title="Other Job", company_name="Other Corp")]
+
+        job = Job(job_title="Software Engineer", company_name="Tech Corp")
+
+        with patch("src.job_manager.job_manager.COLLECT_INFO_MODE", True):
+            is_seen, reason = job_applier._job_is_already_seen(job)
+
+        assert is_seen is False
+        assert reason == ""
+
+
+class TestSaveCompanyEdgeCases:
+    """Test _save_company edge cases"""
+
+    def test_save_company_empty_name_does_not_save(self, job_applier):
+        with patch.object(job_applier, "_save_company_to_yaml") as mock_save:
+            job_applier.success_companies = {}
+            job_applier.skipped_companies = {}
+            job_applier.failed_companies = {}
+
+            job = Job(
+                job_title="Software Engineer",
+                company_name="",
+                url="https://linkedin.com/jobs/view/1",
+            )
+            job_applier._save_company(job, ("Success", ""), {"url": job.url})
+
+            assert job_applier.success_companies == {}
+            mock_save.assert_called_once()
+
+    def test_save_company_appends_to_existing(self, job_applier):
+        with patch.object(job_applier, "_save_company_to_yaml"):
+            job_applier.success_companies = {
+                "Tech Corp": [{"job_title": "Backend Engineer", "url": "http://test.com"}]
+            }
+            job_applier.skipped_companies = {}
+            job_applier.failed_companies = {}
+
+            job = Job(
+                job_title="Frontend Engineer",
+                company_name="Tech Corp",
+                url="https://linkedin.com/jobs/view/2",
+            )
+            job_applier._save_company(job, ("Success", ""), {"url": job.url})
+
+            assert len(job_applier.success_companies["Tech Corp"]) == 2
