@@ -92,8 +92,8 @@ PRICE_DICT: dict[str, dict[str, float]] = {
     },
     # DeepSeek
     "deepseek/deepseek-chat-v3.1": {
-        "input_cost_per_token": 0.10 / 1_000_000,
-        "output_cost_per_token": 0.20 / 1_000_000,
+        "input_cost_per_token": 0.15 / 1_000_000,
+        "output_cost_per_token": 0.75 / 1_000_000,
     },
     "deepseek/deepseek-chat-v3.2": {
         "input_cost_per_token": 0.26 / 1_000_000,
@@ -102,6 +102,15 @@ PRICE_DICT: dict[str, dict[str, float]] = {
     "deepseek/deepseek-v4-flash": {
         "input_cost_per_token": 0.14 / 1_000_000,
         "output_cost_per_token": 0.28 / 1_000_000,
+    },
+    # Qwen
+    "qwen/qwen3.5-flash-02-23": {
+        "input_cost_per_token": 0.065 / 1_000_000,
+        "output_cost_per_token": 0.26 / 1_000_000,
+    },
+    "qwen/qwen3.6-plus": {
+        "input_cost_per_token": 0.325 / 1_000_000,
+        "output_cost_per_token": 1.30 / 1_000_000,
     },
 }
 
