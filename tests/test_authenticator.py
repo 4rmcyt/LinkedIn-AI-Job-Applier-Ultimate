@@ -80,7 +80,7 @@ class TestLinkedInAuthenticatorLogin:
 
     @pytest.mark.asyncio
     async def test_is_logged_in_no_feed_content(self):
-        """Test is_logged_in when feed content is not found"""
+        """Test is_logged_in when authenticated shell is detected"""
         mock_page = AsyncMock()
         mock_page.url = "https://www.linkedin.com/feed/"
 
@@ -88,7 +88,24 @@ class TestLinkedInAuthenticatorLogin:
             "src.job_manager.linkedin.authenticator_linkedin.find_element_safely",
             new_callable=AsyncMock,
         ) as mock_find:
-            mock_find.return_value = None  # No feed element found
+            mock_find.side_effect = [MagicMock()]  # Authenticated nav found immediately
+
+            auth = LinkedInAuthenticator(page=mock_page)
+            result = await auth.is_logged_in()
+
+            assert result is True
+
+    @pytest.mark.asyncio
+    async def test_is_logged_in_unknown_page_without_markers(self):
+        """Test is_logged_in when no authenticated markers are found"""
+        mock_page = AsyncMock()
+        mock_page.url = "https://www.linkedin.com/authwall"
+
+        with patch(
+            "src.job_manager.linkedin.authenticator_linkedin.find_element_safely",
+            new_callable=AsyncMock,
+        ) as mock_find:
+            mock_find.return_value = None
 
             auth = LinkedInAuthenticator(page=mock_page)
             result = await auth.is_logged_in()
@@ -152,6 +169,7 @@ class TestLinkedInAuthenticatorLogin:
         auth.password = "password123"
 
         with (
+            patch.object(auth, "_is_authenticated_page", new_callable=AsyncMock, return_value=False),
             patch(
                 "src.job_manager.linkedin.authenticator_linkedin.safe_fill", new_callable=AsyncMock
             ) as mock_fill,
@@ -188,6 +206,7 @@ class TestLinkedInAuthenticatorLogin:
         auth.password = "password123"
 
         with (
+            patch.object(auth, "_is_authenticated_page", new_callable=AsyncMock, return_value=False),
             patch(
                 "src.job_manager.linkedin.authenticator_linkedin.safe_fill", new_callable=AsyncMock
             ) as mock_fill,
@@ -288,6 +307,27 @@ class TestLinkedInAuthenticatorLogin:
             result = await auth.enter_credentials()
 
             assert result is False
+
+    @pytest.mark.asyncio
+    async def test_enter_credentials_returns_success_when_already_authenticated(self):
+        """Test enter_credentials short-circuits when session is already authenticated"""
+        mock_page = AsyncMock()
+
+        auth = LinkedInAuthenticator(page=mock_page)
+
+        with (
+            patch.object(auth, "_is_authenticated_page", new_callable=AsyncMock) as mock_auth_page,
+            patch(
+                "src.job_manager.linkedin.authenticator_linkedin.safe_fill",
+                new_callable=AsyncMock,
+            ) as mock_fill,
+        ):
+            mock_auth_page.return_value = True
+
+            result = await auth.enter_credentials()
+
+            assert result is True
+            mock_fill.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_enter_credentials_exception(self):

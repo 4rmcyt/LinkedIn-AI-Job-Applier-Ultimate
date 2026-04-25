@@ -31,3 +31,7 @@ Both easy applier implementations cache question answers in `data/output/answers
 ## Project rules
 
 See `.claude/rules/` directory for detailed rules.
+
+## Debugging Artifacts
+
+When debugging runtime or browser issues, inspect `data/debug/` for screenshots, captured HTML, and Playwright traces.

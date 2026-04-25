@@ -12,6 +12,24 @@ from src.utils.utils import async_pause
 class LinkedInAuthenticator(BaseAuthenticator):
     """Class for LinkedIn login and session management"""
 
+    AUTHENTICATED_URL_PATTERNS = (
+        "/feed/",
+        "/jobs/",
+        "/in/",
+        "/mynetwork/",
+        "/notifications/",
+        "/messaging/",
+    )
+
+    UNAUTHENTICATED_URL_PATTERNS = (
+        "/login",
+        "/uas/login",
+        "/signup",
+        "/authwall",
+        "/checkpoint/challenge",
+        "/challenge",
+    )
+
     def __init__(self, page: Union[Page, any] = None):
         super().__init__(page)
         self.session_file = Path("data/linkedin_session.json")
@@ -27,18 +45,8 @@ class LinkedInAuthenticator(BaseAuthenticator):
             await self.page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded")
             logger.info("Checking if user is logged into LinkedIn...")
 
-            # Check current URL to see if we're redirected to login
-            current_url = self.page.url
-            if "/login" in current_url or "/uas/login" in current_url:
-                logger.warning("Redirected to login page, user not authorized")
-                return False
-
-            # Additional check - look for feed content
-            feed_element = await find_element_safely(
-                self.page, ".feed-shared-update-v2", timeout=30000
-            )
-            if feed_element:
-                logger.info("Feed content found, user is logged in")
+            if await self._is_authenticated_page():
+                logger.info("LinkedIn session appears authenticated")
                 return True
 
             logger.warning("Could not determine authorization status, assuming not logged in")
@@ -66,6 +74,10 @@ class LinkedInAuthenticator(BaseAuthenticator):
         logger.info("Entering user credentials in LinkedIn...")
 
         try:
+            if await self._is_authenticated_page():
+                logger.info("LinkedIn already redirected to an authenticated page")
+                return True
+
             if await self.try_continue_with_saved_account():
                 logger.info("Continued via saved account chooser")
                 return await self.check_login_success()
@@ -166,6 +178,45 @@ class LinkedInAuthenticator(BaseAuthenticator):
             if await password_locator.count() > 0:
                 logger.info("Saved account chooser led to password prompt")
                 return False
+
+        return False
+
+    async def _is_authenticated_page(self) -> bool:
+        """Detect authenticated LinkedIn pages using stable URLs and nav markers."""
+        current_url = self.page.url.lower()
+
+        if any(pattern in current_url for pattern in self.UNAUTHENTICATED_URL_PATTERNS):
+            logger.warning(f"LinkedIn is on an unauthenticated URL: {self.page.url}")
+            return False
+
+        if current_url in {"https://www.linkedin.com/", "https://www.linkedin.com"} or any(
+            pattern in current_url for pattern in self.AUTHENTICATED_URL_PATTERNS
+        ):
+            return True
+
+        authenticated_selectors = [
+            "nav[aria-label='Primary Navigation']",
+            "a[href='https://www.linkedin.com/feed/']",
+            "a[href='https://www.linkedin.com/jobs/']",
+            "button[aria-label*='Notifications']",
+            "button[aria-label*='Messaging']",
+            "input[placeholder*='Search']",
+        ]
+
+        for selector in authenticated_selectors:
+            if await find_element_safely(self.page, selector, timeout=2000):
+                logger.info(f"Authenticated LinkedIn UI detected via selector: {selector}")
+                return True
+
+        try:
+            page_title = (await self.page.title()).strip().lower()
+        except Exception as e:
+            logger.debug(f"Could not read LinkedIn page title while checking auth state: {e}")
+            return False
+
+        if "linkedin" in page_title and page_title != "sign in | linkedin":
+            logger.info(f"Authenticated LinkedIn page inferred from title: {page_title}")
+            return True
 
         return False
 

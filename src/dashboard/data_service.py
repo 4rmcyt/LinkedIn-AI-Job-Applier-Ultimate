@@ -76,6 +76,8 @@ def _flatten_company_jobs(
                     "interest_score": job.get("interest_score"),
                     "interest_reason": job.get("interest_reason"),
                     "skills": job.get("skills"),
+                    "llm_time_seconds": job.get("llm_time_seconds", 0.0),
+                    "executed_at": job.get("executed_at"),
                 }
             )
     return rows
@@ -116,6 +118,8 @@ def _load_jobs_board() -> List[Dict[str, Any]]:
                 "interest_score": current_job.get("score"),
                 "interest_reason": "",
                 "skills": None,
+                "llm_time_seconds": current_job.get("llm_time_seconds", 0.0),
+                "executed_at": current_job.get("executed_at") or snapshot.get("last_event_at"),
             },
         )
 
@@ -159,6 +163,8 @@ def _build_run_jobs(run_id: str) -> List[Dict[str, Any]]:
                 "interest_score": None,
                 "interest_reason": "",
                 "skills": None,
+                "llm_time_seconds": 0.0,
+                "executed_at": event.get("timestamp"),
                 "stage": payload.get("stage"),
                 "last_message": event.get("message"),
                 "updated_at": event.get("timestamp"),
@@ -173,9 +179,18 @@ def _build_run_jobs(run_id: str) -> List[Dict[str, Any]]:
         job["updated_at"] = event.get("timestamp") or job.get("updated_at")
 
         event_type = event.get("type")
+        if event_type == "llm_call_completed":
+            job["llm_time_seconds"] = payload.get(
+                "total_job_llm_time_seconds", job.get("llm_time_seconds", 0.0)
+            )
+            continue
+
         if event_type == "job_evaluated":
             job["interest_score"] = payload.get("score")
             job["interest_reason"] = payload.get("reasoning") or job.get("interest_reason", "")
+            job["llm_time_seconds"] = payload.get(
+                "llm_time_seconds", job.get("llm_time_seconds", 0.0)
+            )
             job["status"] = "interesting" if payload.get("interesting") else "skipped"
             if not payload.get("interesting") and not job.get("skip_reason"):
                 job["skip_reason"] = payload.get("reasoning") or "Vacancy is not interesting"
@@ -189,6 +204,10 @@ def _build_run_jobs(run_id: str) -> List[Dict[str, Any]]:
                 job["status"] = "in_progress"
         elif event_type == "job_result":
             result = str(payload.get("result", "")).lower()
+            job["llm_time_seconds"] = payload.get(
+                "llm_time_seconds", job.get("llm_time_seconds", 0.0)
+            )
+            job["executed_at"] = event.get("timestamp") or job.get("executed_at")
             if result == "success":
                 job["status"] = "applied"
             elif result == "skip":
@@ -282,7 +301,7 @@ def _load_last_run() -> Dict[str, Any]:
 
 def _read_llm_totals() -> Dict[str, Any]:
     if not LLM_CALLS_FILE.exists():
-        return {"calls": 0, "total_tokens": 0, "total_cost": 0.0}
+        return {"calls": 0, "total_tokens": 0, "total_cost": 0.0, "total_time_seconds": 0.0}
 
     content = LLM_CALLS_FILE.read_text(encoding="utf-8")
     total_tokens = sum(
@@ -292,8 +311,19 @@ def _read_llm_totals() -> Dict[str, Any]:
         float(match)
         for match in re.findall(r"^total_cost:\s*([0-9]+(?:\.[0-9]+)?)\s*$", content, re.MULTILINE)
     )
+    total_time_seconds = sum(
+        float(match)
+        for match in re.findall(
+            r"^response_time_seconds:\s*([0-9]+(?:\.[0-9]+)?)\s*$", content, re.MULTILINE
+        )
+    )
     calls = len(re.findall(r"^model_name:\s*", content, re.MULTILINE))
-    return {"calls": calls, "total_tokens": total_tokens, "total_cost": round(total_cost, 6)}
+    return {
+        "calls": calls,
+        "total_tokens": total_tokens,
+        "total_cost": round(total_cost, 6),
+        "total_time_seconds": round(total_time_seconds, 3),
+    }
 
 
 def get_summary() -> Dict[str, Any]:
@@ -332,6 +362,7 @@ def get_summary() -> Dict[str, Any]:
             "llm_calls": llm_totals["calls"],
             "llm_total_tokens": llm_totals["total_tokens"],
             "llm_total_cost": llm_totals["total_cost"],
+            "llm_total_time_seconds": llm_totals["total_time_seconds"],
         },
         "last_run": last_run,
     }

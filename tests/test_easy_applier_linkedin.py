@@ -459,3 +459,37 @@ class TestFillApplicationForm:
         applier._next_or_submit = AsyncMock(return_value=True)
         await applier._fill_application_form(test_job)
         pause_checker.assert_called_once()
+
+
+class TestTextboxCaching:
+    @pytest.mark.asyncio
+    async def test_reuses_cached_answer_when_field_type_changed(self, applier):
+        text_field = AsyncMock()
+        text_field.get_attribute = AsyncMock(side_effect=lambda attr: "text" if attr == "type" else None)
+        text_field.fill = AsyncMock()
+
+        label = AsyncMock()
+        label.text_content = AsyncMock(return_value="Email Address")
+
+        applier.all_questions = [
+            Question(question="email address", question_type="dropdown", answer="  ziad.nahas@gmail.com  ")
+        ]
+
+        with (
+            patch(
+                "src.job_manager.linkedin.easy_applier_linkedin.find_elements_safely",
+                new_callable=AsyncMock,
+                return_value=[text_field],
+            ),
+            patch(
+                "src.job_manager.linkedin.easy_applier_linkedin.find_element_safely",
+                new_callable=AsyncMock,
+                side_effect=[label],
+            ),
+            patch.object(applier, "_process_autocomplete_suggestions", new_callable=AsyncMock),
+        ):
+            result = await applier._find_and_handle_textbox_question(MagicMock())
+
+        assert result is True
+        text_field.fill.assert_called_once_with("ziad.nahas@gmail.com")
+        applier.gpt_answerer.answer_question_textual_wide_range.assert_not_called()

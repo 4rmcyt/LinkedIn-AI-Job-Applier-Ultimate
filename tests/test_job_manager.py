@@ -248,6 +248,80 @@ class TestTimeChecking:
 
         assert result is False
 
+
+class TestVacancyParsing:
+    """Test LinkedIn vacancy parsing"""
+
+    @pytest.mark.asyncio
+    async def test_extract_job_url_from_relative_href(self, job_applier):
+        """Test extracting a job URL from a relative link"""
+        job_element = AsyncMock()
+        job_element.get_attribute.return_value = None
+
+        with patch(
+            "src.job_manager.job_manager.get_element_attribute_safely", new_callable=AsyncMock
+        ) as mock_get_attribute:
+            mock_get_attribute.return_value = "/jobs/view/12345/"
+
+            job_url = await job_applier._extract_job_url(job_element)
+
+            assert job_url == "https://www.linkedin.com/jobs/view/12345/"
+
+    @pytest.mark.asyncio
+    async def test_extract_job_url_from_data_job_id(self, job_applier):
+        """Test extracting a job URL from a job id attribute"""
+        job_element = AsyncMock()
+
+        async def get_attribute_side_effect(name):
+            return "12345" if name == "data-occludable-job-id" else None
+
+        job_element.get_attribute.side_effect = get_attribute_side_effect
+
+        with patch(
+            "src.job_manager.job_manager.get_element_attribute_safely", new_callable=AsyncMock
+        ) as mock_get_attribute:
+            mock_get_attribute.return_value = None
+
+            job_url = await job_applier._extract_job_url(job_element)
+
+            assert job_url == "https://www.linkedin.com/jobs/view/12345"
+            mock_get_attribute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_vacancies_from_page_skips_bad_selector_matches(self, job_applier):
+        """Test vacancy parsing continues past selectors without job URLs"""
+        first_selector_elements = [AsyncMock(), AsyncMock()]
+        for element in first_selector_elements:
+            element.get_attribute.return_value = None
+
+        valid_element = AsyncMock()
+
+        async def valid_get_attribute(name):
+            if name == "href":
+                return None
+            if name == "data-occludable-job-id":
+                return "67890"
+            return None
+
+        valid_element.get_attribute.side_effect = valid_get_attribute
+
+        with (
+            patch.object(job_applier, "_scroll_to_load_jobs", new_callable=AsyncMock),
+            patch(
+                "src.job_manager.job_manager.find_elements_safely", new_callable=AsyncMock
+            ) as mock_find_elements,
+        ):
+            mock_find_elements.side_effect = [
+                first_selector_elements,
+                [valid_element],
+            ]
+
+            vacancies = await job_applier.get_vacancies_from_page()
+
+            assert vacancies == [
+                {"url": "https://www.linkedin.com/jobs/view/67890", "id": "67890"}
+            ]
+
     def test_check_previous_apply_number_no_previous(self, job_applier):
         """Test when there's no previous application"""
         job_applier.cache = JobManagerCache()
@@ -389,6 +463,64 @@ class TestCompanyManagement:
             job_applier._save_company(job, apply_result, vacancy)
 
             assert "Tech Corp" in job_applier.skipped_companies
+            saved_job = job_applier.skipped_companies["Tech Corp"][0]
+            assert saved_job["company_name"] == "Tech Corp"
+
+    def test_save_company_persists_evaluation_metadata(self, job_applier):
+        with patch.object(job_applier, "_save_company_to_yaml"):
+            job_applier.success_companies = {}
+            job_applier.skipped_companies = {}
+            job_applier.failed_companies = {}
+
+            job = Job(
+                job_title="Software Engineer",
+                company_name="Tech Corp",
+                url="https://linkedin.com/jobs/view/12345",
+            )
+
+            job_applier._save_company(
+                job,
+                ("Skip", "Not interesting"),
+                {"url": "https://linkedin.com/jobs/view/12345"},
+                evaluation={
+                    "interest_score": 42,
+                    "interest_reason": "Mismatch with role target",
+                    "skills": ["Python", "Leadership"],
+                },
+            )
+
+            saved_job = job_applier.skipped_companies["Tech Corp"][0]
+            assert saved_job["interest_score"] == 42
+            assert saved_job["interest_reason"] == "Mismatch with role target"
+            assert saved_job["skills"] == ["Python", "Leadership"]
+
+    def test_save_company_skip_does_not_duplicate_existing_entry(self, job_applier):
+        """Test duplicate skipped vacancies are not appended again"""
+        with patch.object(job_applier, "_save_company_to_yaml") as mock_save:
+            job_applier.success_companies = {}
+            job_applier.skipped_companies = {
+                "Tech Corp": [
+                    {
+                        "job_title": "Software Engineer",
+                        "url": "https://linkedin.com/jobs/view/12345",
+                        "skip_reason": "Not interesting",
+                    }
+                ]
+            }
+            job_applier.failed_companies = {}
+
+            job = Job(
+                job_title="Software Engineer",
+                company_name="Tech Corp",
+                url="https://linkedin.com/jobs/view/12345",
+            )
+            vacancy = {"url": "https://linkedin.com/jobs/view/12345"}
+            apply_result = ("Skip", "Not interesting")
+
+            job_applier._save_company(job, apply_result, vacancy)
+
+            assert len(job_applier.skipped_companies["Tech Corp"]) == 1
+            mock_save.assert_not_called()
 
     def test_save_company_failed(self, job_applier):
         """Test saving company to failed list"""
@@ -482,6 +614,76 @@ class TestJobSeenChecking:
 
         assert is_seen is True
         assert "vacancy has already been encountered" in reason
+
+    def test_job_is_already_seen_when_skipped_before(self, job_applier):
+        """Test skipped jobs are treated as already seen"""
+        job_applier.success_companies = {}
+        job_applier.skipped_companies = {
+            "Tech Corp": [{"job_title": "Software Engineer", "url": "http://test.com"}]
+        }
+        job_applier.failed_companies = {}
+        job_applier.apply_once_at_company = False
+
+        job = Job(job_title="Software Engineer", company_name="Tech Corp")
+
+        with patch("src.job_manager.job_manager.COLLECT_INFO_MODE", False):
+            is_seen, reason = job_applier._job_is_already_seen(job)
+
+        assert is_seen is True
+        assert "vacancy has already been encountered" in reason
+
+
+class TestPagination:
+    """Test search result pagination"""
+
+    @pytest.mark.asyncio
+    async def test_go_to_next_page_does_not_increment_when_click_fails(self, job_applier):
+        """Test page number stays unchanged if next page button is missing"""
+        job_applier.page_num = 1
+
+        with (
+            patch("src.job_manager.job_manager.safe_click", new_callable=AsyncMock) as mock_click,
+            patch(
+                "src.job_manager.job_manager.find_element_safely", new_callable=AsyncMock
+            ) as mock_find,
+        ):
+            mock_click.return_value = False
+            mock_find.return_value = None
+
+            result = await job_applier._go_to_next_page()
+
+        assert result is False
+        assert job_applier.page_num == 1
+
+    @pytest.mark.asyncio
+    async def test_go_to_next_page_increments_after_successful_click(self, job_applier):
+        """Test page number advances only after a successful click"""
+        job_applier.page_num = 1
+
+        with patch("src.job_manager.job_manager.safe_click", new_callable=AsyncMock) as mock_click:
+            mock_click.return_value = True
+
+            result = await job_applier._go_to_next_page()
+
+        assert result is True
+        assert job_applier.page_num == 2
+
+    @pytest.mark.asyncio
+    async def test_go_to_next_page_uses_human_page_number_for_numbered_buttons(self, job_applier):
+        """Test numbered pagination targets the next human-visible page number"""
+        job_applier.page_num = 0
+        attempted_selectors = []
+
+        async def safe_click_side_effect(page, selector, timeout=10000):
+            attempted_selectors.append(selector)
+            return selector == "button[aria-label='Page 2']"
+
+        with patch("src.job_manager.job_manager.safe_click", side_effect=safe_click_side_effect):
+            result = await job_applier._go_to_next_page()
+
+        assert result is True
+        assert job_applier.page_num == 1
+        assert attempted_selectors[0] == "button[aria-label='Page 2']"
 
 
 class TestInterestingJobs:
@@ -652,6 +854,39 @@ class TestHandleApplyResult:
         assert job_applier.success_applies_num == 1
         assert job_applier.total_applies_num == 1
         assert job_applier.error_num == 0
+
+    @pytest.mark.asyncio
+    async def test_handle_apply_result_passes_evaluation_to_save_company(self, job_applier):
+        job_applier.applies_num = 0
+        job_applier.success_applies_num = 0
+        job_applier.total_applies_num = 0
+        job_applier.error_num = 0
+        job_applier.cache = JobManagerCache()
+
+        job = Job(
+            job_title="Software Engineer",
+            company_name="Tech Corp",
+            url="https://linkedin.com/jobs/view/1",
+        )
+
+        with (
+            patch("src.job_manager.job_manager.emit_event"),
+            patch("src.job_manager.job_manager.COLLECT_INFO_MODE", False),
+            patch.object(job_applier, "_save_company") as mock_save,
+            patch.object(job_applier, "_write_the_last_search_time"),
+        ):
+            await job_applier._handle_apply_result(
+                ("Success", ""),
+                job,
+                evaluation={"interest_score": 88, "interest_reason": "Strong fit", "skills": ["Python"]},
+            )
+
+        mock_save.assert_called_once_with(
+            job,
+            ("Success", ""),
+            {"url": job.url},
+            evaluation={"interest_score": 88, "interest_reason": "Strong fit", "skills": ["Python"]},
+        )
 
     @pytest.mark.asyncio
     async def test_handle_apply_result_error(self, job_applier):

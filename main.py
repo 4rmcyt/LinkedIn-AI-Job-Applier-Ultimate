@@ -416,6 +416,11 @@ def main() -> None:
             emit_event("run_stopped", "Run stopped gracefully by dashboard")
             should_exit = True
 
+        except StopRequested as stop_requested:
+            logger.warning(str(stop_requested))
+            emit_event("run_stopped", "Run stopped gracefully by dashboard")
+            should_exit = True
+
         except ConfigError as ce:
             logger.error(f"Configuration error: {str(ce)}")
             emit_event("run_failed", "Configuration error", error=str(ce))

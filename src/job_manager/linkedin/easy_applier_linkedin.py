@@ -1057,11 +1057,9 @@ class LinkedInEasyApplier(BaseEasyApplier):
                 return False
 
             existing_answer = None
-            current_question_sanitized = sanitize_text(question_text)
-            for item in self.all_questions:
-                if current_question_sanitized in item.question and item.question_type == "radio":
-                    existing_answer = item
-                    break
+            cached_question = self._find_cached_question(question_text, "radio")
+            if cached_question and cached_question.question_type == "radio":
+                existing_answer = cached_question
 
             if existing_answer:
                 await self._select_radio(section, radios, existing_answer.model_dump()["answer"])
@@ -1152,15 +1150,14 @@ class LinkedInEasyApplier(BaseEasyApplier):
             # Look for existing answer if it's not a cover letter field
             existing_answer = None
             if not is_cover_letter:
-                current_question_sanitized = sanitize_text(question_text)
-                for item in self.all_questions:
-                    if (
-                        item.question == current_question_sanitized
-                        and item.question_type == question_type
-                    ):
-                        existing_answer = item.answer
-                        logger.debug(f"Found existing answer: {existing_answer}")
-                        break
+                cached_question = self._find_cached_question(question_text, question_type)
+                if cached_question:
+                    existing_answer = cached_question.answer.strip()
+                    logger.debug(
+                        "Found existing answer for '%s' via cached %s field",
+                        question_text,
+                        cached_question.question_type,
+                    )
 
             if existing_answer and not is_cover_letter:
                 answer = existing_answer
@@ -1292,14 +1289,9 @@ class LinkedInEasyApplier(BaseEasyApplier):
                 logger.debug(f"Current selection: {current_selection}")
 
                 existing_answer = None
-                current_question_sanitized = sanitize_text(question_text)
-                for item in self.all_questions:
-                    if (
-                        current_question_sanitized in item.question
-                        and item.question_type == "dropdown"
-                    ):
-                        existing_answer = item.answer
-                        break
+                cached_question = self._find_cached_question(question_text, "dropdown")
+                if cached_question and cached_question.question_type == "dropdown":
+                    existing_answer = cached_question.answer
 
                 if existing_answer:
                     logger.debug(
