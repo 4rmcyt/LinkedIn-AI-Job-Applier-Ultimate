@@ -2,12 +2,17 @@ import json
 import os
 import signal
 import subprocess
+import sys
 import threading
 from datetime import datetime
 from pathlib import Path
 from shutil import copyfile
 from typing import Any, Dict, List, Tuple
 
+try:
+    from config.app_config import DASHBOARD_OUTPUT_APP_LOGS
+except ImportError:
+    DASHBOARD_OUTPUT_APP_LOGS = False
 from config.constants import LOG_DIR
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -217,7 +222,9 @@ def _update_snapshot_from_event(event: Dict[str, Any]) -> None:
         snapshot["run_status"] = (
             "completed"
             if event_type == "run_completed"
-            else "stopped" if event_type == "run_stopped" else "failed"
+            else "stopped"
+            if event_type == "run_stopped"
+            else "failed"
         )
         snapshot["finished_at"] = event["timestamp"]
         snapshot["current_job"] = None
@@ -353,6 +360,20 @@ def is_process_running(pid: int | None) -> bool:
         return False
 
 
+def _tee_process_output(process: subprocess.Popen, log_path: Path) -> None:
+    def _reader() -> None:
+        with log_path.open("a", encoding="utf-8") as log:
+            assert process.stdout is not None
+            for raw_line in iter(process.stdout.readline, b""):
+                line = raw_line.decode("utf-8", errors="replace")
+                if DASHBOARD_OUTPUT_APP_LOGS:
+                    sys.stdout.write(line)
+                    sys.stdout.flush()
+                log.write(line)
+
+    threading.Thread(target=_reader, daemon=True).start()
+
+
 def start_bot_process() -> Dict[str, Any]:
     process_info = get_process_info()
     if is_process_running(process_info.get("pid")):
@@ -365,16 +386,15 @@ def start_bot_process() -> Dict[str, Any]:
     env = os.environ.copy()
     env["DASHBOARD_RUN_ID"] = run_id
 
-    stdout_file = BOT_STDOUT_FILE.open("a", encoding="utf-8")
     process = subprocess.Popen(
         ["uv", "run", "python", "main.py"],
         cwd=ROOT_DIR,
         env=env,
-        stdout=stdout_file,
+        stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         start_new_session=True,
     )
-    stdout_file.close()
+    _tee_process_output(process, BOT_STDOUT_FILE)
 
     process_info = {"pid": process.pid, "run_id": run_id, "started_at": _now_iso()}
     set_process_info(process_info)

@@ -95,6 +95,11 @@ Free tier mode wait time in seconds
 FREE_TIER_RPM_LIMIT = 15
 
 """
+If this mode is activated, bot process output will be printed to the dashboard console in addition to the log file.
+"""
+DASHBOARD_OUTPUT_APP_LOGS = True
+
+"""
 Logging level
 Possible values:
     - "DEBUG"
