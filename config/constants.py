@@ -90,6 +90,19 @@ PRICE_DICT: dict[str, dict[str, float]] = {
         "input_cost_per_token": 3.00 / 1_000_000,
         "output_cost_per_token": 15.00 / 1_000_000,
     },
+    # DeepSeek
+    "deepseek/deepseek-chat-v3.1": {
+        "input_cost_per_token": 0.10 / 1_000_000,
+        "output_cost_per_token": 0.20 / 1_000_000,
+    },
+    "deepseek/deepseek-chat-v3.2": {
+        "input_cost_per_token": 0.26 / 1_000_000,
+        "output_cost_per_token": 0.38 / 1_000_000,
+    },
+    "deepseek/deepseek-v4-flash": {
+        "input_cost_per_token": 0.14 / 1_000_000,
+        "output_cost_per_token": 0.28 / 1_000_000,
+    },
 }
 
 

@@ -3,7 +3,6 @@ import os
 import signal
 import subprocess
 import threading
-from shutil import copyfile
 from datetime import datetime
 from pathlib import Path
 from shutil import copyfile
@@ -279,9 +278,6 @@ def _update_snapshot_from_event(event: Dict[str, Any]) -> None:
             counters["skipped"] = counters.get("skipped", 0) + 1
         elif result in {"error", "failed"}:
             counters["failed"] = counters.get("failed", 0) + 1
-        current_job = snapshot.get("current_job") or {}
-        current_job["executed_at"] = event["timestamp"]
-        snapshot["current_job"] = current_job
         snapshot["current_job"] = None
     elif event_type == "screenshot_updated":
         snapshot["latest_screenshot_at"] = event["timestamp"]

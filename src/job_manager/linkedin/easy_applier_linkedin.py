@@ -1056,13 +1056,9 @@ class LinkedInEasyApplier(BaseEasyApplier):
                 logger.debug("No options extracted from radio buttons, skipping")
                 return False
 
-            existing_answer = None
             cached_question = self._find_cached_question(question_text, "radio")
-            if cached_question and cached_question.question_type == "radio":
-                existing_answer = cached_question
-
-            if existing_answer:
-                await self._select_radio(section, radios, existing_answer.model_dump()["answer"])
+            if cached_question:
+                await self._select_radio(section, radios, cached_question.answer)
                 logger.debug("Selected existing radio answer")
                 return True
 
@@ -1288,18 +1284,14 @@ class LinkedInEasyApplier(BaseEasyApplier):
                     current_selection = ""
                 logger.debug(f"Current selection: {current_selection}")
 
-                existing_answer = None
                 cached_question = self._find_cached_question(question_text, "dropdown")
-                if cached_question and cached_question.question_type == "dropdown":
-                    existing_answer = cached_question.answer
-
-                if existing_answer:
+                if cached_question:
                     logger.debug(
-                        f"Found existing answer for question '{question_text}': {existing_answer}"
+                        f"Found existing answer for question '{question_text}': {cached_question.answer}"
                     )
-                    if current_selection != existing_answer:
-                        logger.debug(f"Updating selection to: {existing_answer}")
-                        await self._select_dropdown_option(dropdown, existing_answer)
+                    if current_selection != cached_question.answer:
+                        logger.debug(f"Updating selection to: {cached_question.answer}")
+                        await self._select_dropdown_option(dropdown, cached_question.answer)
                 else:
                     logger.info(f"Asking question: {question_text}")
                     logger.info(f"Available options: {options}")

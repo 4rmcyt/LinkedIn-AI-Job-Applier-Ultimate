@@ -57,16 +57,10 @@ def append_yaml_file(yaml_path: Path, data: dict) -> None:
     """Append data to YAML file"""
     # Append the log entry to the call log file
     try:
-        if yaml_path.exists():
-            # Read existing data
-            with yaml_path.open("a", encoding="utf-8") as f:
-                yaml.safe_dump(data, f, allow_unicode=True, default_flow_style=False)
-                f.write("\n")  # Add empty line after data
-        else:
-            # Create new file and write the first entry
-            with yaml_path.open("w", encoding="utf-8") as f:
-                yaml.safe_dump(data, f, allow_unicode=True, default_flow_style=False)
-                f.write("\n")  # Add empty line after data
+        with yaml_path.open("a", encoding="utf-8") as f:
+            f.write("---\n")
+            yaml.safe_dump(data, f, allow_unicode=True, default_flow_style=False)
+            f.write("\n")
         logger.info(f"Data appended to {yaml_path}")
     except yaml.YAMLError as exc:
         raise yaml.YAMLError(f"Error in reading file {yaml_path}: {exc}")

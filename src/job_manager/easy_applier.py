@@ -7,7 +7,6 @@ from typing import Any, List, Tuple
 from httpx import HTTPStatusError
 
 from config.logger_config import logger
-from src.dashboard.runtime import StopRequested, capture_page_screenshot, emit_event
 from src.pydantic_models.job_models import Job, Question
 from src.utils.browser_utils import debug_capture
 from src.utils.utils import ConfigError, async_pause, load_yaml_file, sanitize_text, save_yaml_file
@@ -170,24 +169,27 @@ class BaseEasyApplier(ABC):
             and self.current_job.company_name in answer
         )
 
-    def _find_cached_question(self, question_text: str, question_type: str | None = None) -> Question | None:
-        """Find a cached answer, preferring the same field type but falling back to exact question text."""
+    def _find_cached_question(
+        self, question_text: str, question_type: str | None = None
+    ) -> Question | None:
+        """Find a cached answer with the same field type, preferring exact question text match,
+        but falling back to question text containing match."""
         current_question_sanitized = sanitize_text(question_text)
-        exact_type_match = None
         exact_question_match = None
+        has_question_text = None
 
         for item in self.all_questions:
-            if item.question != current_question_sanitized:
+            if item.question_type != question_type:
                 continue
 
-            if exact_question_match is None:
-                exact_question_match = item
+            if current_question_sanitized in item.question:
+                has_question_text = item
 
-            if question_type is not None and item.question_type == question_type:
-                exact_type_match = item
+            if item.question == current_question_sanitized:
+                exact_question_match = item
                 break
 
-        return exact_type_match or exact_question_match
+        return exact_question_match or has_question_text
 
     def _load_questions(self) -> List[Question]:
         logger.info(f"Loading questions from YAML file: {self.answers_file}")
