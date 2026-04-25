@@ -172,24 +172,19 @@ class BaseEasyApplier(ABC):
     def _find_cached_question(
         self, question_text: str, question_type: str | None = None
     ) -> Question | None:
-        """Find a cached answer with the same field type, preferring exact question text match,
-        but falling back to question text containing match."""
+        """Find a cached answer with the same field type and exact question text match."""
         current_question_sanitized = sanitize_text(question_text)
         exact_question_match = None
-        has_question_text = None
 
         for item in self.all_questions:
             if item.question_type != question_type:
                 continue
 
-            if current_question_sanitized in item.question:
-                has_question_text = item
-
             if item.question == current_question_sanitized:
                 exact_question_match = item
                 break
 
-        return exact_question_match or has_question_text
+        return exact_question_match
 
     def _load_questions(self) -> List[Question]:
         logger.info(f"Loading questions from YAML file: {self.answers_file}")
