@@ -49,7 +49,7 @@ class BaseJobManager(ABC):
         logger.info("Setting job manager parameters")
         self.max_applies_num = MAX_APPLIES_NUM
         self.apply_once_at_company = parameters.get("apply_once_at_company", True)
-        self.job_blacklist = [sanitize_text(j) for j in parameters.get("job_blacklist", [])]
+        self.job_blacklist = [sanitize_text(j) for j in parameters.get("company_blacklist", [])]
         self.success_companies = self._load_companies_from_yaml("success.yaml")
         self.skipped_companies = self._load_companies_from_yaml("skipped.yaml")
         self.failed_companies = self._load_companies_from_yaml("failed.yaml")
