@@ -299,6 +299,41 @@ class TestIsUploadField:
         assert result is False
 
 
+class TestUploadFields:
+    @pytest.mark.asyncio
+    async def test_generates_resume_even_when_ready_made_resume_exists(self, applier, tmp_path):
+        ready_made_resume = tmp_path / "existing.pdf"
+        ready_made_resume.write_bytes(b"existing")
+        applier.ready_made_resume_path = ready_made_resume
+
+        upload_element = AsyncMock()
+        upload_element.get_attribute = AsyncMock(return_value="resume-upload")
+        upload_element.evaluate = AsyncMock()
+        upload_element.set_input_files = AsyncMock()
+
+        parent = AsyncMock()
+        parent.text_content = AsyncMock(return_value="Resume")
+        upload_element.locator = MagicMock(return_value=MagicMock(first=parent))
+
+        element = MagicMock()
+        upload_locator = MagicMock()
+        upload_locator.all = AsyncMock(return_value=[upload_element])
+        element.locator = MagicMock(return_value=upload_locator)
+
+        applier._create_and_upload_resume = AsyncMock()
+        job = Job(job_title="Engineer", company_name="Tech")
+
+        with patch(
+            "src.job_manager.linkedin.easy_applier_linkedin.find_element_safely",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            await applier._handle_upload_fields(element, job, set())
+
+        applier._create_and_upload_resume.assert_called_once_with(upload_element, job)
+        upload_element.set_input_files.assert_not_called()
+
+
 class TestDeduplicateQuestionText:
     def test_deduplicates_repeated_string(self, applier):
         text = "hello worldhello world"
@@ -493,3 +528,97 @@ class TestTextboxCaching:
         assert result is True
         text_field.fill.assert_called_once_with("ziad.nahas@gmail.com")
         applier.gpt_answerer.answer_question_textual_wide_range.assert_not_called()
+
+
+class TestDropdownCaching:
+    @pytest.mark.asyncio
+    async def test_reuses_cached_answer_from_different_field_type(self, applier):
+        dropdown = AsyncMock()
+        dropdown.get_attribute = AsyncMock(return_value="email-dropdown")
+        option_locator = MagicMock()
+        option_locator.evaluate_all = AsyncMock(return_value=["Select an option", "ziad.nahas@gmail.com"])
+        dropdown.locator = MagicMock(return_value=option_locator)
+
+        checked_locator = MagicMock()
+        checked_locator.first.text_content = AsyncMock(return_value="Select an option")
+
+        def dropdown_locator(selector):
+            if selector == "option:checked":
+                return checked_locator
+            return option_locator
+
+        dropdown.locator = MagicMock(side_effect=dropdown_locator)
+
+        label = AsyncMock()
+        label.text_content = AsyncMock(return_value="Email Address")
+
+        applier.all_questions = [
+            Question(question="email address", question_type="textbox", answer=" ziad.nahas@gmail.com ")
+        ]
+        applier._select_dropdown_option = AsyncMock()
+
+        async def find_elements(section, selector, by="css selector", **kwargs):
+            if selector == "css=select":
+                return [dropdown]
+            return []
+
+        with (
+            patch(
+                "src.job_manager.linkedin.easy_applier_linkedin.find_elements_safely",
+                new_callable=AsyncMock,
+                side_effect=find_elements,
+            ),
+            patch(
+                "src.job_manager.linkedin.easy_applier_linkedin.find_element_safely",
+                new_callable=AsyncMock,
+                return_value=label,
+            ),
+        ):
+            result = await applier._find_and_handle_dropdown_question(MagicMock())
+
+        assert result is True
+        applier._select_dropdown_option.assert_called_once_with(dropdown, "ziad.nahas@gmail.com")
+        applier.gpt_answerer.select_one_answer_from_options.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_accepts_already_selected_dropdown_answer(self, applier):
+        dropdown = AsyncMock()
+        dropdown.get_attribute = AsyncMock(return_value="email-dropdown")
+        option_locator = MagicMock()
+        option_locator.evaluate_all = AsyncMock(return_value=["Select an option", "ziad.nahas@gmail.com"])
+
+        checked_locator = MagicMock()
+        checked_locator.first.text_content = AsyncMock(return_value="ziad.nahas@gmail.com")
+
+        def dropdown_locator(selector):
+            if selector == "option:checked":
+                return checked_locator
+            return option_locator
+
+        dropdown.locator = MagicMock(side_effect=dropdown_locator)
+
+        label = AsyncMock()
+        label.text_content = AsyncMock(return_value="Email Address")
+        applier._save_questions = MagicMock()
+
+        async def find_elements(section, selector, by="css selector", **kwargs):
+            if selector == "css=select":
+                return [dropdown]
+            return []
+
+        with (
+            patch(
+                "src.job_manager.linkedin.easy_applier_linkedin.find_elements_safely",
+                new_callable=AsyncMock,
+                side_effect=find_elements,
+            ),
+            patch(
+                "src.job_manager.linkedin.easy_applier_linkedin.find_element_safely",
+                new_callable=AsyncMock,
+                return_value=label,
+            ),
+        ):
+            result = await applier._find_and_handle_dropdown_question(MagicMock())
+
+        assert result is True
+        applier.gpt_answerer.select_one_answer_from_options.assert_not_called()

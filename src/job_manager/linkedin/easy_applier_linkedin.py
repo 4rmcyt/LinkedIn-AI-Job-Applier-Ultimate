@@ -600,7 +600,9 @@ class LinkedInEasyApplier(BaseEasyApplier):
                     # if await self._detect_already_selected_resume(parent):
                     #     logger.info("There is already selected resume, skipping upload")
                     #     continue
-                    if (
+                    if self.resume_generator_manager is not None:
+                        await self._create_and_upload_resume(upload_element, job)
+                    elif (
                         self.ready_made_resume_path is not None
                         and self.ready_made_resume_path.resolve().is_file()
                     ):
@@ -1284,14 +1286,35 @@ class LinkedInEasyApplier(BaseEasyApplier):
                     current_selection = ""
                 logger.debug(f"Current selection: {current_selection}")
 
+                if self._is_meaningful_existing_answer(current_selection):
+                    logger.info(
+                        f"Dropdown question '{question_text}' already has a selected answer: {current_selection}"
+                    )
+                    self._save_questions(
+                        Question(
+                            question_type="dropdown",
+                            question=question_text,
+                            answer=current_selection,
+                        )
+                    )
+                    return True
+
+                existing_answer = None
                 cached_question = self._find_cached_question(question_text, "dropdown")
                 if cached_question:
-                    logger.debug(
-                        f"Found existing answer for question '{question_text}': {cached_question.answer}"
+                    existing_answer = (
+                        cached_question.answer.strip()
+                        if isinstance(cached_question.answer, str)
+                        else cached_question.answer
                     )
-                    if current_selection != cached_question.answer:
-                        logger.debug(f"Updating selection to: {cached_question.answer}")
-                        await self._select_dropdown_option(dropdown, cached_question.answer)
+
+                if existing_answer:
+                    logger.debug(
+                        f"Found existing answer for question '{question_text}': {existing_answer}"
+                    )
+                    if current_selection != existing_answer:
+                        logger.debug(f"Updating selection to: {existing_answer}")
+                        await self._select_dropdown_option(dropdown, existing_answer)
                 else:
                     logger.info(f"Asking question: {question_text}")
                     logger.info(f"Available options: {options}")
@@ -1336,6 +1359,23 @@ class LinkedInEasyApplier(BaseEasyApplier):
         )
         logger.debug(f"Field type: {field_type}, Field ID: {field_id}, Is numeric: {is_numeric}")
         return is_numeric
+
+    def _is_meaningful_existing_answer(self, value: str | None) -> bool:
+        if not value:
+            return False
+        normalized = sanitize_text(value)
+        if not normalized:
+            return False
+        placeholders = {
+            "select an option",
+            "choose an option",
+            "select",
+            "choose",
+            "please select",
+            "empty response",
+            "no info",
+        }
+        return normalized not in placeholders
 
     def _deduplicate_question_text(self, question_text: str) -> str:
         """If the question consists of two lines, and the second line is the same as the first line, use the first line"""

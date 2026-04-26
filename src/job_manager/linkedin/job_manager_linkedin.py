@@ -78,13 +78,16 @@ class LinkedInJobManager(BaseJobManager):
 
             # Find all job listing elements on the current page using multiple selectors
             job_selectors = [
-                "//*[starts-with(@class, 'flex-grow-1')]",
-                "div[data-job-id]",
+                ".scaffold-layout__list [data-view-name='job-card'][data-job-id]",
+                ".scaffold-layout__list .job-card-job-posting-card-wrapper[data-job-id]",
+                ".scaffold-layout__list div[data-job-id]",
                 ".jobs-search-results__list-item",
                 ".job-card-container",
                 ".base-card",
                 ".job-card-list__entity-lockup",
                 ".scaffold-layout__list-item",
+                "div[data-job-id]",
+                "//*[starts-with(@class, 'flex-grow-1')]",
             ]
 
             job_elements = []
@@ -98,6 +101,7 @@ class LinkedInJobManager(BaseJobManager):
 
             logger.info(f"Found {len(job_elements)} job elements on page {self.page_num}")
 
+            seen_job_keys = set()
             for job_element in job_elements:
                 vacancy = {}
                 try:
@@ -106,6 +110,10 @@ class LinkedInJobManager(BaseJobManager):
                     if job_url:
                         match = re.search(r"/jobs/view/(\d+)", job_url)
                         job_id = match.group(1) if match else None
+                        job_key = job_id or job_url
+                        if job_key in seen_job_keys:
+                            continue
+                        seen_job_keys.add(job_key)
                         vacancy["url"] = job_url
                         vacancy["id"] = job_id
                         vacancies.append(vacancy)
@@ -153,6 +161,7 @@ class LinkedInJobManager(BaseJobManager):
         result = ""
         # write recommendations for improving the resume
         self.resume_improvement_recommendations()
+        seen_page_signatures = set()
         # continue until the maximum number of applications is reached
         while self.success_applies_num < self.max_applies_num and self.applies_num < 400:
             # Check if execution is paused
@@ -165,6 +174,13 @@ class LinkedInJobManager(BaseJobManager):
                 if self.page_num == 1:
                     logger.warning("No vacancies found for the search query")
                 break
+
+            page_signature = tuple(vacancy.get("id") or vacancy.get("url") for vacancy in vacancies)
+            if page_signature in seen_page_signatures:
+                logger.info("Detected repeated LinkedIn result page; stopping pagination")
+                break
+            seen_page_signatures.add(page_signature)
+
             for vacancy in vacancies:
                 # Check if execution is paused before processing each job
                 if self.pause_checker:
@@ -410,13 +426,50 @@ class LinkedInJobManager(BaseJobManager):
             logger.warning(f"Error during job container scrolling: {e}")
             await debug_capture(self.page, "scroll_jobs_error")
 
-    async def _extract_job_url(self, job_element) -> str:
+    @staticmethod
+    def _canonical_job_url_from_id(job_id: str) -> str:
+        return f"https://www.linkedin.com/jobs/view/{job_id}"
+
+    @staticmethod
+    def _normalize_job_url(href: str) -> str | None:
+        if not href:
+            return None
+
+        current_job_match = re.search(r"[?&]currentJobId=(\d+)", href)
+        if current_job_match:
+            return LinkedInJobManager._canonical_job_url_from_id(current_job_match.group(1))
+
+        view_match = re.search(r"/jobs/view/(\d+)", href)
+        if view_match:
+            if href.startswith("http"):
+                return href
+            return f"https://www.linkedin.com{href}"
+
+        return None
+
+    async def _get_direct_data_job_id(self, job_element) -> str:
+        try:
+            if hasattr(job_element, "get_attribute"):
+                job_id = await job_element.get_attribute("data-job-id") or ""
+                return job_id if isinstance(job_id, str) and job_id.isdigit() else ""
+            if hasattr(job_element, "locator"):
+                locator = job_element.locator if not callable(job_element.locator) else job_element
+                job_id = await locator.get_attribute("data-job-id") or ""
+                return job_id if isinstance(job_id, str) and job_id.isdigit() else ""
+        except Exception:
+            return ""
+        return ""
+
+    async def _extract_job_url(self, job_element) -> str | None:
         """Extract job URL from job element using multiple selector strategies (async)"""
         logger.debug("Extracting job URL from element")
         # Try different selectors for job links
         link_selectors = [
+            "a[href*='currentJobId=']",
+            "a[href*='/jobs/collections/recommended']",
             "a[href*='/jobs/view/']",
             "a[data-control-name='job_card_title']",
+            ".job-card-job-posting-card-wrapper__card-link",
             ".base-card__full-link",
             ".job-card-container__link",
             ".jobs-search-results__list-item-action",
@@ -425,12 +478,15 @@ class LinkedInJobManager(BaseJobManager):
         for selector in link_selectors:
             try:
                 href = await get_element_attribute_safely(job_element, selector, "href")
-                if href and "/jobs/view/" in href:
-                    if not href.startswith("https://linkedin.com"):
-                        href = "https://linkedin.com" + href
-                    return href
+                job_url = self._normalize_job_url(href)
+                if job_url:
+                    return job_url
             except Exception:
                 continue
+
+        job_id = await self._get_direct_data_job_id(job_element)
+        if job_id:
+            return self._canonical_job_url_from_id(job_id)
 
         return None
 
@@ -739,20 +795,24 @@ class LinkedInJobManager(BaseJobManager):
 
     async def _go_to_next_page(self) -> bool:
         """Go to the next page using framework-agnostic methods (async)"""
-        target_page = self.page_num + 1
-        logger.info(f"Going to the page {target_page}")
-        emit_event("page_changed", f"Moving to page {target_page}", page_num=target_page)
+        next_page_num = self.page_num + 1
+        target_page_label = self.page_num + 2
+        logger.info(f"Going to the page {target_page_label}")
+        emit_event("page_changed", f"Moving to page {target_page_label}", page_num=target_page_label)
 
         # Try multiple selectors for next page button
         next_page_selectors = [
-            f"//button[@aria-label='Page {target_page}']",
-            f"//button[contains(@aria-label, 'Page {target_page}')]",
-            "//button[contains(@aria-label, 'next')]",
-            "//button[contains(@aria-label, 'Next')]",
-            "button[aria-label*='Next']",
-            "button[aria-label*='next']",
-            ".jobs-search-results-list__pagination button[aria-label*='next']",
-            "button.artdeco-pagination__button--next",
+            f"button[aria-label='Page {target_page_label}']:not([disabled]):not([aria-current='page'])",
+            f"//button[@aria-label='Page {target_page_label}' and not(@disabled) and not(@aria-current='page')]",
+            f"//button[contains(@aria-label, 'Page {target_page_label}') and not(@disabled) and not(@aria-current='page')]",
+            "button[aria-label='View next page']:not([disabled])",
+            "//button[@aria-label='View next page' and not(@disabled)]",
+            "//button[contains(@aria-label, 'next') and not(@disabled)]",
+            "//button[contains(@aria-label, 'Next') and not(@disabled)]",
+            "button[aria-label*='Next']:not([disabled])",
+            "button[aria-label*='next']:not([disabled])",
+            ".jobs-search-results-list__pagination button[aria-label*='next']:not([disabled])",
+            "button.artdeco-pagination__button--next:not([disabled])",
         ]
 
         page_clicked = False
@@ -781,7 +841,7 @@ class LinkedInJobManager(BaseJobManager):
             logger.warning("Could not find or click next page button")
             return False
 
-        self.page_num = target_page
+        self.page_num = next_page_num
         await async_pause(2, 3)
         return True
 

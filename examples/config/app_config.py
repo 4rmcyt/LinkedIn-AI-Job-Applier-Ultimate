@@ -57,6 +57,12 @@ WARNING: applying to the jobs with 3rd party applications is not guaranteed to b
 EASY_APPLY_ONLY_MODE = True
 
 """
+If enabled for LinkedIn, ignores positions in search_config.yaml and processes
+LinkedIn's recommended jobs list instead of a keyword search.
+"""
+LINKEDIN_RECOMMENDED_JOBS_MODE = False
+
+"""
 If this mode is activated, app will check if the last search was less than a day ago.
 This is useful if you want bot to automatically restart the search every 24 hours when LinkedIn resets the search limits.
 """

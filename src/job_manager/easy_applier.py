@@ -172,24 +172,39 @@ class BaseEasyApplier(ABC):
     def _find_cached_question(
         self, question_text: str, question_type: str | None = None
     ) -> Question | None:
-        """Find a cached answer with the same field type and exact question text match."""
+        """Find a cached answer by exact question text, preferring the same field type."""
         current_question_sanitized = sanitize_text(question_text)
-        exact_question_match = None
+        same_type_match = None
+        any_type_match = None
 
         for item in self.all_questions:
-            if item.question_type != question_type:
+            if item.question != current_question_sanitized:
                 continue
 
-            if item.question == current_question_sanitized:
-                exact_question_match = item
+            if item.question_type == question_type:
+                same_type_match = item
                 break
 
-        return exact_question_match
+            if any_type_match is None:
+                any_type_match = item
+
+        return same_type_match or any_type_match
 
     def _load_questions(self) -> List[Question]:
         logger.info(f"Loading questions from YAML file: {self.answers_file}")
         try:
-            data = load_yaml_file(self.answers_file)
+            answers_file = self.answers_file
+            if not answers_file.exists():
+                legacy_answers_file = answers_file.parent.parent / answers_file.name
+                if legacy_answers_file.exists():
+                    logger.info(
+                        "Using legacy shared answers file because platform-specific file is missing: "
+                        f"{legacy_answers_file}"
+                    )
+                    self.answers_file = legacy_answers_file
+                    answers_file = legacy_answers_file
+
+            data = load_yaml_file(answers_file)
             logger.info("Questions loaded successfully from YAML")
             if not data:
                 return []
