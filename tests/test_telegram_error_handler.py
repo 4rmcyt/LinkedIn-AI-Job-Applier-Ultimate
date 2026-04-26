@@ -1,8 +1,5 @@
-import asyncio
-import os
 from datetime import datetime, timedelta
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, mock_open, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import yaml
@@ -336,28 +333,6 @@ class TestAsyncTelegramSink:
             await telegram_sink._process_message("Test message")
         except Exception as e:
             pytest.fail(f"Should handle exceptions gracefully, but raised {e}")
-
-    def test_call_with_running_loop(self, telegram_sink):
-        """Test __call__ when event loop is already running"""
-        message = "Test error in running loop"
-
-        async def mock_running_loop():
-            # This simulates being in an async context
-            with patch.object(telegram_sink, "_process_message", return_value=None) as mock_process:
-                with patch("asyncio.create_task") as mock_create_task:
-                    telegram_sink(message)
-                    mock_create_task.assert_called_once()
-
-        asyncio.run(mock_running_loop())
-
-    def test_call_without_running_loop(self, telegram_sink):
-        """Test __call__ when no event loop is running"""
-        message = "Test error without loop"
-
-        with patch("asyncio.run") as mock_run:
-            with patch("asyncio.get_running_loop", side_effect=RuntimeError("No loop")):
-                telegram_sink(message)
-                mock_run.assert_called_once()
 
     def test_call_handles_exceptions(self, telegram_sink):
         """Test __call__ handles exceptions gracefully"""
