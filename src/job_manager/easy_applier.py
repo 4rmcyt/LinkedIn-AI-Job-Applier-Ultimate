@@ -192,7 +192,18 @@ class BaseEasyApplier(ABC):
     def _load_questions(self) -> List[Question]:
         logger.info(f"Loading questions from YAML file: {self.answers_file}")
         try:
-            data = load_yaml_file(self.answers_file)
+            answers_file = self.answers_file
+            if not answers_file.exists():
+                legacy_answers_file = answers_file.parent.parent / answers_file.name
+                if legacy_answers_file.exists():
+                    logger.info(
+                        "Using legacy shared answers file because platform-specific file is missing: "
+                        f"{legacy_answers_file}"
+                    )
+                    self.answers_file = legacy_answers_file
+                    answers_file = legacy_answers_file
+
+            data = load_yaml_file(answers_file)
             logger.info("Questions loaded successfully from YAML")
             if not data:
                 return []

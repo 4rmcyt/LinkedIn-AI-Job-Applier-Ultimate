@@ -6,7 +6,7 @@ from typing import Any, Union
 
 from playwright.sync_api import Page
 
-from config.app_config import EASY_APPLY_ONLY_MODE
+from config.app_config import EASY_APPLY_ONLY_MODE, LINKEDIN_RECOMMENDED_JOBS_MODE
 from config.logger_config import logger
 
 # Import Playwright utilities for enhanced functionality
@@ -16,9 +16,17 @@ from src.utils.utils import async_pause
 
 
 class SearchCustomizer(BaseSearchCustomizer):
+    RECOMMENDED_JOBS_URL = "https://www.linkedin.com/jobs/collections/recommended/"
+
     def __init__(self, page: Union[Page, Any]):
         super().__init__(page)
         logger.info("SearchCustomizer initialized")
+
+    async def _open_recommended_jobs(self) -> None:
+        """Navigate to LinkedIn recommended jobs and skip configured position keywords."""
+        logger.info("LinkedIn recommended jobs mode enabled; ignoring configured positions")
+        await self.page.goto(self.RECOMMENDED_JOBS_URL, wait_until="domcontentloaded")
+        await async_pause(2, 3)
 
     async def _set_basic_search_terms(self):
         """Set basic search parameters (keywords and location) - async"""
@@ -295,6 +303,11 @@ class SearchCustomizer(BaseSearchCustomizer):
         logger.info("Starting LinkedIn search parameters setup")
 
         try:
+            if LINKEDIN_RECOMMENDED_JOBS_MODE:
+                await self._open_recommended_jobs()
+                logger.info("LinkedIn recommended jobs page opened successfully")
+                return
+
             # Navigate to LinkedIn jobs search
             await self.page.goto(
                 "https://www.linkedin.com/jobs/search/", wait_until="domcontentloaded"

@@ -197,7 +197,7 @@ async def check_pause():
     """Check if execution is paused and wait if needed"""
     global last_dashboard_pause_state, paused
 
-    control = get_control_state()
+    control = get_control_state() if os.environ.get("DASHBOARD_RUN_ID") else {}
     effective_paused = paused or control.get("pause_requested", False)
 
     if control.get("stop_requested"):
@@ -212,8 +212,10 @@ async def check_pause():
         )
         last_dashboard_pause_state = effective_paused
 
-    while paused or get_control_state().get("pause_requested", False):
-        if get_control_state().get("stop_requested"):
+    while paused or (
+        os.environ.get("DASHBOARD_RUN_ID") and get_control_state().get("pause_requested", False)
+    ):
+        if os.environ.get("DASHBOARD_RUN_ID") and get_control_state().get("stop_requested"):
             raise StopRequested("Dashboard requested stop")
         await asyncio.sleep(0.5)
 
@@ -343,8 +345,7 @@ async def create_and_run_bot(
         await bot.set_search_parameters(search_config)
         bot.set_answerer_and_agent(llm_answerer_component, llm_agent_component, search_config)
         bot.set_resume(resume_structured, resume_text, resume_text_anonymized)
-        if not READY_MADE_RESUME.resolve().is_file():
-            bot.set_resume_generator(resume_generator_manager)
+        bot.set_resume_generator(resume_generator_manager)
         await bot.start_apply()
         emit_event("run_completed", "LinkedIn bot run completed successfully")
 

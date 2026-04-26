@@ -106,7 +106,10 @@ class TestGetVacanciesFromPage:
                 manager,
                 "_extract_job_url",
                 new_callable=AsyncMock,
-                return_value=LINKEDIN_JOB_URL,
+                side_effect=[
+                    "https://linkedin.com/jobs/view/123456",
+                    "https://linkedin.com/jobs/view/123457",
+                ],
             ),
             patch("src.job_manager.linkedin.job_manager_linkedin.emit_event"),
         ):
@@ -126,7 +129,7 @@ class TestExtractJobUrl:
         ):
             result = await manager._extract_job_url(mock_element)
 
-        assert result == "https://linkedin.com/jobs/view/999"
+        assert result == "https://www.linkedin.com/jobs/view/999"
 
     @pytest.mark.asyncio
     async def test_returns_url_already_absolute(self, manager):
@@ -139,6 +142,35 @@ class TestExtractJobUrl:
             result = await manager._extract_job_url(mock_element)
 
         assert result == "https://linkedin.com/jobs/view/999"
+
+    @pytest.mark.asyncio
+    async def test_returns_canonical_url_from_recommended_current_job_id(self, manager):
+        mock_element = AsyncMock()
+        recommended_href = (
+            "https://www.linkedin.com/jobs/collections/recommended?"
+            "currentJobId=4401460753&start=0&trackingId=abc"
+        )
+        with patch(
+            "src.job_manager.linkedin.job_manager_linkedin.get_element_attribute_safely",
+            new_callable=AsyncMock,
+            return_value=recommended_href,
+        ):
+            result = await manager._extract_job_url(mock_element)
+
+        assert result == "https://www.linkedin.com/jobs/view/4401460753"
+
+    @pytest.mark.asyncio
+    async def test_returns_canonical_url_from_data_job_id(self, manager):
+        mock_element = AsyncMock()
+        mock_element.get_attribute = AsyncMock(return_value="4401460753")
+        with patch(
+            "src.job_manager.linkedin.job_manager_linkedin.get_element_attribute_safely",
+            new_callable=AsyncMock,
+            return_value="",
+        ):
+            result = await manager._extract_job_url(mock_element)
+
+        assert result == "https://www.linkedin.com/jobs/view/4401460753"
 
     @pytest.mark.asyncio
     async def test_returns_none_when_no_href_found(self, manager):
@@ -619,6 +651,31 @@ class TestCheckApplyButton:
 
 
 class TestGoToNextPage:
+    @pytest.mark.asyncio
+    async def test_targets_second_visible_page_after_first_page(self, manager):
+        manager.page_num = 0
+        attempted_selectors = []
+
+        async def safe_click_side_effect(page, selector, timeout=10000):
+            attempted_selectors.append(selector)
+            return True
+
+        with (
+            patch(
+                "src.job_manager.linkedin.job_manager_linkedin.safe_click",
+                side_effect=safe_click_side_effect,
+            ),
+            patch("src.job_manager.linkedin.job_manager_linkedin.emit_event"),
+            patch("src.job_manager.linkedin.job_manager_linkedin.async_pause"),
+        ):
+            result = await manager._go_to_next_page()
+
+        assert result is True
+        assert manager.page_num == 1
+        assert attempted_selectors[0] == (
+            "button[aria-label='Page 2']:not([disabled]):not([aria-current='page'])"
+        )
+
     @pytest.mark.asyncio
     async def test_returns_true_and_increments_page_on_success(self, manager):
         manager.page_num = 1
