@@ -21,7 +21,7 @@ dependencies = [
     "langchain-google-genai==4.2.2",
     "langchain-ollama==1.1.0",
     "langchain-openai==1.1.7",
-    "Levenshtein==0.27.1",
+    "Levenshtein==0.27.3",
     "loguru==0.7.2",
     "playwright==1.58.0",
     "pydantic==2.12.5",
