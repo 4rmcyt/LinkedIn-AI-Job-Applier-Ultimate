@@ -90,39 +90,37 @@ class LinkedInJobManager(BaseJobManager):
                 "//*[starts-with(@class, 'flex-grow-1')]",
             ]
 
-            job_elements = []
+            seen_job_keys = set()
             for selector in job_selectors:
                 by = "xpath" if selector.startswith("//") else "css selector"
                 elements = await find_elements_safely(self.page, selector, by)
-                if elements:
-                    job_elements = elements
-                    logger.debug(f"Found {len(elements)} job elements using selector: {selector}")
-                    break
-
-            logger.info(f"Found {len(job_elements)} job elements on page {self.page_num}")
-
-            seen_job_keys = set()
-            for job_element in job_elements:
-                vacancy = {}
-                try:
-                    # Try to extract job URL and ID
-                    job_url = await self._extract_job_url(job_element)
-                    if job_url:
-                        match = re.search(r"/jobs/view/(\d+)", job_url)
-                        job_id = match.group(1) if match else None
-                        job_key = job_id or job_url
-                        if job_key in seen_job_keys:
-                            continue
-                        seen_job_keys.add(job_key)
-                        vacancy["url"] = job_url
-                        vacancy["id"] = job_id
-                        vacancies.append(vacancy)
-                    else:
-                        logger.debug("Could not extract URL from job element")
-
-                except Exception as e:
-                    logger.warning(f"Error parsing job element: {e}")
+                if not elements:
                     continue
+                logger.debug(f"Found {len(elements)} job elements using selector: {selector}")
+
+                selector_vacancies = []
+                for job_element in elements:
+                    try:
+                        job_url = await self._extract_job_url(job_element)
+                        if job_url:
+                            match = re.search(r"/jobs/view/(\d+)", job_url)
+                            job_id = match.group(1) if match else None
+                            job_key = job_id or job_url
+                            if job_key in seen_job_keys:
+                                continue
+                            seen_job_keys.add(job_key)
+                            selector_vacancies.append({"url": job_url, "id": job_id})
+                        else:
+                            logger.debug("Could not extract URL from job element")
+                    except Exception as e:
+                        logger.warning(f"Error parsing job element: {e}")
+
+                if selector_vacancies:
+                    vacancies.extend(selector_vacancies)
+                    logger.info(
+                        f"Found {len(selector_vacancies)} job elements using selector: {selector}"
+                    )
+                    break
 
             # If no jobs found on first page, log warning
             if self.page_num == 0 and len(vacancies) == 0:
@@ -441,28 +439,34 @@ class LinkedInJobManager(BaseJobManager):
 
         view_match = re.search(r"/jobs/view/(\d+)", href)
         if view_match:
-            if href.startswith("http"):
+            if href.startswith("https://www.linkedin.com") or href.startswith(
+                "https://linkedin.com"
+            ):
                 return href
-            return f"https://www.linkedin.com{href}"
+            if not href.startswith("http"):
+                return f"https://www.linkedin.com{href}"
 
         return None
 
     async def _get_direct_data_job_id(self, job_element) -> str:
-        try:
-            if hasattr(job_element, "get_attribute"):
-                job_id = await job_element.get_attribute("data-job-id") or ""
-                return job_id if isinstance(job_id, str) and job_id.isdigit() else ""
-            if hasattr(job_element, "locator"):
-                locator = job_element.locator if not callable(job_element.locator) else job_element
-                job_id = await locator.get_attribute("data-job-id") or ""
-                return job_id if isinstance(job_id, str) and job_id.isdigit() else ""
-        except Exception:
-            return ""
+        for attr in ("data-occludable-job-id", "data-job-id"):
+            try:
+                job_id = await job_element.get_attribute(attr) or ""
+                if isinstance(job_id, str) and job_id.isdigit():
+                    return job_id
+            except Exception:
+                pass
         return ""
 
     async def _extract_job_url(self, job_element) -> str | None:
         """Extract job URL from job element using multiple selector strategies (async)"""
         logger.debug("Extracting job URL from element")
+
+        # Check direct job ID attributes first (avoids child element queries)
+        job_id = await self._get_direct_data_job_id(job_element)
+        if job_id:
+            return self._canonical_job_url_from_id(job_id)
+
         # Try different selectors for job links
         link_selectors = [
             "a[href*='currentJobId=']",
@@ -483,10 +487,6 @@ class LinkedInJobManager(BaseJobManager):
                     return job_url
             except Exception:
                 continue
-
-        job_id = await self._get_direct_data_job_id(job_element)
-        if job_id:
-            return self._canonical_job_url_from_id(job_id)
 
         return None
 
@@ -795,10 +795,11 @@ class LinkedInJobManager(BaseJobManager):
 
     async def _go_to_next_page(self) -> bool:
         """Go to the next page using framework-agnostic methods (async)"""
-        next_page_num = self.page_num + 1
-        target_page_label = self.page_num + 2
+        target_page_label = self.page_num + 2  # page_num is 0-indexed; LinkedIn labels pages from 1
         logger.info(f"Going to the page {target_page_label}")
-        emit_event("page_changed", f"Moving to page {target_page_label}", page_num=target_page_label)
+        emit_event(
+            "page_changed", f"Moving to page {target_page_label}", page_num=target_page_label
+        )
 
         # Try multiple selectors for next page button
         next_page_selectors = [
@@ -841,7 +842,7 @@ class LinkedInJobManager(BaseJobManager):
             logger.warning("Could not find or click next page button")
             return False
 
-        self.page_num = next_page_num
+        self.page_num += 1
         await async_pause(2, 3)
         return True
 

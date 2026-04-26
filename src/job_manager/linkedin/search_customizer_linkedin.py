@@ -6,7 +6,12 @@ from typing import Any, Union
 
 from playwright.sync_api import Page
 
-from config.app_config import EASY_APPLY_ONLY_MODE, LINKEDIN_RECOMMENDED_JOBS_MODE
+from config.app_config import EASY_APPLY_ONLY_MODE
+
+try:
+    from config.app_config import LINKEDIN_RECOMMENDED_JOBS_MODE
+except ImportError:
+    LINKEDIN_RECOMMENDED_JOBS_MODE = False
 from config.logger_config import logger
 
 # Import Playwright utilities for enhanced functionality

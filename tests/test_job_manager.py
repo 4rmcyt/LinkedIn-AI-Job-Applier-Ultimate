@@ -154,7 +154,7 @@ class TestSetParameters:
         ):
             parameters = {
                 "apply_once_at_company": True,
-                "job_blacklist": ["BadCompany Inc", "Evil Corp"],
+                "company_blacklist": ["BadCompany Inc", "Evil Corp"],
             }
 
             job_applier.set_parameters(parameters)
@@ -259,7 +259,8 @@ class TestVacancyParsing:
         job_element.get_attribute.return_value = None
 
         with patch(
-            "src.job_manager.job_manager.get_element_attribute_safely", new_callable=AsyncMock
+            "src.job_manager.linkedin.job_manager_linkedin.get_element_attribute_safely",
+            new_callable=AsyncMock,
         ) as mock_get_attribute:
             mock_get_attribute.return_value = "/jobs/view/12345/"
 
@@ -278,7 +279,8 @@ class TestVacancyParsing:
         job_element.get_attribute.side_effect = get_attribute_side_effect
 
         with patch(
-            "src.job_manager.job_manager.get_element_attribute_safely", new_callable=AsyncMock
+            "src.job_manager.linkedin.job_manager_linkedin.get_element_attribute_safely",
+            new_callable=AsyncMock,
         ) as mock_get_attribute:
             mock_get_attribute.return_value = None
 
@@ -308,7 +310,8 @@ class TestVacancyParsing:
         with (
             patch.object(job_applier, "_scroll_to_load_jobs", new_callable=AsyncMock),
             patch(
-                "src.job_manager.job_manager.find_elements_safely", new_callable=AsyncMock
+                "src.job_manager.linkedin.job_manager_linkedin.find_elements_safely",
+                new_callable=AsyncMock,
             ) as mock_find_elements,
         ):
             mock_find_elements.side_effect = [
@@ -318,9 +321,7 @@ class TestVacancyParsing:
 
             vacancies = await job_applier.get_vacancies_from_page()
 
-            assert vacancies == [
-                {"url": "https://www.linkedin.com/jobs/view/67890", "id": "67890"}
-            ]
+            assert vacancies == [{"url": "https://www.linkedin.com/jobs/view/67890", "id": "67890"}]
 
     def test_check_previous_apply_number_no_previous(self, job_applier):
         """Test when there's no previous application"""
@@ -642,9 +643,12 @@ class TestPagination:
         job_applier.page_num = 1
 
         with (
-            patch("src.job_manager.job_manager.safe_click", new_callable=AsyncMock) as mock_click,
             patch(
-                "src.job_manager.job_manager.find_element_safely", new_callable=AsyncMock
+                "src.job_manager.linkedin.job_manager_linkedin.safe_click", new_callable=AsyncMock
+            ) as mock_click,
+            patch(
+                "src.job_manager.linkedin.job_manager_linkedin.find_element_safely",
+                new_callable=AsyncMock,
             ) as mock_find,
         ):
             mock_click.return_value = False
@@ -660,7 +664,9 @@ class TestPagination:
         """Test page number advances only after a successful click"""
         job_applier.page_num = 1
 
-        with patch("src.job_manager.job_manager.safe_click", new_callable=AsyncMock) as mock_click:
+        with patch(
+            "src.job_manager.linkedin.job_manager_linkedin.safe_click", new_callable=AsyncMock
+        ) as mock_click:
             mock_click.return_value = True
 
             result = await job_applier._go_to_next_page()
@@ -673,17 +679,21 @@ class TestPagination:
         """Test numbered pagination targets the next human-visible page number"""
         job_applier.page_num = 0
         attempted_selectors = []
+        expected_selector = "button[aria-label='Page 2']:not([disabled]):not([aria-current='page'])"
 
         async def safe_click_side_effect(page, selector, timeout=10000):
             attempted_selectors.append(selector)
-            return selector == "button[aria-label='Page 2']"
+            return selector == expected_selector
 
-        with patch("src.job_manager.job_manager.safe_click", side_effect=safe_click_side_effect):
+        with patch(
+            "src.job_manager.linkedin.job_manager_linkedin.safe_click",
+            side_effect=safe_click_side_effect,
+        ):
             result = await job_applier._go_to_next_page()
 
         assert result is True
         assert job_applier.page_num == 1
-        assert attempted_selectors[0] == "button[aria-label='Page 2']"
+        assert attempted_selectors[0] == expected_selector
 
 
 class TestInterestingJobs:
@@ -878,14 +888,22 @@ class TestHandleApplyResult:
             await job_applier._handle_apply_result(
                 ("Success", ""),
                 job,
-                evaluation={"interest_score": 88, "interest_reason": "Strong fit", "skills": ["Python"]},
+                evaluation={
+                    "interest_score": 88,
+                    "interest_reason": "Strong fit",
+                    "skills": ["Python"],
+                },
             )
 
         mock_save.assert_called_once_with(
             job,
             ("Success", ""),
             {"url": job.url},
-            evaluation={"interest_score": 88, "interest_reason": "Strong fit", "skills": ["Python"]},
+            evaluation={
+                "interest_score": 88,
+                "interest_reason": "Strong fit",
+                "skills": ["Python"],
+            },
         )
 
     @pytest.mark.asyncio
