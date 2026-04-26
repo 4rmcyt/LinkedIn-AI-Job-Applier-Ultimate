@@ -304,26 +304,21 @@ def _read_llm_totals() -> Dict[str, Any]:
     if not LLM_CALLS_FILE.exists():
         return {"calls": 0, "total_tokens": 0, "total_cost": 0.0, "total_time_seconds": 0.0}
 
-    content = LLM_CALLS_FILE.read_text(encoding="utf-8")
-    total_tokens = sum(
-        int(match) for match in re.findall(r"^total_tokens:\s*(\d+)\s*$", content, re.MULTILINE)
-    )
-    total_cost = sum(
-        float(match)
-        for match in re.findall(r"^total_cost:\s*([0-9]+(?:\.[0-9]+)?)\s*$", content, re.MULTILINE)
-    )
-    total_time_seconds = sum(
-        float(match)
-        for match in re.findall(
-            r"^response_time_seconds:\s*([0-9]+(?:\.[0-9]+)?)\s*$", content, re.MULTILINE
-        )
-    )
-    calls = len(re.findall(r"^model_name:\s*", content, re.MULTILINE))
+    calls, total_tokens, total_cost, total_time = 0, 0, 0.0, 0.0
+    with LLM_CALLS_FILE.open(encoding="utf-8") as f:
+        for doc in yaml.safe_load_all(f):
+            if not isinstance(doc, dict):
+                continue
+            calls += 1
+            total_tokens += doc.get("total_tokens") or 0
+            total_cost += doc.get("total_cost") or 0.0
+            total_time += doc.get("response_time_seconds") or 0.0
+
     return {
         "calls": calls,
         "total_tokens": total_tokens,
         "total_cost": round(total_cost, 6),
-        "total_time_seconds": round(total_time_seconds, 3),
+        "total_time_seconds": round(total_time, 3),
     }
 
 

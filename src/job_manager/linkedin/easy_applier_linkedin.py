@@ -1058,13 +1058,9 @@ class LinkedInEasyApplier(BaseEasyApplier):
                 logger.debug("No options extracted from radio buttons, skipping")
                 return False
 
-            existing_answer = None
             cached_question = self._find_cached_question(question_text, "radio")
-            if cached_question and cached_question.question_type == "radio":
-                existing_answer = cached_question
-
-            if existing_answer:
-                await self._select_radio(section, radios, existing_answer.model_dump()["answer"])
+            if cached_question:
+                await self._select_radio(section, radios, cached_question.answer)
                 logger.debug("Selected existing radio answer")
                 return True
 

@@ -22,7 +22,7 @@ from src.utils.browser_utils import (
     get_current_page_testid,
     wait_for_page_transition,
 )
-from src.utils.utils import async_pause, get_first_pdf_file, load_yaml_file, sanitize_text
+from src.utils.utils import async_pause, get_first_pdf_file, load_yaml_file
 
 INDEED_APPLY_BUTTON_SELECTOR = (
     "span.indeed-apply-status-not-applied button, "
@@ -601,12 +601,8 @@ class IndeedEasyApplier(BaseEasyApplier):
         question_text = await get_clean_text(section)
         try:
             self.previous_question_texts.append(question_text)
-            current_question_sanitized = sanitize_text(question_text)
-            existing_answer = None
-            for item in self.all_questions:
-                if item.question == current_question_sanitized and item.question_type == "date":
-                    existing_answer = item.answer
-                    break
+            cached = self._find_cached_question(question_text, "date")
+            existing_answer = cached.answer if cached else None
             if existing_answer:
                 answer = existing_answer
                 logger.debug(f"Using cached date answer for '{question_text}': '{answer}'")
@@ -669,15 +665,8 @@ class IndeedEasyApplier(BaseEasyApplier):
             self.previous_question_texts.append(question_text)
             is_numeric = await self._is_numeric_field(text_input)
             question_type = "numeric" if is_numeric else "text"
-            current_question_sanitized = sanitize_text(question_text)
-            existing_answer = None
-            for item in self.all_questions:
-                if (
-                    item.question == current_question_sanitized
-                    and item.question_type == question_type
-                ):
-                    existing_answer = item.answer
-                    break
+            cached = self._find_cached_question(question_text, question_type)
+            existing_answer = cached.answer if cached else None
             if existing_answer:
                 answer = existing_answer
                 logger.debug(f"Using cached answer for '{question_text}': '{answer}'")
@@ -752,12 +741,8 @@ class IndeedEasyApplier(BaseEasyApplier):
             if question_text:
                 self.previous_question_texts.append(question_text)
 
-            current_question_sanitized = sanitize_text(question_text)
-            existing_answer = None
-            for item in self.all_questions:
-                if item.question == current_question_sanitized and item.question_type == "checkbox":
-                    existing_answer = item.answer
-                    break
+            cached = self._find_cached_question(question_text, "checkbox")
+            existing_answer = cached.answer if cached else None
 
             if existing_answer:
                 selected_options = (
@@ -833,12 +818,8 @@ class IndeedEasyApplier(BaseEasyApplier):
             if question_text:
                 self.previous_question_texts.append(question_text)
 
-            current_question_sanitized = sanitize_text(question_text)
-            existing_answer = None
-            for item in self.all_questions:
-                if current_question_sanitized in item.question and item.question_type == "radio":
-                    existing_answer = item.answer
-                    break
+            cached = self._find_cached_question(question_text, "radio")
+            existing_answer = cached.answer if cached else None
 
             if existing_answer:
                 answer = existing_answer
@@ -909,12 +890,8 @@ class IndeedEasyApplier(BaseEasyApplier):
 
             self.previous_question_texts.append(question_text)
 
-            current_question_sanitized = sanitize_text(question_text)
-            existing_answer = None
-            for item in self.all_questions:
-                if current_question_sanitized in item.question and item.question_type == "dropdown":
-                    existing_answer = item.answer
-                    break
+            cached = self._find_cached_question(question_text, "dropdown")
+            existing_answer = cached.answer if cached else None
 
             if existing_answer:
                 answer = existing_answer

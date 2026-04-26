@@ -70,10 +70,12 @@ def test_get_summary_aggregates_dashboard_outputs(monkeypatch, tmp_path):
 
     logs_dir.mkdir(parents=True, exist_ok=True)
     (logs_dir / "llm_api_calls.yaml").write_text(
+        "---\n"
         "model_name: model-a\n"
         "response_time_seconds: 1.25\n"
         "total_tokens: 100\n"
         "total_cost: 0.1\n\n"
+        "---\n"
         "model_name: model-b\n"
         "response_time_seconds: 2.75\n"
         "total_tokens: 250\n"
