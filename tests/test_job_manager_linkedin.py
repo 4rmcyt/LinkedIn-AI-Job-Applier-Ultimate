@@ -173,6 +173,19 @@ class TestExtractJobUrl:
         assert result == "https://www.linkedin.com/jobs/view/4401460753"
 
     @pytest.mark.asyncio
+    async def test_rejects_non_linkedin_absolute_url(self, manager):
+        mock_element = AsyncMock()
+        mock_element.get_attribute = AsyncMock(return_value=None)
+        with patch(
+            "src.job_manager.linkedin.job_manager_linkedin.get_element_attribute_safely",
+            new_callable=AsyncMock,
+            return_value="https://malicious.com/jobs/view/999",
+        ):
+            result = await manager._extract_job_url(mock_element)
+
+        assert result is None
+
+    @pytest.mark.asyncio
     async def test_returns_none_when_no_href_found(self, manager):
         mock_element = AsyncMock()
         with patch(
