@@ -32,9 +32,9 @@ from config.app_config import (
 )
 from config.constants import LOG_DIR, RESUME_DIR, cost_per_token
 from config.logger_config import logger
+from src.dashboard.runtime import emit_event
 from src.pydantic_models.log_models import LLMCall
 from src.pydantic_models.prompt_models import ResumeStructure
-from src.dashboard.runtime import emit_event
 from src.utils.json_to_readable import transform_search_config_data, transform_vacancy_data
 from src.utils.utils import append_yaml_file, pause
 
@@ -794,11 +794,12 @@ class GPTAnswerer:
     def answer_question_numeric(self, question: str, previous_questions: list[str]) -> str:
         """Answer numeric question"""
         question_lower = question.lower()
-        if any(keyword in question_lower for keyword in ["phone", "mobile", "telephone", "contact number", "contact"]):
+        if any(
+            keyword in question_lower
+            for keyword in ["phone", "mobile", "telephone", "contact number"]
+        ):
             phone = self.resume_structured["personal_information"].get("phone", "")
             phone_code = self.resume_structured["personal_information"].get("phone_code", "")
-            if not phone_code:
-                phone_code = self.resume_structured["personal_information"].get("phone_prefix", "")
             if phone:
                 phone_value = f"{phone_code} {phone}".strip()
                 phone_digits = re.sub(r"\D", "", phone_value)
@@ -808,7 +809,6 @@ class GPTAnswerer:
                         phone_digits,
                     )
                     return phone_digits
-            return "no info"
 
         current_date = datetime.now().date().strftime("%Y-%m-%d")
 
