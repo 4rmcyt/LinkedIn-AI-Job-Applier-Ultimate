@@ -743,7 +743,6 @@ class IndeedEasyApplier(BaseEasyApplier):
 
             cached = self._find_cached_question(question_text, "checkbox")
             existing_answer = cached.answer if cached else None
-
             if existing_answer:
                 selected_options = (
                     existing_answer if isinstance(existing_answer, list) else [existing_answer]
@@ -820,7 +819,6 @@ class IndeedEasyApplier(BaseEasyApplier):
 
             cached = self._find_cached_question(question_text, "radio")
             existing_answer = cached.answer if cached else None
-
             if existing_answer:
                 answer = existing_answer
                 logger.debug(f"Using cached radio answer for '{question_text}': '{answer}'")
@@ -892,7 +890,6 @@ class IndeedEasyApplier(BaseEasyApplier):
 
             cached = self._find_cached_question(question_text, "dropdown")
             existing_answer = cached.answer if cached else None
-
             if existing_answer:
                 answer = existing_answer
                 logger.debug(f"Using cached dropdown answer for '{question_text}': '{answer}'")

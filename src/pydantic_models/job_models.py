@@ -237,7 +237,8 @@ class JobInfo(BaseModel):
     )
     skills: Optional[List[str]] = Field(default=None, description="Skills required for the job")
     interest_score: Optional[int] = Field(
-        default=None, description="Interest score of the job, from 1 to 100"
+        default=0,
+        description="Interest score of the job, from 1 to 100, 0 if scoring wasn't performed",
     )
     interest_reason: Optional[str] = Field(
         default=None, description="Reasoning for the interest score"
@@ -259,8 +260,8 @@ class JobInfo(BaseModel):
             if not v.isdigit():
                 raise ValueError("Interest score must be a number")
             v = int(v)
-        if v < 1 or v > 100:
-            raise ValueError("Interest score must be between 1 and 100")
+        if v < 0 or v > 100:
+            raise ValueError("Interest score must be between 0 and 100")
         return v
 
 

@@ -161,7 +161,7 @@ def _build_run_jobs(run_id: str) -> List[Dict[str, Any]]:
                 "job_title": payload.get("job_title"),
                 "url": payload.get("url") or "",
                 "skip_reason": "",
-                "interest_score": None,
+                "interest_score": 0,
                 "interest_reason": "",
                 "skills": None,
                 "llm_time_seconds": 0.0,

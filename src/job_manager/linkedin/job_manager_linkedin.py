@@ -282,7 +282,7 @@ class LinkedInJobManager(BaseJobManager):
                         score,
                         reasoning,
                     ) = self.llm_answerer_component.job_is_interesting(job.model_dump())
-                evaluation["interest_score"] = int(score) if score is not None else None
+                evaluation["interest_score"] = int(score) if str(score).isdigit() else 0
                 evaluation["interest_reason"] = reasoning
                 if not job_is_interesting:
                     logger.info(
