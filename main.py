@@ -345,7 +345,8 @@ async def create_and_run_bot(
         await bot.set_search_parameters(search_config)
         bot.set_answerer_and_agent(llm_answerer_component, llm_agent_component, search_config)
         bot.set_resume(resume_structured, resume_text, resume_text_anonymized)
-        bot.set_resume_generator(resume_generator_manager)
+        if not READY_MADE_RESUME.resolve().is_file():
+            bot.set_resume_generator(resume_generator_manager)
         await bot.start_apply()
         emit_event("run_completed", "LinkedIn bot run completed successfully")
 
