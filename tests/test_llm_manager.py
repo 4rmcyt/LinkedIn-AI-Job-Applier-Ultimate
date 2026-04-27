@@ -451,6 +451,41 @@ class TestLLMLogger:
 
         mock_append_yaml.assert_called_once()
 
+    @patch("src.llm.llm_manager.append_yaml_file")
+    @patch("src.llm.llm_manager.EASY_APPLY_MODEL", "gpt-4")
+    @patch("src.llm.llm_manager.LOG_DIR", "/tmp/logs")
+    def test_llm_logger_log_request_includes_timing_and_context(self, mock_append_yaml):
+        logger = LLMLogger()
+
+        prompts = MagicMock()
+        prompts.messages = [MagicMock(content="Prompt")]
+        parsed_reply = {
+            "content": "Test response",
+            "response_metadata": {"model_name": "gpt-4"},
+            "usage_metadata": {
+                "input_tokens": 100,
+                "output_tokens": 50,
+                "total_tokens": 150,
+            },
+        }
+
+        logger.log_request(
+            prompts,
+            parsed_reply,
+            response_time_seconds=1.234,
+            context={
+                "job_url": "https://linkedin.com/jobs/view/12345",
+                "job_title": "CTO",
+                "company_name": "Acme",
+            },
+        )
+
+        payload = mock_append_yaml.call_args[0][1]
+        assert payload["response_time_seconds"] == 1.234
+        assert payload["job_url"] == "https://linkedin.com/jobs/view/12345"
+        assert payload["job_title"] == "CTO"
+        assert payload["company_name"] == "Acme"
+
 
 class TestLoggerChatModel:
     """Tests for LoggerChatModel class"""
@@ -464,8 +499,12 @@ class TestLoggerChatModel:
         assert chat_model.llm == mock_llm
         mock_llm_logger_class.assert_called_once()
 
+    @patch("src.llm.llm_manager.emit_event")
+    @patch("src.llm.llm_manager.time.perf_counter")
     @patch("src.llm.llm_manager.LLMLogger")
-    def test_logger_chat_model_call_success(self, mock_llm_logger_class):
+    def test_logger_chat_model_call_success(
+        self, mock_llm_logger_class, mock_perf_counter, mock_emit_event
+    ):
         """Test LoggerChatModel __call__ method success"""
         mock_llm = MagicMock()
         mock_reply = AIMessage(
@@ -474,14 +513,26 @@ class TestLoggerChatModel:
             usage_metadata={"input_tokens": 100, "output_tokens": 50, "total_tokens": 150},
         )
         mock_llm.invoke.return_value = mock_reply
+        mock_perf_counter.side_effect = [1.0, 2.5]
 
-        chat_model = LoggerChatModel(mock_llm)
+        mock_logger = mock_llm_logger_class.return_value
+        chat_model = LoggerChatModel(
+            mock_llm,
+            context_provider=lambda: {
+                "job_url": "https://linkedin.com/jobs/view/12345",
+                "job_title": "CTO",
+                "company_name": "Acme",
+            },
+        )
         messages = [{"role": "user", "content": "Test prompt"}]
 
         response = chat_model(messages)
 
         assert response == mock_reply
         mock_llm.invoke.assert_called_once_with(messages)
+        mock_logger.log_request.assert_called_once()
+        assert mock_logger.log_request.call_args.kwargs["response_time_seconds"] == 1.5
+        mock_emit_event.assert_not_called()
 
     def test_logger_chat_model_parse_llm_result_with_usage_metadata(self):
         """Test LoggerChatModel parse_llmresult with usage_metadata"""
@@ -594,6 +645,33 @@ class TestGPTAnswerer:
         assert answerer.job_readable == "Brief job description"
         mock_transform.assert_called_once_with(mock_job)
 
+    @patch("src.llm.llm_manager.emit_event")
+    @patch("src.llm.llm_manager.AIAdapter")
+    @patch("src.llm.llm_manager.LoggerChatModel")
+    def test_gpt_answerer_records_job_llm_time(
+        self, mock_logger_chat, mock_ai_adapter, mock_emit_event, mock_api_key, mock_llm_proxy
+    ):
+        answerer = GPTAnswerer(mock_api_key, mock_llm_proxy)
+        answerer._set_current_job_context(
+            {
+                "url": "https://linkedin.com/jobs/view/12345",
+                "job_title": "CTO",
+                "company_name": "Acme",
+            }
+        )
+
+        answerer._record_llm_call(
+            response_time_seconds=2.25,
+            parsed_reply={
+                "usage_metadata": {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
+                "response_metadata": {"model_name": "gpt-4"},
+            },
+            context=answerer._get_llm_context(),
+        )
+
+        assert answerer.get_job_llm_time_seconds("https://linkedin.com/jobs/view/12345") == 2.25
+        mock_emit_event.assert_called_once()
+
     @patch("src.llm.llm_manager.transform_search_config_data")
     @patch("src.llm.llm_manager.AIAdapter")
     @patch("src.llm.llm_manager.LoggerChatModel")
@@ -675,6 +753,29 @@ class TestGPTAnswerer:
         result = answerer.answer_question_numeric("How many years of experience?", [])
 
         assert result == "5"
+
+    @patch("src.llm.llm_manager.AIAdapter")
+    @patch("src.llm.llm_manager.LoggerChatModel")
+    def test_gpt_answerer_answer_question_numeric_with_non_numeric_text(
+        self,
+        mock_logger_chat,
+        mock_ai_adapter,
+        mock_api_key,
+        mock_llm_proxy,
+        mock_resume_structured,
+        mock_resume_readable,
+    ):
+        """Test GPTAnswerer answer_question_numeric gracefully handles bad numeric output"""
+        mock_chain = MagicMock()
+        mock_chain.invoke.return_value = "I cannot determine the exact number"
+
+        answerer = GPTAnswerer(mock_api_key, mock_llm_proxy)
+        answerer.chains = {"numeric_question": mock_chain}
+        answerer.set_resume(mock_resume_structured, mock_resume_readable)
+
+        result = answerer.answer_question_numeric("How many years of experience?", [])
+
+        assert result == "no info"
 
     @patch("src.llm.llm_manager.ChatPromptTemplate")
     @patch("src.llm.llm_manager.AIAdapter")

@@ -49,7 +49,7 @@ class BaseJobManager(ABC):
         logger.info("Setting job manager parameters")
         self.max_applies_num = MAX_APPLIES_NUM
         self.apply_once_at_company = parameters.get("apply_once_at_company", True)
-        self.job_blacklist = [sanitize_text(j) for j in parameters.get("job_blacklist", [])]
+        self.job_blacklist = [sanitize_text(j) for j in parameters.get("company_blacklist", [])]
         self.success_companies = self._load_companies_from_yaml("success.yaml")
         self.skipped_companies = self._load_companies_from_yaml("skipped.yaml")
         self.failed_companies = self._load_companies_from_yaml("failed.yaml")
@@ -117,11 +117,13 @@ class BaseJobManager(ABC):
         job: Job,
         apply_result: Tuple[str, str],
         vacancy: Dict[str, Any],
+        evaluation: Dict[str, Any] | None = None,
     ) -> None:
         """Determine in which category to save the company and save it to the corresponding YAML file"""
         company_name = job.company_name
         company_job_title = job.job_title
         result, reason = apply_result
+        evaluation = evaluation or {}
 
         if result == "Success":
             companies = self.success_companies
@@ -138,8 +140,18 @@ class BaseJobManager(ABC):
         try:
             job_info = JobInfo(
                 job_title=company_job_title,
+                company_name=company_name,
                 url=vacancy["url"],
                 skip_reason=reason,
+                skills=evaluation.get("skills"),
+                interest_score=evaluation.get("interest_score"),
+                interest_reason=evaluation.get("interest_reason"),
+                llm_time_seconds=(
+                    self.llm_answerer_component.get_job_llm_time_seconds(vacancy["url"])
+                    if self.llm_answerer_component
+                    else 0.0
+                ),
+                executed_at=datetime.now().isoformat(timespec="seconds"),
             )
         except Exception as e:
             logger.warning(f"Error in saving job info: {e}")
@@ -147,7 +159,15 @@ class BaseJobManager(ABC):
 
         if company_name:
             if company_name in seen_companies:
-                seen_companies[company_name].append(job_info.model_dump())
+                existing_jobs = seen_companies[company_name]
+                if any(
+                    saved_job.get("url") == vacancy["url"]
+                    or saved_job.get("job_title") == company_job_title
+                    for saved_job in existing_jobs
+                ):
+                    logger.info("Vacancy already saved in output file, skipping duplicate entry")
+                    return
+                existing_jobs.append(job_info.model_dump())
             else:
                 seen_companies[company_name] = [job_info.model_dump()]
 
@@ -199,6 +219,11 @@ class BaseJobManager(ABC):
             interest_score=score,
             interest_reason=reasoning,
             skills=self.job_key_skills,
+            llm_time_seconds=(
+                self.llm_answerer_component.get_job_llm_time_seconds(job.url)
+                if self.llm_answerer_component
+                else 0.0
+            ),
         )
         self.interesting_jobs.append(interesting_job)
         self.interesting_jobs = sorted(
@@ -397,7 +422,12 @@ class BaseJobManager(ABC):
         except Exception as e:
             logger.warning(f"Failed to send Telegram report: {e}")
 
-    async def _handle_apply_result(self, apply_result: Tuple[str, str], job: Job) -> None:
+    async def _handle_apply_result(
+        self,
+        apply_result: Tuple[str, str],
+        job: Job,
+        evaluation: Dict[str, Any] | None = None,
+    ) -> None:
         """Handle the result of a job application attempt"""
         result, _ = apply_result
         emit_event(
@@ -410,7 +440,7 @@ class BaseJobManager(ABC):
         )
         self.applies_num += 1
         if result != "Limit" and COLLECT_INFO_MODE is False:
-            self._save_company(job, apply_result, {"url": job.url})
+            self._save_company(job, apply_result, {"url": job.url}, evaluation=evaluation)
         if result == "Success":
             self.success_applies_num += 1
             self.total_applies_num += 1

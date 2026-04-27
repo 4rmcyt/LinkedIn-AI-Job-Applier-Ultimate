@@ -78,43 +78,49 @@ class LinkedInJobManager(BaseJobManager):
 
             # Find all job listing elements on the current page using multiple selectors
             job_selectors = [
-                "//*[starts-with(@class, 'flex-grow-1')]",
-                "div[data-job-id]",
+                ".scaffold-layout__list [data-view-name='job-card'][data-job-id]",
+                ".scaffold-layout__list .job-card-job-posting-card-wrapper[data-job-id]",
+                ".scaffold-layout__list div[data-job-id]",
                 ".jobs-search-results__list-item",
                 ".job-card-container",
                 ".base-card",
                 ".job-card-list__entity-lockup",
                 ".scaffold-layout__list-item",
+                "div[data-job-id]",
+                "//*[starts-with(@class, 'flex-grow-1')]",
             ]
 
-            job_elements = []
+            seen_job_keys = set()
             for selector in job_selectors:
                 by = "xpath" if selector.startswith("//") else "css selector"
                 elements = await find_elements_safely(self.page, selector, by)
-                if elements:
-                    job_elements = elements
-                    logger.debug(f"Found {len(elements)} job elements using selector: {selector}")
-                    break
-
-            logger.info(f"Found {len(job_elements)} job elements on page {self.page_num}")
-
-            for job_element in job_elements:
-                vacancy = {}
-                try:
-                    # Try to extract job URL and ID
-                    job_url = await self._extract_job_url(job_element)
-                    if job_url:
-                        match = re.search(r"/jobs/view/(\d+)", job_url)
-                        job_id = match.group(1) if match else None
-                        vacancy["url"] = job_url
-                        vacancy["id"] = job_id
-                        vacancies.append(vacancy)
-                    else:
-                        logger.debug("Could not extract URL from job element")
-
-                except Exception as e:
-                    logger.warning(f"Error parsing job element: {e}")
+                if not elements:
                     continue
+                logger.debug(f"Found {len(elements)} job elements using selector: {selector}")
+
+                selector_vacancies = []
+                for job_element in elements:
+                    try:
+                        job_url = await self._extract_job_url(job_element)
+                        if job_url:
+                            match = re.search(r"/jobs/view/(\d+)", job_url)
+                            job_id = match.group(1) if match else None
+                            job_key = job_id or job_url
+                            if job_key in seen_job_keys:
+                                continue
+                            seen_job_keys.add(job_key)
+                            selector_vacancies.append({"url": job_url, "id": job_id})
+                        else:
+                            logger.debug("Could not extract URL from job element")
+                    except Exception as e:
+                        logger.warning(f"Error parsing job element: {e}")
+
+                if selector_vacancies:
+                    vacancies.extend(selector_vacancies)
+                    logger.info(
+                        f"Found {len(selector_vacancies)} job elements using selector: {selector}"
+                    )
+                    break
 
             # If no jobs found on first page, log warning
             if self.page_num == 0 and len(vacancies) == 0:
@@ -153,6 +159,7 @@ class LinkedInJobManager(BaseJobManager):
         result = ""
         # write recommendations for improving the resume
         self.resume_improvement_recommendations()
+        seen_page_signatures = set()
         # continue until the maximum number of applications is reached
         while self.success_applies_num < self.max_applies_num and self.applies_num < 400:
             # Check if execution is paused
@@ -165,6 +172,13 @@ class LinkedInJobManager(BaseJobManager):
                 if self.page_num == 1:
                     logger.warning("No vacancies found for the search query")
                 break
+
+            page_signature = tuple(vacancy.get("id") or vacancy.get("url") for vacancy in vacancies)
+            if page_signature in seen_page_signatures:
+                logger.info("Detected repeated LinkedIn result page; stopping pagination")
+                break
+            seen_page_signatures.add(page_signature)
+
             for vacancy in vacancies:
                 # Check if execution is paused before processing each job
                 if self.pause_checker:
@@ -207,6 +221,7 @@ class LinkedInJobManager(BaseJobManager):
     async def apply_job(self, vacancy: Dict[str, Any]) -> str:
         """Send applications to all employers on the page (async)"""
         minimum_job_time = time.time() + MINIMUM_WAIT_TIME_SEC
+        evaluation = {"interest_score": None, "interest_reason": None, "skills": None}
         # Open vacancy in a new window/tab
         original_page = self.page
         new_page = await self.page.context.new_page()
@@ -267,17 +282,20 @@ class LinkedInJobManager(BaseJobManager):
                         score,
                         reasoning,
                     ) = self.llm_answerer_component.job_is_interesting(job.model_dump())
+                evaluation["interest_score"] = int(score) if score is not None else None
+                evaluation["interest_reason"] = reasoning
                 if not job_is_interesting:
                     logger.info(
                         f"Skipping uninteresting job: {job.job_title} at {job.company_name}"
                     )
-                    await self._handle_apply_result(("Skip", reasoning), job)
+                    await self._handle_apply_result(("Skip", reasoning), job, evaluation=evaluation)
                     return "Skip"
                 # update the list of required skills for the vacancy and save job info to file
                 # only if the vacancy was scored and considered interesting
                 if int(score) > 0:
                     # extract skills from the vacancy
                     job.skills = self._extract_skills_from_vacancy(job)
+                    evaluation["skills"] = self.job_key_skills
                     self._update_skill_stat(self.job_key_skills)
                     # set the vacancy to answerer
                     if COLLECT_INFO_MODE is True:
@@ -309,7 +327,7 @@ class LinkedInJobManager(BaseJobManager):
                 if result == "Skip" and reason.startswith("Could not"):
                     self._collect_job_info(company_job_title, company_name, job.url, reason)
             result, _ = apply_result
-            await self._handle_apply_result(apply_result, job)
+            await self._handle_apply_result(apply_result, job, evaluation=evaluation)
             if self.success_applies_num >= self.max_applies_num:
                 logger.info(
                     f"The maximum number of applications has been reached: "
@@ -406,13 +424,56 @@ class LinkedInJobManager(BaseJobManager):
             logger.warning(f"Error during job container scrolling: {e}")
             await debug_capture(self.page, "scroll_jobs_error")
 
-    async def _extract_job_url(self, job_element) -> str:
+    @staticmethod
+    def _canonical_job_url_from_id(job_id: str) -> str:
+        return f"https://www.linkedin.com/jobs/view/{job_id}"
+
+    @staticmethod
+    def _normalize_job_url(href: str) -> str | None:
+        if not href:
+            return None
+
+        current_job_match = re.search(r"[?&]currentJobId=(\d+)", href)
+        if current_job_match:
+            return LinkedInJobManager._canonical_job_url_from_id(current_job_match.group(1))
+
+        view_match = re.search(r"/jobs/view/(\d+)", href)
+        if view_match:
+            if href.startswith("https://www.linkedin.com") or href.startswith(
+                "https://linkedin.com"
+            ):
+                return href
+            if not href.startswith("http"):
+                return f"https://www.linkedin.com{href}"
+
+        return None
+
+    async def _get_direct_data_job_id(self, job_element) -> str:
+        for attr in ("data-occludable-job-id", "data-job-id"):
+            try:
+                job_id = await job_element.get_attribute(attr) or ""
+                if isinstance(job_id, str) and job_id.isdigit():
+                    return job_id
+            except Exception:
+                pass
+        return ""
+
+    async def _extract_job_url(self, job_element) -> str | None:
         """Extract job URL from job element using multiple selector strategies (async)"""
         logger.debug("Extracting job URL from element")
+
+        # Check direct job ID attributes first (avoids child element queries)
+        job_id = await self._get_direct_data_job_id(job_element)
+        if job_id:
+            return self._canonical_job_url_from_id(job_id)
+
         # Try different selectors for job links
         link_selectors = [
+            "a[href*='currentJobId=']",
+            "a[href*='/jobs/collections/recommended']",
             "a[href*='/jobs/view/']",
             "a[data-control-name='job_card_title']",
+            ".job-card-job-posting-card-wrapper__card-link",
             ".base-card__full-link",
             ".job-card-container__link",
             ".jobs-search-results__list-item-action",
@@ -421,10 +482,9 @@ class LinkedInJobManager(BaseJobManager):
         for selector in link_selectors:
             try:
                 href = await get_element_attribute_safely(job_element, selector, "href")
-                if href and "/jobs/view/" in href:
-                    if not href.startswith("https://linkedin.com"):
-                        href = "https://linkedin.com" + href
-                    return href
+                job_url = self._normalize_job_url(href)
+                if job_url:
+                    return job_url
             except Exception:
                 continue
 
@@ -735,20 +795,25 @@ class LinkedInJobManager(BaseJobManager):
 
     async def _go_to_next_page(self) -> bool:
         """Go to the next page using framework-agnostic methods (async)"""
-        target_page = self.page_num + 1
-        logger.info(f"Going to the page {target_page}")
-        emit_event("page_changed", f"Moving to page {target_page}", page_num=target_page)
+        target_page_label = self.page_num + 2  # page_num is 0-indexed; LinkedIn labels pages from 1
+        logger.info(f"Going to the page {target_page_label}")
+        emit_event(
+            "page_changed", f"Moving to page {target_page_label}", page_num=target_page_label
+        )
 
         # Try multiple selectors for next page button
         next_page_selectors = [
-            f"//button[@aria-label='Page {target_page}']",
-            f"//button[contains(@aria-label, 'Page {target_page}')]",
-            "//button[contains(@aria-label, 'next')]",
-            "//button[contains(@aria-label, 'Next')]",
-            "button[aria-label*='Next']",
-            "button[aria-label*='next']",
-            ".jobs-search-results-list__pagination button[aria-label*='next']",
-            "button.artdeco-pagination__button--next",
+            f"button[aria-label='Page {target_page_label}']:not([disabled]):not([aria-current='page'])",
+            f"//button[@aria-label='Page {target_page_label}' and not(@disabled) and not(@aria-current='page')]",
+            f"//button[contains(@aria-label, 'Page {target_page_label}') and not(@disabled) and not(@aria-current='page')]",
+            "button[aria-label='View next page']:not([disabled])",
+            "//button[@aria-label='View next page' and not(@disabled)]",
+            "//button[contains(@aria-label, 'next') and not(@disabled)]",
+            "//button[contains(@aria-label, 'Next') and not(@disabled)]",
+            "button[aria-label*='Next']:not([disabled])",
+            "button[aria-label*='next']:not([disabled])",
+            ".jobs-search-results-list__pagination button[aria-label*='next']:not([disabled])",
+            "button.artdeco-pagination__button--next:not([disabled])",
         ]
 
         page_clicked = False
@@ -777,7 +842,7 @@ class LinkedInJobManager(BaseJobManager):
             logger.warning("Could not find or click next page button")
             return False
 
-        self.page_num = target_page
+        self.page_num += 1
         await async_pause(2, 3)
         return True
 

@@ -457,6 +457,23 @@ class TestSetSearchParams:
         )
 
     @pytest.mark.asyncio
+    async def test_recommended_jobs_mode_ignores_position_search(self, customizer, mock_page):
+        with (
+            patch(f"{MODULE}.LINKEDIN_RECOMMENDED_JOBS_MODE", True),
+            patch(f"{MODULE}.async_pause", new_callable=AsyncMock),
+            patch.object(customizer, "_set_basic_search_terms", new_callable=AsyncMock) as mock_basic,
+            patch.object(customizer, "_open_all_filters", new_callable=AsyncMock) as mock_filters,
+        ):
+            await customizer.set_search_params()
+
+        mock_page.goto.assert_called_once_with(
+            "https://www.linkedin.com/jobs/collections/recommended/",
+            wait_until="domcontentloaded",
+        )
+        mock_basic.assert_not_called()
+        mock_filters.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_calls_all_filter_setters_when_filters_open(self, customizer):
         with (
             patch(f"{MODULE}.async_pause"),

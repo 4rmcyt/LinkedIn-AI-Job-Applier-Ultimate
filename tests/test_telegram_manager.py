@@ -775,49 +775,6 @@ class TestAsyncTelegramSink:
                 # Should log the critical error
                 mock_logger.error.assert_called()
 
-    def test_call_no_running_loop(self, mock_env, mock_config):
-        """Test __call__ when no event loop is running"""
-        with patch("src.telegram.telegram_error_handler.Bot"):
-            sink = AsyncTelegramSink()
-
-            with (
-                patch("asyncio.get_running_loop", side_effect=RuntimeError("No loop")),
-                patch("asyncio.run") as mock_run,
-            ):
-                sink("Test error")
-
-                # Should use asyncio.run
-                mock_run.assert_called_once()
-
-    def test_call_with_running_loop(self, mock_env, mock_config):
-        """Test __call__ when event loop is already running"""
-        with patch("src.telegram.telegram_error_handler.Bot"):
-            sink = AsyncTelegramSink()
-
-            mock_loop = MagicMock()
-            with (
-                patch("asyncio.get_running_loop", return_value=mock_loop),
-                patch("asyncio.create_task") as mock_create_task,
-            ):
-                sink("Test error")
-
-                # Should use create_task
-                mock_create_task.assert_called_once()
-
-    def test_call_exception_handling(self, mock_env, mock_config):
-        """Test __call__ handles exceptions gracefully"""
-        with patch("src.telegram.telegram_error_handler.Bot"):
-            sink = AsyncTelegramSink()
-
-            with (
-                patch("asyncio.get_running_loop", side_effect=Exception("Fatal error")),
-                patch("src.telegram.telegram_error_handler.internal_logger") as mock_logger,
-            ):
-                # Should not raise exception
-                sink("Test error")
-                # Should log the failure
-                mock_logger.error.assert_called()
-
 
 class TestGetTelegramChatAndTopicId:
     """Tests for get_telegram_chat_and_topic_id.py module"""

@@ -221,6 +221,7 @@ This project enhances the original codebase with several powerful new features:
     *   `MINIMUM_WAIT_TIME_SEC`: Minimum time spent on one job application, this setting help to prevent ban for too frequent job applies
     *   `FREE_TIER`: If `True`, the bot will try to decrease RPM (requests per minute) to avoid rate limit errors when using free tier LLM services.
     *   `FREE_TIER_RPM_LIMIT`: desired RPM limit, application will try not to exceed this limit
+    *   `DASHBOARD_OUTPUT_APP_LOGS`: If `True`, bot process log output is printed to the dashboard console (in addition to the log file `logs/dashboard_bot_stdout.log`). Useful for debugging when running the bot from the dashboard.
     *   `LLM_MODEL_TYPE`: Choose your LLM provider (e.g., "gemini").
     *   `EASY_APPLY_MODEL`: Specify the exact model to use for Easy Apply vacancies (e.g., "gemini-2.0-flash").
     *   `APPLY_AGENT_MODEL`: *(LinkedIn only)* Specify the exact agent model to use for Non-Easy Apply vacancies (e.g., "gemini-2.5-flash").

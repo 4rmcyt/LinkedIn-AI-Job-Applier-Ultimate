@@ -7,7 +7,6 @@ from typing import Any, List, Tuple
 from httpx import HTTPStatusError
 
 from config.logger_config import logger
-from src.dashboard.runtime import StopRequested, capture_page_screenshot, emit_event
 from src.pydantic_models.job_models import Job, Question
 from src.utils.browser_utils import debug_capture
 from src.utils.utils import ConfigError, async_pause, load_yaml_file, sanitize_text, save_yaml_file
@@ -170,10 +169,42 @@ class BaseEasyApplier(ABC):
             and self.current_job.company_name in answer
         )
 
+    def _find_cached_question(
+        self, question_text: str, question_type: str | None = None
+    ) -> Question | None:
+        """Find a cached answer by exact question text, preferring the same field type."""
+        current_question_sanitized = sanitize_text(question_text)
+        same_type_match = None
+        any_type_match = None
+
+        for item in self.all_questions:
+            if item.question != current_question_sanitized:
+                continue
+
+            if item.question_type == question_type:
+                same_type_match = item
+                break
+
+            if any_type_match is None:
+                any_type_match = item
+
+        return same_type_match or any_type_match
+
     def _load_questions(self) -> List[Question]:
         logger.info(f"Loading questions from YAML file: {self.answers_file}")
         try:
-            data = load_yaml_file(self.answers_file)
+            answers_file = self.answers_file
+            if not answers_file.exists():
+                legacy_answers_file = answers_file.parent.parent / answers_file.name
+                if legacy_answers_file.exists():
+                    logger.info(
+                        "Using legacy shared answers file because platform-specific file is missing: "
+                        f"{legacy_answers_file}"
+                    )
+                    self.answers_file = legacy_answers_file
+                    answers_file = legacy_answers_file
+
+            data = load_yaml_file(answers_file)
             logger.info("Questions loaded successfully from YAML")
             if not data:
                 return []

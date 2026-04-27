@@ -22,6 +22,26 @@ let dashboardConfig = null;
 let currentJobs = [];
 let selectedRunId = null;
 
+function formatDateTime(value) {
+  if (!value) {
+    return "-";
+  }
+
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  const hours = String(parsed.getHours()).padStart(2, "0");
+  const minutes = String(parsed.getMinutes()).padStart(2, "0");
+  const seconds = String(parsed.getSeconds()).padStart(2, "0");
+
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
 function currentRunPath(runId) {
   return runId ? `/runs/${encodeURIComponent(runId)}` : "/";
 }
@@ -41,7 +61,7 @@ function renderTimeline(events) {
     .reverse()
     .map((event) => `
       <article class="timeline-item">
-        <p class="timeline-time">${event.timestamp}</p>
+        <p class="timeline-time">${formatDateTime(event.timestamp)}</p>
         <p class="timeline-title">${event.message}</p>
         <pre>${JSON.stringify(event.payload || {}, null, 2)}</pre>
       </article>
@@ -115,6 +135,7 @@ function renderJobs(jobs) {
     .map((job, index) => `
       <tr class="job-row" data-job-index="${index}">
         <td><span class="badge" data-status="${job.status}">${job.status}</span></td>
+        <td>${formatDateTime(job.executed_at || job.updated_at)}</td>
         <td><a href="${job.url || "#"}" target="_blank" rel="noreferrer">${job.job_title || "Unknown job"}</a></td>
         <td>${job.company_name || "-"}</td>
         <td>${job.interest_score ?? "-"}</td>
@@ -151,6 +172,7 @@ function renderJobDetails(job) {
     </div>
     <dl class="detail-grid">
       <div><dt>URL</dt><dd>${job.url ? `<a href="${job.url}" target="_blank" rel="noreferrer">Open posting</a>` : "-"}</dd></div>
+      <div><dt>Executed At</dt><dd>${formatDateTime(job.executed_at || job.updated_at)}</dd></div>
       <div><dt>Interest Score</dt><dd>${job.interest_score ?? "-"}</dd></div>
       <div><dt>Skip Reason</dt><dd>${job.skip_reason || "-"}</dd></div>
       <div><dt>Interest Reason</dt><dd>${job.interest_reason || "-"}</dd></div>
@@ -167,9 +189,9 @@ function renderRunHistory(runs) {
           <strong>${run.run_id}</strong>
           <span class="badge" data-status="${run.status}">${run.status}</span>
         </div>
-        <p class="muted">Started: ${run.started_at || "-"}</p>
-        <p class="muted">Finished: ${run.finished_at || "-"}</p>
-        <p class="muted">Last event: ${run.last_event_at || "-"}</p>
+        <p class="muted">Started: ${formatDateTime(run.started_at)}</p>
+        <p class="muted">Finished: ${formatDateTime(run.finished_at)}</p>
+        <p class="muted">Last event: ${formatDateTime(run.last_event_at)}</p>
         <p>${run.last_message || "No message"}</p>
         <div class="run-stats">
           <span>Discovered ${run.jobs.discovered}</span>
@@ -208,15 +230,15 @@ function renderRunDetailSummary(run) {
     </div>
     <div class="run-detail-card">
       <strong>Started</strong>
-      <span>${run.started_at || "-"}</span>
+      <span>${formatDateTime(run.started_at)}</span>
     </div>
     <div class="run-detail-card">
       <strong>Finished</strong>
-      <span>${run.finished_at || "-"}</span>
+      <span>${formatDateTime(run.finished_at)}</span>
     </div>
     <div class="run-detail-card">
       <strong>Last Event</strong>
-      <span>${run.last_event_at || "-"}</span>
+      <span>${formatDateTime(run.last_event_at)}</span>
     </div>
     <div class="run-detail-card">
       <strong>Last Message</strong>
@@ -258,7 +280,7 @@ function renderScreenshotHistory(entries) {
           <img src="/api/screenshot-file?path=${encodeURIComponent(entry.path)}" alt="${entry.label || "screenshot"}">
         </a>
         <strong>${entry.label || "screenshot"}</strong>
-        <span class="muted">${entry.timestamp || "-"}</span>
+        <span class="muted">${formatDateTime(entry.timestamp)}</span>
         <span class="muted">${entry.company_name || ""} ${entry.job_title ? `- ${entry.job_title}` : ""}</span>
         <span class="muted">${entry.stage || ""}</span>
       </article>
@@ -427,7 +449,7 @@ async function refreshScreenshot() {
     return;
   }
   screenshot.src = `/api/screenshot?t=${bust}`;
-  screenshotMeta.textContent = `Last refreshed ${new Date().toLocaleTimeString()}`;
+  screenshotMeta.textContent = `Last refreshed ${formatDateTime(new Date())}`;
 }
 
 async function wireControls() {
@@ -494,7 +516,7 @@ function startEventStream() {
       const existing = Array.from(timeline.children).slice(0, 39).map((node) => node.outerHTML).join("");
       const latest = `
         <article class="timeline-item">
-          <p class="timeline-time">${payload.timestamp}</p>
+          <p class="timeline-time">${formatDateTime(payload.timestamp)}</p>
           <p class="timeline-title">${payload.message}</p>
           <pre>${JSON.stringify(payload.payload || {}, null, 2)}</pre>
         </article>`;
