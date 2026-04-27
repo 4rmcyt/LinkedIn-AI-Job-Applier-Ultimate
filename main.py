@@ -25,7 +25,7 @@ except (ImportError, Exception):
 from config.app_config import JOB_SITE, RESTART_EVERY_DAY
 from config.constants import BROWSER_STORAGE_STATE, RESUME_DIR, SEARCH_CONFIG_FILE
 from config.logger_config import logger
-from src.dashboard.runtime import StopRequested, emit_event, get_control_state
+from src.dashboard.runtime import StopRequested, emit_event, get_control_state, update_control_state
 
 if JOB_SITE == "indeed":
     from src.job_manager.indeed.authenticator_indeed import IndeedAuthenticator as Authenticator
@@ -375,6 +375,8 @@ def main() -> None:
     # Local runtime patch: register graceful shutdown handlers once at startup.
     register_shutdown_handlers()
     start_keyboard_listener()
+    if not os.environ.get("DASHBOARD_RUN_ID"):
+        update_control_state(stop_requested=False, pause_requested=False)
 
     while True:
         should_exit = False
