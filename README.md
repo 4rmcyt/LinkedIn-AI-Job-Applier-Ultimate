@@ -525,9 +525,19 @@ If error happens when `search_config.yaml` is processed:
 
 7. Send a message to every topic in the chat. Then click on that message and select *Copy Message Link*. You will get a link like: https://t.me/c/194xxxx987/11/13, so the group Topic ID is 11. Set TG_ERR_TOPIC_ID in `config/app_config.py` with Error Topic ID and TG_REPORT_TOPIC_ID - with Report Topic ID.
 
-## 🤝 Contributing
+## 🤝 Contribution
 
-Contributions are welcome! If you have suggestions for improvements or find a bug, please feel free to open an issue or submit a pull request.
+Contributions are welcome! If you have suggestions for improvements or find a bug, please feel free to open an issue. If you want to submit a pull request, please read the rules below.
+
+### Pull Request Rules
+
+1. One PR is one feature or one bug fix. Please don't put multiple features/bug fixes in one PR.
+
+2. Run `uv run pytest` and make sure all tests pass. If some tests fail - fix them or fix code or provide the reason why failed tests should be skipped. PRs that break existing tests will be rejected.
+
+3. Test your changes in real environment and make sure they don't break existing functionality. PRs that break existing functionality will be rejected.
+
+4. Don't forget to add description of what you've changed and why.
 
 ## 📜 License
 
