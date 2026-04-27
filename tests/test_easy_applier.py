@@ -224,8 +224,9 @@ class TestLoadQuestions:
         with patch(
             "src.job_manager.easy_applier.load_yaml_file", side_effect=ValueError("bad data")
         ):
-            with pytest.raises(Exception, match="Error loading questions"):
-                applier._load_questions()
+            with patch("src.job_manager.easy_applier.logger"):
+                with pytest.raises(Exception, match="Error loading questions"):
+                    applier._load_questions()
 
 
 class TestCreateAndUploadResume:

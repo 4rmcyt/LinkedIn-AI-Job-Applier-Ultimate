@@ -32,9 +32,9 @@ from config.app_config import (
 )
 from config.constants import LOG_DIR, RESUME_DIR, cost_per_token
 from config.logger_config import logger
+from src.dashboard.runtime import emit_event
 from src.pydantic_models.log_models import LLMCall
 from src.pydantic_models.prompt_models import ResumeStructure
-from src.dashboard.runtime import emit_event
 from src.utils.json_to_readable import transform_search_config_data, transform_vacancy_data
 from src.utils.utils import append_yaml_file, pause
 
@@ -621,6 +621,10 @@ class GPTAnswerer:
         """Add resume for analysis."""
         logger.info("Adding resume")
         self.resume_structured = resume_structured
+        if not self.resume_structured["personal_information"].get("phone_code"):
+            phone_prefix = self.resume_structured["personal_information"].get("phone_prefix", "")
+            if phone_prefix:
+                self.resume_structured["personal_information"]["phone_code"] = phone_prefix
         self.resume_readable = resume_readable
 
     def _set_current_job_context(self, job: Dict[str, Any] | None) -> None:
@@ -789,6 +793,23 @@ class GPTAnswerer:
 
     def answer_question_numeric(self, question: str, previous_questions: list[str]) -> str:
         """Answer numeric question"""
+        question_lower = question.lower()
+        if any(
+            keyword in question_lower
+            for keyword in ["phone", "mobile", "telephone", "contact number"]
+        ):
+            phone = self.resume_structured["personal_information"].get("phone", "")
+            phone_code = self.resume_structured["personal_information"].get("phone_code", "")
+            if phone:
+                phone_value = f"{phone_code} {phone}".strip()
+                phone_digits = re.sub(r"\D", "", phone_value)
+                if phone_digits:
+                    logger.info(
+                        "Answered phone question using structured resume: %s",
+                        phone_digits,
+                    )
+                    return phone_digits
+
         current_date = datetime.now().date().strftime("%Y-%m-%d")
 
         chain = self.chains["numeric_question"]

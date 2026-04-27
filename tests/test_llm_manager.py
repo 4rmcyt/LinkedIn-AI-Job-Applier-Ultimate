@@ -754,12 +754,14 @@ class TestGPTAnswerer:
 
         assert result == "5"
 
+    @patch("src.llm.llm_manager.logger")
     @patch("src.llm.llm_manager.AIAdapter")
     @patch("src.llm.llm_manager.LoggerChatModel")
     def test_gpt_answerer_answer_question_numeric_with_non_numeric_text(
         self,
         mock_logger_chat,
         mock_ai_adapter,
+        mock_llm_logger,
         mock_api_key,
         mock_llm_proxy,
         mock_resume_structured,
