@@ -1,5 +1,6 @@
 """Tests for src/job_manager/linkedin/easy_applier_linkedin.py"""
 
+import os
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -332,6 +333,46 @@ class TestUploadFields:
 
         applier._create_and_upload_resume.assert_called_once_with(upload_element, job)
         upload_element.set_input_files.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_records_ready_made_resume_path_when_uploaded(self, applier, tmp_path):
+        ready_made_resume = tmp_path / "existing.pdf"
+        ready_made_resume.write_bytes(b"existing")
+        applier.ready_made_resume_path = ready_made_resume
+        applier.resume_generator_manager = None
+
+        upload_element = AsyncMock()
+        upload_element.get_attribute = AsyncMock(return_value="resume-upload")
+        upload_element.evaluate = AsyncMock()
+        upload_element.set_input_files = AsyncMock()
+
+        parent = AsyncMock()
+        parent.text_content = AsyncMock(return_value="Resume")
+        upload_element.locator = MagicMock(return_value=MagicMock(first=parent))
+
+        element = MagicMock()
+        upload_locator = MagicMock()
+        upload_locator.all = AsyncMock(return_value=[upload_element])
+        element.locator = MagicMock(return_value=upload_locator)
+
+        job = Job(job_title="Engineer", company_name="Tech")
+
+        with (
+            patch(
+                "src.job_manager.linkedin.easy_applier_linkedin.find_element_safely",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "src.job_manager.linkedin.easy_applier_linkedin.async_pause",
+                new_callable=AsyncMock,
+            ),
+        ):
+            await applier._handle_upload_fields(element, job, set())
+
+        expected_path = os.path.abspath(str(ready_made_resume.resolve()))
+        upload_element.set_input_files.assert_called_once_with(expected_path)
+        assert applier.submitted_resume_path == expected_path
 
 
 class TestDeduplicateQuestionText:

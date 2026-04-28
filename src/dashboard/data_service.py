@@ -79,9 +79,14 @@ def _flatten_company_jobs(
                     "skills": job.get("skills"),
                     "llm_time_seconds": job.get("llm_time_seconds", 0.0),
                     "executed_at": job.get("executed_at"),
+                    "submitted_resume_path": job.get("submitted_resume_path"),
                 }
             )
     return rows
+
+
+def _job_url_key(url: str | None) -> str:
+    return (url or "").rstrip("/")
 
 
 def _load_jobs_board() -> List[Dict[str, Any]]:
@@ -121,6 +126,7 @@ def _load_jobs_board() -> List[Dict[str, Any]]:
                 "skills": None,
                 "llm_time_seconds": current_job.get("llm_time_seconds", 0.0),
                 "executed_at": current_job.get("executed_at") or snapshot.get("last_event_at"),
+                "submitted_resume_path": current_job.get("submitted_resume_path"),
             },
         )
 
@@ -166,6 +172,7 @@ def _build_run_jobs(run_id: str) -> List[Dict[str, Any]]:
                 "skills": None,
                 "llm_time_seconds": 0.0,
                 "executed_at": event.get("timestamp"),
+                "submitted_resume_path": payload.get("submitted_resume_path"),
                 "stage": payload.get("stage"),
                 "last_message": event.get("message"),
                 "updated_at": event.get("timestamp"),
@@ -178,6 +185,9 @@ def _build_run_jobs(run_id: str) -> List[Dict[str, Any]]:
         job["stage"] = payload.get("stage") or job.get("stage")
         job["last_message"] = event.get("message") or job.get("last_message")
         job["updated_at"] = event.get("timestamp") or job.get("updated_at")
+        job["submitted_resume_path"] = payload.get("submitted_resume_path") or job.get(
+            "submitted_resume_path"
+        )
 
         event_type = event.get("type")
         if event_type == "llm_call_completed":
@@ -218,7 +228,33 @@ def _build_run_jobs(run_id: str) -> List[Dict[str, Any]]:
                 job["status"] = "failed"
                 job["skip_reason"] = payload.get("reason") or job.get("skip_reason", "")
 
-    rows = list(jobs.values())
+    saved_jobs_by_url = {
+        _job_url_key(job.get("url")): job
+        for job in (
+            _flatten_company_jobs(_read_yaml(SUCCESS_FILE, {}), "applied")
+            + _flatten_company_jobs(_read_yaml(SKIPPED_FILE, {}), "skipped")
+            + _flatten_company_jobs(_read_yaml(FAILED_FILE, {}), "failed")
+        )
+        if job.get("url")
+    }
+
+    rows = []
+    for job in jobs.values():
+        saved_job = saved_jobs_by_url.get(_job_url_key(job.get("url")))
+        if saved_job:
+            for field in ("company_name", "job_title", "skip_reason", "interest_reason"):
+                job[field] = job.get(field) or saved_job.get(field)
+            if job.get("interest_score") in (None, 0):
+                job["interest_score"] = saved_job.get("interest_score")
+            if not job.get("skills"):
+                job["skills"] = saved_job.get("skills")
+            if not job.get("llm_time_seconds"):
+                job["llm_time_seconds"] = saved_job.get("llm_time_seconds", 0.0)
+            if not job.get("submitted_resume_path"):
+                job["submitted_resume_path"] = saved_job.get("submitted_resume_path")
+            job["executed_at"] = job.get("executed_at") or saved_job.get("executed_at")
+        rows.append(job)
+
     rows.sort(
         key=lambda job: (
             job.get("status") != "in_progress",

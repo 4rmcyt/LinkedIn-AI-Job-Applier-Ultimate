@@ -37,11 +37,11 @@ class BaseSearchCustomizer(ABC):
         self.experience_level = parameters.get("experience_level", {})
         self.job_types = parameters.get("job_types", {})
         self.date_posted = parameters.get("date", {})
-        self.locations = parameters.get("locations", [])
+        self.locations = parameters.get("locations") or []
         self.apply_once_at_company = parameters.get("apply_once_at_company", True)
-        self.company_blacklist = parameters.get("company_blacklist", [])
-        self.title_blacklist = parameters.get("title_blacklist", [])
-        self.location_blacklist = parameters.get("location_blacklist", [])
+        self.company_blacklist = parameters.get("company_blacklist") or []
+        self.title_blacklist = parameters.get("title_blacklist") or []
+        self.location_blacklist = parameters.get("location_blacklist") or []
         logger.info(f"{self.__class__.__name__} parameters successfully set")
 
     def is_job_blacklisted(self, job_title: str, company_name: str, job_location: str) -> bool:

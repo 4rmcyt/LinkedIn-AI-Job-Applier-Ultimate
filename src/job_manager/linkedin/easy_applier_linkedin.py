@@ -49,6 +49,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
         self.ready_made_resume_path = get_ready_made_resume()
         self.all_questions = self._load_questions()
         self.current_job = None
+        self.submitted_resume_path = None
         self.test_mode = test_mode
         self.previous_question_texts = []
         logger.info("LinkedInEasyApplier initialized successfully")
@@ -600,6 +601,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
                     if self.ready_made_resume_path is not None:
                         abs_path = os.path.abspath(str(self.ready_made_resume_path))
                         await upload_element.set_input_files(abs_path)
+                        self.submitted_resume_path = abs_path
                         logger.info(f"Resume uploaded from path: {self.ready_made_resume_path}")
                         await async_pause(2, 3)
                     else:

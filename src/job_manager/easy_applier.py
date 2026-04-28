@@ -51,7 +51,7 @@ class BaseEasyApplier(ABC):
     async def _find_and_handle_date_question(self, section: Any) -> bool:
         return False
 
-    async def _create_and_upload_resume(self, element: Any, job: Job) -> None:
+    async def _create_and_upload_resume(self, element: Any, job: Job) -> str:
         try:
             os.makedirs(self.generated_resume_dir, exist_ok=True)
         except Exception as e:
@@ -106,9 +106,12 @@ class BaseEasyApplier(ABC):
             )
 
         try:
-            await element.set_input_files(os.path.abspath(file_path_pdf))
+            abs_path = os.path.abspath(file_path_pdf)
+            await element.set_input_files(abs_path)
+            self.submitted_resume_path = abs_path
             await async_pause(1, 2)
             logger.debug(f"Resume created and uploaded successfully: {file_path_pdf}")
+            return abs_path
         except Exception:
             tb_str = traceback.format_exc()
             logger.error(f"Resume upload failed: {tb_str}")

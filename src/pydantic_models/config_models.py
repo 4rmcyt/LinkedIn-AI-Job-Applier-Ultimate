@@ -77,6 +77,19 @@ class SearchConfig(BaseModel):
     title_blacklist: Optional[List[str]] = []
     location_blacklist: Optional[List[str]] = []
 
+    @field_validator(
+        "locations",
+        "company_blacklist",
+        "title_blacklist",
+        "location_blacklist",
+        mode="before",
+    )
+    @classmethod
+    def none_list_fields_default_to_empty(cls, value):
+        if value is None:
+            return []
+        return value
+
 
 class ConnectionSearcherConfig(BaseModel):
     main_search_words: List[str] = [

@@ -438,6 +438,7 @@ class TestSetSearchParams:
     @pytest.mark.asyncio
     async def test_navigates_to_linkedin_jobs(self, customizer, mock_page):
         with (
+            patch(f"{MODULE}.LINKEDIN_RECOMMENDED_JOBS_MODE", False),
             patch(f"{MODULE}.async_pause"),
             patch.object(customizer, "_set_basic_search_terms", new_callable=AsyncMock),
             patch.object(
@@ -476,6 +477,7 @@ class TestSetSearchParams:
     @pytest.mark.asyncio
     async def test_calls_all_filter_setters_when_filters_open(self, customizer):
         with (
+            patch(f"{MODULE}.LINKEDIN_RECOMMENDED_JOBS_MODE", False),
             patch(f"{MODULE}.async_pause"),
             patch.object(customizer, "_set_basic_search_terms", new_callable=AsyncMock),
             patch.object(
@@ -507,6 +509,7 @@ class TestSetSearchParams:
     @pytest.mark.asyncio
     async def test_skips_filter_setters_when_filters_not_open(self, customizer):
         with (
+            patch(f"{MODULE}.LINKEDIN_RECOMMENDED_JOBS_MODE", False),
             patch(f"{MODULE}.async_pause"),
             patch.object(customizer, "_set_basic_search_terms", new_callable=AsyncMock),
             patch.object(

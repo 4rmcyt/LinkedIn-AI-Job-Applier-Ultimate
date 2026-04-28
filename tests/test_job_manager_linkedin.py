@@ -758,6 +758,7 @@ class TestEasyApply:
     async def test_delegates_to_linkedin_easy_applier(self, manager, test_job):
         mock_applier = AsyncMock()
         mock_applier.apply_to_job = AsyncMock(return_value=("Success", ""))
+        mock_applier.submitted_resume_path = "/tmp/resumes/generated.pdf"
 
         with patch(
             "src.job_manager.linkedin.job_manager_linkedin.LinkedInEasyApplier",
@@ -767,11 +768,13 @@ class TestEasyApply:
 
         assert result == ("Success", "")
         mock_applier.apply_to_job.assert_called_once_with(test_job)
+        assert manager.submitted_resume_path == "/tmp/resumes/generated.pdf"
 
     @pytest.mark.asyncio
     async def test_sets_page_on_applier(self, manager, test_job):
         mock_applier = AsyncMock()
         mock_applier.apply_to_job = AsyncMock(return_value=("Skip", ""))
+        mock_applier.submitted_resume_path = None
 
         with patch(
             "src.job_manager.linkedin.job_manager_linkedin.LinkedInEasyApplier",

@@ -73,6 +73,22 @@ class TestSetAdvancedSearchParams:
         assert customizer.apply_once_at_company is True
         assert customizer.company_blacklist == []
 
+    def test_none_list_params_default_to_empty_lists(self, customizer):
+        customizer.set_advanced_search_params(
+            {
+                "positions": ["Engineer"],
+                "locations": None,
+                "company_blacklist": None,
+                "title_blacklist": None,
+                "location_blacklist": None,
+            }
+        )
+
+        assert customizer.locations == []
+        assert customizer.company_blacklist == []
+        assert customizer.title_blacklist == []
+        assert customizer.location_blacklist == []
+
 
 class TestIsJobBlacklisted:
     def test_title_blacklisted(self, customizer):
