@@ -531,7 +531,7 @@ Contributions are welcome! If you have suggestions for improvements or find a bu
 
 ### Pull Request Rules
 
-1. One PR is one major feature or bug fix. If changes are small - you can combine them in one PR, but please don't put multiple major features/bug fixes in one PR.
+1. One PR is one major feature or bug fix. If changes are small - you can combine them in one PR, but please don't put multiple major features/bug fixes in one PR: some of that features can be acceptable, some are not, but they are in one PR so they can be accepted or rejected only together, which is not good.
 
 2. Run `uv run pytest` and make sure all tests pass. If some tests fail - fix them or fix code or provide the reason why failed tests should be skipped. PRs that break existing tests will be rejected.
 
