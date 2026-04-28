@@ -271,8 +271,6 @@ class IndeedJobManager(BaseJobManager):
                 # set the vacancy to answerer
                 if COLLECT_INFO_MODE is True:
                     self._save_interesting_job(job, score, reasoning)
-                else:
-                    self.llm_answerer_component.set_job(job.model_dump())
 
             if COLLECT_INFO_MODE:
                 logger.info(
@@ -280,6 +278,8 @@ class IndeedJobManager(BaseJobManager):
                     "interesting jobs - do not apply to the vacancy"
                 )
                 return "Ok"
+
+            self.llm_answerer_component.set_job(job.model_dump())
 
             if not EASY_APPLY_ONLY_MODE and job.apply_method == "external":
                 if TEST_MODE:

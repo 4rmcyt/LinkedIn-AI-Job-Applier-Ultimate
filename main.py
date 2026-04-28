@@ -56,7 +56,7 @@ from src.utils.runtime_control import (
     sleep_with_shutdown,
 )
 from src.utils.utils import (
-    get_first_pdf_file,
+    get_ready_made_resume,
     load_yaml_file,
     save_yaml_file,
     validate_and_prompt_resume_completion,
@@ -69,7 +69,7 @@ os.makedirs(RESUME_DIR, exist_ok=True)
 RESUME_STRUCTURED_FILE = Path(RESUME_DIR) / "structured_resume.yaml"
 RESUME_TEXT_FILE = Path(RESUME_DIR) / "resume_text.txt"
 
-READY_MADE_RESUME = get_first_pdf_file(Path(RESUME_DIR))
+READY_MADE_RESUME = get_ready_made_resume()
 
 # Global pause state for keyboard control
 paused = False
@@ -304,7 +304,7 @@ async def create_and_run_bot(
         resume_generator = ResumeGenerator(llm_answerer_component, resume_anonymizer)
         resume_generator_manager = ResumeManager(llm_api_key, style_manager, resume_generator)
 
-        if not READY_MADE_RESUME.resolve().is_file() and not os.environ.get("DASHBOARD_RUN_ID"):
+        if READY_MADE_RESUME is None and not os.environ.get("DASHBOARD_RUN_ID"):
             resume_generator_manager.choose_style()
 
         # Set search component
@@ -345,7 +345,7 @@ async def create_and_run_bot(
         await bot.set_search_parameters(search_config)
         bot.set_answerer_and_agent(llm_answerer_component, llm_agent_component, search_config)
         bot.set_resume(resume_structured, resume_text, resume_text_anonymized)
-        if not READY_MADE_RESUME.resolve().is_file():
+        if READY_MADE_RESUME is None:
             bot.set_resume_generator(resume_generator_manager)
         await bot.start_apply()
         emit_event("run_completed", "LinkedIn bot run completed successfully")

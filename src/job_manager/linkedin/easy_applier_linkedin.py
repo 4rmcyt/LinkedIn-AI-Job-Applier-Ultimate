@@ -20,7 +20,7 @@ from src.utils.browser_utils import (
     find_elements_safely,
     get_clean_text,
 )
-from src.utils.utils import async_pause, get_first_pdf_file, load_yaml_file, sanitize_text
+from src.utils.utils import async_pause, get_ready_made_resume, load_yaml_file, sanitize_text
 
 
 class LinkedInEasyApplier(BaseEasyApplier):
@@ -46,7 +46,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
         self.resume_dir = resume_dir
         self.generated_resume_dir = Path(resume_dir) / "generated_resumes"
         self.generated_cover_letter_dir = Path(cover_letter_dir) / "generated_cover_letters"
-        self.ready_made_resume_path = get_first_pdf_file(Path(resume_dir))
+        self.ready_made_resume_path = get_ready_made_resume()
         self.all_questions = self._load_questions()
         self.current_job = None
         self.test_mode = test_mode
@@ -597,20 +597,10 @@ class LinkedInEasyApplier(BaseEasyApplier):
                 # output = self.gpt_answerer.resume_or_cover(container_text)
                 if "resume" in container_text:
                     logger.info("Uploading resume")
-                    # if await self._detect_already_selected_resume(parent):
-                    #     logger.info("There is already selected resume, skipping upload")
-                    #     continue
-                    if self.resume_generator_manager is not None:
-                        await self._create_and_upload_resume(upload_element, job)
-                    elif (
-                        self.ready_made_resume_path is not None
-                        and self.ready_made_resume_path.resolve().is_file()
-                    ):
-                        abs_path = os.path.abspath(str(self.ready_made_resume_path.resolve()))
+                    if self.ready_made_resume_path is not None:
+                        abs_path = os.path.abspath(str(self.ready_made_resume_path))
                         await upload_element.set_input_files(abs_path)
-                        logger.info(
-                            f"Resume uploaded from path: {self.ready_made_resume_path.resolve()}"
-                        )
+                        logger.info(f"Resume uploaded from path: {self.ready_made_resume_path}")
                         await async_pause(2, 3)
                     else:
                         await self._create_and_upload_resume(upload_element, job)
@@ -1779,7 +1769,7 @@ if __name__ == "__main__":
                 COVER_LETTER_DIR,
                 TEST_MODE,
             )
-            if not easy_applier.ready_made_resume_path.is_file():
+            if easy_applier.ready_made_resume_path is None:
                 resume_generator_manager.choose_style()
 
             # Navigate to job page

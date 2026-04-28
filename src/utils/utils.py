@@ -12,6 +12,11 @@ import yaml
 
 from config.constants import APP_CONFIG_FILE
 
+try:
+    from config.app_config import READY_MADE_RESUME_PATH
+except ImportError:
+    READY_MADE_RESUME_PATH = None
+
 # Import browser configuration
 from config.logger_config import logger
 
@@ -106,14 +111,12 @@ def sanitize_text(text: str) -> str:
     return sanitized_text
 
 
-def get_first_pdf_file(resume_dir: Path) -> Path:
-    """Get the first PDF file found in the resume directory, or default to resume.pdf"""
-    pdf_files = list(resume_dir.glob("*.pdf"))
-    if len(pdf_files) > 1:
-        logger.warning(
-            f"Multiple PDF files found in {resume_dir}. Selecting the first one: {pdf_files[0].name}"
-        )
-    return pdf_files[0] if pdf_files else resume_dir / "resume.pdf"
+def get_ready_made_resume() -> Path | None:
+    """Resolve the ready-made resume path and return it if it exists as a file, else None."""
+    if not READY_MADE_RESUME_PATH:
+        return None
+    resolved = Path(READY_MADE_RESUME_PATH).resolve()
+    return resolved if resolved.is_file() else None
 
 
 def validate_structured_resume_fields(structured_resume: Dict[str, Any]) -> List[str]:

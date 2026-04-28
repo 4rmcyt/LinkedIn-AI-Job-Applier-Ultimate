@@ -68,6 +68,13 @@ This is useful if you want bot to automatically restart the search every 24 hour
 """
 RESTART_EVERY_DAY = False
 """
+Path to a ready-made resume PDF to use for all applications.
+If empty string - a new resume is generated for each vacancy.
+If set - the file at this path is used as-is for every application.
+Example: data/resumes/resume.pdf
+"""
+READY_MADE_RESUME_PATH = ""
+"""
 Resume style to use for generated resumes.
 If set - skips the interactive style selection prompt.
 If None - prompts user to select a style interactively.

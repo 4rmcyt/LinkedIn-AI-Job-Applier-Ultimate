@@ -225,6 +225,7 @@ This project enhances the original codebase with several powerful new features:
     *   `LLM_MODEL_TYPE`: Choose your LLM provider (e.g., "gemini").
     *   `EASY_APPLY_MODEL`: Specify the exact model to use for Easy Apply vacancies (e.g., "gemini-2.0-flash").
     *   `APPLY_AGENT_MODEL`: *(LinkedIn only)* Specify the exact agent model to use for Non-Easy Apply vacancies (e.g., "gemini-2.5-flash").
+    *   `READY_MADE_RESUME_PATH`: Path to a ready-made resume PDF (e.g. `"data/resumes/resume.pdf"`). If set, the bot uses this file for every application instead of generating a new resume. If empty, a tailored resume is generated for each vacancy.
     *   `RESUME_STYLE`: Resume style to use for generated resumes. If set, skips the interactive style selection prompt. If `None`, prompts interactively (or falls back to default in Docker/headless mode). Possible values: `"FAANGPath"`, `"Cloyola Grey"`, `"Modern Blue"`, `"Modern Grey"`, `"Default"`, `"Clean Blue"`.
 
     **Supported LLM models**
@@ -280,8 +281,8 @@ This project enhances the original codebase with several powerful new features:
 
 7. **Resume generation:**
     You have two options:
-    *   **Automatic Creation (recommended):** Don't put your ready-made resume in `data/resumes/` and app will create a new resume for every job it applies to. Using this mode, the bot can create resumes tailored to each specific vacancy. Generated resume will be stored in `data/resumes/generated_resumes/` folder. Some of resume sections are the same for each vacancy (e.g. header), so bot generates these sections once and then stores them in `data/resumes/templates/<section_name>.html`. Netx time bot will load these sections from corresponding file instead of generation. If you think that some of these sections were generated incorrectly - just delete corresponding files so LLM will re-generate them.
-    *   **Ready Made Resume (recommended):** Take your ready-made resume in PDF format and put it into `data/resumes/` The bot will use this resume for applying jobs. If you have multiple PDF files in `data/resumes/` folder - bot will use the first one found.
+    *   **Automatic Creation (recommended):** Leave `READY_MADE_RESUME_PATH` empty in `config/app_config.py` and the bot will generate a new resume tailored to each vacancy. Generated resumes are stored in `data/resumes/generated_resumes/`. Sections that are the same across vacancies (e.g. header) are generated once and cached in `data/resumes/templates/<section_name>.html`. Delete a cached file to force re-generation.
+    *   **Ready-Made Resume:** Set `READY_MADE_RESUME_PATH` in `config/app_config.py` to the path of your resume PDF (e.g. `"data/resumes/resume.pdf"`). The bot will use that file for every application.
 
     **I also recommend to test resume generation before starting applying jobs**.
 
@@ -296,7 +297,7 @@ This project enhances the original codebase with several powerful new features:
     4.  Select resume style (first style FAANGPath is recommended).
     5.  Output file is `test_generated_resume.pdf` in root directory
     6.  Carefully read the resume, look for **No info**, **N/A** or **None** text in it. If you find it - that means that some critical information in your resume text is missing and you must add it to your resume file(s) and repeat the resume creation process.
-    7.  If you are satisfied with the quality of your resume - you can rename the output file to `resume.pdf` and move it to the `data/resumes/` folder - the bot will use this resume by default.
+    7.  If you are satisfied with the quality of your resume - move the output file to any path you like (e.g. `data/resumes/resume.pdf`) and set `READY_MADE_RESUME_PATH` in `config/app_config.py` to that path. The bot will use it for every application.
 
 ## ▶️ Usage
 

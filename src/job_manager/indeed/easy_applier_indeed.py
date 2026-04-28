@@ -22,7 +22,7 @@ from src.utils.browser_utils import (
     get_current_page_testid,
     wait_for_page_transition,
 )
-from src.utils.utils import async_pause, get_first_pdf_file, load_yaml_file
+from src.utils.utils import async_pause, get_ready_made_resume, load_yaml_file
 
 INDEED_APPLY_BUTTON_SELECTOR = (
     "span.indeed-apply-status-not-applied button, "
@@ -64,7 +64,7 @@ class IndeedEasyApplier(BaseEasyApplier):
         self.all_questions: List[Question] = self._load_questions()
         self.previous_question_texts: List[str] = []
         self.generated_resume_dir = Path(resume_dir) / "generated_resumes"
-        self.ready_made_resume_path = get_first_pdf_file(Path(resume_dir))
+        self.ready_made_resume_path = get_ready_made_resume()
 
         logger.info("IndeedEasyApplier initialized")
 
@@ -335,11 +335,8 @@ class IndeedEasyApplier(BaseEasyApplier):
                 logger.warning("Resume file input not found on resume selection page")
                 return
 
-            if (
-                self.ready_made_resume_path is not None
-                and self.ready_made_resume_path.resolve().is_file()
-            ):
-                abs_path = os.path.abspath(str(self.ready_made_resume_path.resolve()))
+            if self.ready_made_resume_path is not None:
+                abs_path = os.path.abspath(str(self.ready_made_resume_path))
                 await file_input.set_input_files(abs_path)
                 logger.info(f"Uploaded ready-made resume: {abs_path}")
             else:
@@ -1161,7 +1158,7 @@ if __name__ == "__main__":
                 COVER_LETTER_DIR,
                 test_mode=True,
             )
-            if not easy_applier.ready_made_resume_path.is_file():
+            if easy_applier.ready_made_resume_path is None:
                 resume_generator_manager.choose_style()
 
             # Test the apply_to_job method

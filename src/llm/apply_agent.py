@@ -11,7 +11,7 @@ from config.constants import CUSTOM_COST_PER_TOKEN, LOG_DIR, RESUME_DIR, cost_pe
 from config.logger_config import logger
 from src.dashboard.runtime import emit_event
 from src.pydantic_models.log_models import LLMCall
-from src.utils.utils import append_yaml_file, get_first_pdf_file
+from src.utils.utils import append_yaml_file, get_ready_made_resume
 
 
 class ApplyAgent:
@@ -82,7 +82,7 @@ class ApplyAgent:
 
     async def apply(self, job_url: str) -> None:
         """Apply to the job using AI Agent"""
-        resume_pdf_path = str(get_first_pdf_file(Path(RESUME_DIR)))
+        resume_pdf_path = str(get_ready_made_resume())
         emit_event("agent_apply_started", "External apply agent started", url=job_url)
 
         tools = Tools()
