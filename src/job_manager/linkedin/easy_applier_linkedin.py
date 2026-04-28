@@ -1,3 +1,4 @@
+import base64
 import os
 import traceback
 from pathlib import Path
@@ -8,6 +9,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
+from config.constants import PHOTO_DIR
 from config.logger_config import logger
 from src.dashboard.runtime import StopRequested, capture_page_screenshot, emit_event
 from src.job_manager.easy_applier import BaseEasyApplier, NoInfoException
@@ -20,7 +22,13 @@ from src.utils.browser_utils import (
     find_elements_safely,
     get_clean_text,
 )
-from src.utils.utils import async_pause, get_ready_made_resume, load_yaml_file, sanitize_text
+from src.utils.utils import (
+    async_pause,
+    get_ready_made_photo,
+    get_ready_made_resume,
+    load_yaml_file,
+    sanitize_text,
+)
 
 
 class LinkedInEasyApplier(BaseEasyApplier):
@@ -45,8 +53,10 @@ class LinkedInEasyApplier(BaseEasyApplier):
         self.answers_file = answers_file
         self.resume_dir = resume_dir
         self.generated_resume_dir = Path(resume_dir) / "generated_resumes"
+        self.generated_photo_dir = Path(PHOTO_DIR)
         self.generated_cover_letter_dir = Path(cover_letter_dir) / "generated_cover_letters"
         self.ready_made_resume_path = get_ready_made_resume()
+        self.ready_made_photo_path = get_ready_made_photo()
         self.all_questions = self._load_questions()
         self.current_job = None
         self.submitted_resume_path = None
@@ -595,10 +605,17 @@ class LinkedInEasyApplier(BaseEasyApplier):
                 # Mark this file input as processed before generating files
                 processed_file_inputs.add(file_input_id)
 
+                accept_types = (await upload_element.get_attribute("accept") or "").lower()
+
                 # output = self.gpt_answerer.resume_or_cover(container_text)
-                if "resume" in container_text:
+                if "image/" in accept_types or "photo" in container_text:
+                    logger.info("Uploading photo")
+                    await self._create_and_upload_photo(upload_element, job)
+                elif "resume" in container_text:
                     logger.info("Uploading resume")
-                    if self.ready_made_resume_path is not None:
+                    if self.resume_generator_manager is not None:
+                        await self._create_and_upload_resume(upload_element, job)
+                    elif self.ready_made_resume_path is not None:
                         abs_path = os.path.abspath(str(self.ready_made_resume_path))
                         await upload_element.set_input_files(abs_path)
                         self.submitted_resume_path = abs_path
@@ -616,6 +633,90 @@ class LinkedInEasyApplier(BaseEasyApplier):
                 continue
 
         logger.debug("Finished handling upload fields")
+
+    async def _create_and_upload_photo(self, element: Any, job: Job) -> None:
+        """Upload a configured profile photo or fall back to the visible LinkedIn avatar."""
+        allowed_extensions = {".jpg", ".jpeg", ".png", ".gif"}
+        max_file_size = 2 * 1024 * 1024
+
+        if self.ready_made_photo_path is not None:
+            photo_path = self.ready_made_photo_path.resolve()
+            if photo_path.suffix.lower() not in allowed_extensions:
+                raise ValueError(
+                    "Photo file format is not allowed. Only JPG, JPEG, PNG, and GIF formats are supported."
+                )
+            if photo_path.stat().st_size > max_file_size:
+                raise ValueError("Photo file size exceeds the maximum limit of 2 MB.")
+
+            abs_path = os.path.abspath(str(photo_path))
+            await element.set_input_files(abs_path)
+            await async_pause(1, 2)
+            logger.info(f"Photo uploaded from path: {photo_path}")
+            return
+
+        os.makedirs(self.generated_photo_dir, exist_ok=True)
+
+        image_selectors = [
+            ".jobs-easy-apply-modal .artdeco-entity-lockup__image--type-circle img",
+            ".jobs-easy-apply-modal img[src*='profile-displayphoto']",
+            ".jobs-easy-apply-modal img[title][src]",
+        ]
+
+        image_src = ""
+        for selector in image_selectors:
+            image = await find_element_safely(self.page, selector, "css selector")
+            if not image:
+                continue
+            image_src = (await image.get_attribute("src") or "").strip()
+            if image_src:
+                break
+
+        if not image_src:
+            raise ValueError("Could not locate a profile photo source for the upload field")
+
+        data_url = await self.page.evaluate(
+            """async (src) => {
+                const response = await fetch(src, { credentials: 'include' });
+                if (!response.ok) {
+                    throw new Error(`Photo fetch failed with status ${response.status}`);
+                }
+                const blob = await response.blob();
+                return await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.onerror = () => reject(reader.error || new Error('Photo read failed'));
+                    reader.readAsDataURL(blob);
+                });
+            }""",
+            image_src,
+        )
+
+        if not isinstance(data_url, str) or not data_url.startswith("data:image/"):
+            raise ValueError("Profile photo fetch did not return an image data URL")
+
+        header, encoded = data_url.split(",", 1)
+        mime_type = header.split(";", 1)[0].split(":", 1)[1].lower()
+        extension_map = {
+            "image/jpeg": ".jpg",
+            "image/jpg": ".jpg",
+            "image/png": ".png",
+            "image/gif": ".gif",
+        }
+        extension = extension_map.get(mime_type)
+        if extension is None:
+            raise ValueError(f"Unsupported photo MIME type for upload: {mime_type}")
+
+        file_path = self.generated_photo_dir / f"PHOTO_{job.company_name}_{job.job_title}{extension}"
+        file_bytes = base64.b64decode(encoded)
+        if len(file_bytes) > max_file_size:
+            raise ValueError("Profile photo exceeds LinkedIn 2 MB upload limit")
+
+        with open(file_path, "wb") as file_handle:
+            file_handle.write(file_bytes)
+
+        await element.set_input_files(os.path.abspath(str(file_path)))
+        await async_pause(1, 2)
+        logger.info(f"Photo uploaded from generated path: {file_path}")
 
     async def _detect_already_selected_resume(self, parent: Any) -> bool:
         """Detect if the is already selected resume in Easy Apply form"""
