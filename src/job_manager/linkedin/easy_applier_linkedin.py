@@ -78,7 +78,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
             )
         return is_redirected
 
-    async def apply_to_job(self, job: Job) -> None:
+    async def apply_to_job(self, job: Job) -> Tuple[Tuple[str, str], Any]:
         """
         Starts the process of applying to a job (async).
         :param job: A job object with the job details.
@@ -96,10 +96,11 @@ class LinkedInEasyApplier(BaseEasyApplier):
         # Check for Easy Apply daily limit before attempting to apply
         if await self._check_easy_apply_limit():
             logger.warning("Easy Apply daily limit reached. Skipping job application.")
-            return "Limit", "Easy Apply daily limit reached. Skipping job application."
+            return ("Limit", "Easy Apply daily limit reached. Skipping job application."), None
 
         try:
-            return await self.job_easy_apply(job)
+            apply_result = await self.job_easy_apply(job)
+            return apply_result, self.submitted_resume_path
         except StopRequested:
             raise
         except Exception as e:

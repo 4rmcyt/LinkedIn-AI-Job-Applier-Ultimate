@@ -363,8 +363,7 @@ class LinkedInJobManager(BaseJobManager):
             TEST_MODE,
         )
         easy_applier_component.set_page(self.page)
-        apply_result = await easy_applier_component.apply_to_job(job)
-        self.submitted_resume_path = easy_applier_component.submitted_resume_path
+        apply_result, self.submitted_resume_path = await easy_applier_component.apply_to_job(job)
         return apply_result
 
     async def _scroll_to_load_jobs(self):

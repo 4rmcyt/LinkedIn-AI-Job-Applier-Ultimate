@@ -153,15 +153,16 @@ class TestApplyToJob:
     async def test_skips_when_limit_reached(self, applier, test_job):
         applier._check_easy_apply_limit = AsyncMock(return_value=True)
         result = await applier.apply_to_job(test_job)
-        assert result[0] == "Limit"
+        assert result[0][0] == "Limit"
 
     @pytest.mark.asyncio
     async def test_delegates_to_job_easy_apply(self, applier, test_job):
         applier._check_easy_apply_limit = AsyncMock(return_value=False)
+        applier.submitted_resume_path = None
         applier.job_easy_apply = AsyncMock(return_value=("Success", ""))
         with patch("src.job_manager.linkedin.easy_applier_linkedin.emit_event"):
             result = await applier.apply_to_job(test_job)
-        assert result == ("Success", "")
+        assert result == (("Success", ""), None)
 
     @pytest.mark.asyncio
     async def test_reraises_exception(self, applier, test_job):
