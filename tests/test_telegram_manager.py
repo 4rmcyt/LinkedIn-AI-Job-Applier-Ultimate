@@ -531,7 +531,7 @@ class TestAsyncTelegramSink:
         with patch("src.telegram.telegram_error_handler.Bot"):
             sink = AsyncTelegramSink()
 
-            assert sink.max_retries == 6
+            assert sink.max_retries == 4
             assert sink.cooldown == 60
 
     @pytest.mark.asyncio

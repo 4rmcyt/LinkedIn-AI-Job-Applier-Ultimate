@@ -54,7 +54,7 @@ class AsyncTelegramSink:
 
     def __init__(
         self,
-        max_retries: int = 6,
+        max_retries: int = 4,
         cooldown: int = 60,
     ):
         telegram_bot_token = dotenv.dotenv_values(".env").get("tg_token")
@@ -73,7 +73,7 @@ class AsyncTelegramSink:
     async def _send_with_retry(self, message: str) -> bool:
         """Try to send a message. In case of an error, we wait exponentially longer."""
         base_delay = 1
-        # ограничиваем максимальную длину сообщения, чтобы избежать ошибки Telegram
+        # Telegram allows up to 4096 characters per message
         message_ = f"Error:\n```{message[:4050]}```"
         for attempt in range(self.max_retries):
             try:
