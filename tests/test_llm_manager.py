@@ -112,6 +112,25 @@ class TestGeminiModel:
         assert model.google_api_key == mock_api_key
         mock_chat_gemini.assert_called_once()
 
+
+class TestLinkedInMessageReplyContext:
+    def test_build_apology_context_for_old_personal_message_does_not_mention_opportunity(self):
+        conversation = {"timestamp": "Aug 9, 2025"}
+        classification = {"category": "personal_message"}
+
+        context = GPTAnswerer._build_apology_context(conversation, classification)
+
+        assert "busy with multiple projects" in context
+        assert "opportunity is still available" not in context
+
+    def test_build_apology_context_for_old_job_message_mentions_opportunity(self):
+        conversation = {"timestamp": "Aug 9, 2025"}
+        classification = {"category": "job_offer_to_me"}
+
+        context = GPTAnswerer._build_apology_context(conversation, classification)
+
+        assert "opportunity is still available" in context
+
     @patch("langchain_google_genai.ChatGoogleGenerativeAI")
     def test_gemini_model_invoke(self, mock_chat_gemini, mock_api_key, mock_llm_proxy):
         """Test GeminiModel invoke method"""
