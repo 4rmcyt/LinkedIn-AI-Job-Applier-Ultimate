@@ -32,6 +32,7 @@ SKIPPED_FILE = ROOT_DIR / OUTPUT_DIR / "skipped.yaml"
 FAILED_FILE = ROOT_DIR / OUTPUT_DIR / "failed.yaml"
 INTERESTING_FILE = ROOT_DIR / OUTPUT_DIR / "interesting_jobs.yaml"
 LLM_CALLS_FILE = ROOT_DIR / LOG_DIR / "llm_api_calls.yaml"
+MESSAGES_FILE = ROOT_DIR / OUTPUT_DIR / "messages_dry_run.yaml"
 EDITABLE_APP_CONFIG_KEYS = {
     "MAX_APPLIES_NUM",
     "HEADLESS_MODE",
@@ -402,6 +403,23 @@ def get_summary() -> Dict[str, Any]:
 
 def get_jobs(status: str | None = None, search: str | None = None) -> List[Dict[str, Any]]:
     return _apply_job_filters(_load_jobs_board(), status=status, search=search)
+
+
+def get_messages(
+    category: str | None = None,
+    status: str | None = None,
+) -> List[Dict[str, Any]]:
+    entries = _read_yaml(MESSAGES_FILE, [])
+    if not isinstance(entries, list):
+        entries = []
+
+    if category:
+        entries = [e for e in entries if e.get("category") == category]
+    if status:
+        entries = [e for e in entries if e.get("processing_status") == status]
+
+    entries.sort(key=lambda e: e.get("updated_at") or "", reverse=True)
+    return entries
 
 
 def get_live_state() -> Dict[str, Any]:

@@ -14,6 +14,7 @@ from src.dashboard.data_service import (
     get_app_config,
     get_jobs,
     get_live_state,
+    get_messages,
     get_run_detail,
     get_run_events,
     get_run_history,
@@ -81,6 +82,11 @@ async def run_detail_page(run_id: str) -> HTMLResponse:
     return HTMLResponse((STATIC_DIR / "index.html").read_text(encoding="utf-8"))
 
 
+@app.get("/messages", response_class=HTMLResponse)
+async def messages_page() -> HTMLResponse:
+    return HTMLResponse((STATIC_DIR / "messages.html").read_text(encoding="utf-8"))
+
+
 @app.get("/api/meta")
 async def meta() -> JSONResponse:
     return JSONResponse({"site_name": SITE_NAME})
@@ -97,6 +103,14 @@ async def jobs(
     search: str | None = Query(default=None),
 ) -> JSONResponse:
     return JSONResponse({"jobs": get_jobs(status=status, search=search)})
+
+
+@app.get("/api/messages")
+async def messages(
+    category: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+) -> JSONResponse:
+    return JSONResponse({"messages": get_messages(category=category, status=status)})
 
 
 @app.get("/api/live")
