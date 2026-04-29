@@ -74,6 +74,7 @@ class IndeedJobManager(BaseJobManager):
         self.applies_num = 0
         self.success_applies_num = 0
         self.resume_recommendations = ""
+        self.submitted_resume_path = None
 
         logger.info("IndeedJobManager successfully initialized")
 
@@ -214,6 +215,7 @@ class IndeedJobManager(BaseJobManager):
 
     async def apply_job(self, vacancy: Any) -> str:
         """Process a single Indeed job card"""
+        evaluation = {"interest_score": None, "interest_reason": None, "skills": None}
         job = await self._extract_job_from_card(vacancy)
         if job is None:
             return "Skip"
@@ -223,17 +225,21 @@ class IndeedJobManager(BaseJobManager):
             logger.info(
                 f"Skipping already seen job: {job.job_title} at {job.company_name} ({reason})"
             )
-            await self._handle_apply_result(("Skip", reason), job)
+            await self._handle_apply_result(("Skip", reason), job, evaluation=evaluation)
             return "Skip"
 
         if self.search_component.is_job_blacklisted(job.job_title, job.company_name, job.location):
             logger.info(f"Skipping blacklisted job: {job.job_title} at {job.company_name}")
-            await self._handle_apply_result(("Skip", "Vacancy in the blacklist"), job)
+            await self._handle_apply_result(
+                ("Skip", "Vacancy in the blacklist"), job, evaluation=evaluation
+            )
             return "Skip"
 
         if job.apply_method != "easy_apply" and EASY_APPLY_ONLY_MODE and not COLLECT_INFO_MODE:
             logger.info(f"Skipping external apply job: {job.job_title} at {job.company_name}")
-            await self._handle_apply_result(("Skip", "External apply not allowed"), job)
+            await self._handle_apply_result(
+                ("Skip", "External apply not allowed"), job, evaluation=evaluation
+            )
             return "Skip"
 
         minimum_job_time = time.time() + MINIMUM_WAIT_TIME_SEC
@@ -254,13 +260,16 @@ class IndeedJobManager(BaseJobManager):
                 interest_result = self.llm_answerer_component.job_is_interesting(job.model_dump())
                 if interest_result is None:
                     apply_result = ("Error", "Error while determining if job is interesting")
-                    await self._handle_apply_result(apply_result, job)
+                    await self._handle_apply_result(apply_result, job, evaluation=evaluation)
                     return "Error"
                 job_is_interesting, score, reasoning = interest_result
 
+            evaluation["interest_score"] = int(score) if str(score).isdigit() else 0
+            evaluation["interest_reason"] = reasoning
+
             if not job_is_interesting:
                 logger.info(f"Skipping uninteresting job: {job.job_title} at {job.company_name}")
-                await self._handle_apply_result(("Skip", reasoning), job)
+                await self._handle_apply_result(("Skip", reasoning), job, evaluation=evaluation)
                 return "Skip"
             # update the list of required skills for the vacancy and save job info to file
             # only if the vacancy was scored and considered interesting
@@ -268,6 +277,7 @@ class IndeedJobManager(BaseJobManager):
                 # extract skills from the vacancy
                 job.skills = self._extract_skills_from_vacancy(job)
                 self._update_skill_stat(self.job_key_skills)
+                evaluation["skills"] = self.job_key_skills
                 # set the vacancy to answerer
                 if COLLECT_INFO_MODE is True:
                     self._save_interesting_job(job, score, reasoning)
@@ -280,6 +290,7 @@ class IndeedJobManager(BaseJobManager):
                 return "Ok"
 
             self.llm_answerer_component.set_job(job.model_dump())
+            self.submitted_resume_path = None
 
             if not EASY_APPLY_ONLY_MODE and job.apply_method == "external":
                 if TEST_MODE:
@@ -290,10 +301,12 @@ class IndeedJobManager(BaseJobManager):
             else:
                 apply_result = await self.easy_apply(job, new_page)
 
+            if self.submitted_resume_path:
+                evaluation["submitted_resume_path"] = self.submitted_resume_path
             result, reason = apply_result
             if result == "Skip" and reason.startswith("Could not"):
                 self._collect_job_info(job.job_title, job.company_name, job.url, reason)
-            await self._handle_apply_result(apply_result, job)
+            await self._handle_apply_result(apply_result, job, evaluation=evaluation)
             if self.success_applies_num >= self.max_applies_num:
                 logger.info(
                     f"The maximum number of applications has been reached: "
@@ -312,7 +325,7 @@ class IndeedJobManager(BaseJobManager):
 
     async def easy_apply(self, job: Job, page: Any = None) -> Tuple[str, str]:
         """Delegate application to IndeedEasyApplier"""
-        easy_applier = IndeedEasyApplier(
+        easy_applier_component = IndeedEasyApplier(
             page=page,
             gpt_answerer=self.llm_answerer_component,
             resume_anonymizer=self.resume_anonymizer,
@@ -323,7 +336,9 @@ class IndeedJobManager(BaseJobManager):
             cover_letter_dir=Path(COVER_LETTER_DIR),
             test_mode=TEST_MODE,
         )
-        return await easy_applier.apply_to_job(job)
+        apply_result = await easy_applier_component.apply_to_job(job)
+        self.submitted_resume_path = easy_applier_component.submitted_resume_path
+        return apply_result
 
     # ------------------------------------------------------------------
     # Internal helpers

@@ -238,7 +238,6 @@ class LinkedInJobManager(BaseJobManager):
             company_name = job.company_name
             company_job_title = job.job_title
             logger.info(f"Found a vacancy {company_job_title}")
-            self.submitted_resume_path = None
             # if the vacancy has not been seen yet and the company is not in the blacklist
             # - start the process of applying to the vacancy
             if not job.is_valid_for_application():
@@ -311,6 +310,7 @@ class LinkedInJobManager(BaseJobManager):
                     return "Ok"
 
                 self.llm_answerer_component.set_job(job.model_dump())
+                self.submitted_resume_path = None
 
                 if EASY_APPLY_ONLY_MODE is False:
                     apply_url = await self._check_apply_button()
