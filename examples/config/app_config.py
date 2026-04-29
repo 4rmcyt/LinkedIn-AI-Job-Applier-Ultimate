@@ -75,6 +75,11 @@ Example: data/resumes/resume.pdf
 """
 READY_MADE_RESUME_PATH = ""
 """
+Optional path to a photo file for LinkedIn Easy Apply image upload fields.
+If empty string - the bot will try to reuse your visible LinkedIn profile photo.
+"""
+READY_MADE_PHOTO_PATH = ""
+"""
 Resume style to use for generated resumes.
 If set - skips the interactive style selection prompt.
 If None - prompts user to select a style interactively.

@@ -17,6 +17,11 @@ try:
 except ImportError:
     READY_MADE_RESUME_PATH = None
 
+try:
+    from config.app_config import READY_MADE_PHOTO_PATH
+except ImportError:
+    READY_MADE_PHOTO_PATH = None
+
 # Import browser configuration
 from config.logger_config import logger
 
@@ -116,6 +121,14 @@ def get_ready_made_resume() -> Path | None:
     if not READY_MADE_RESUME_PATH:
         return None
     resolved = Path(READY_MADE_RESUME_PATH).resolve()
+    return resolved if resolved.is_file() else None
+
+
+def get_ready_made_photo() -> Path | None:
+    """Resolve the ready-made photo path and return it if it exists as a file, else None."""
+    if not READY_MADE_PHOTO_PATH:
+        return None
+    resolved = Path(READY_MADE_PHOTO_PATH).resolve()
     return resolved if resolved.is_file() else None
 
 

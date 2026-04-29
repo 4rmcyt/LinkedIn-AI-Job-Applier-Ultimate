@@ -37,6 +37,7 @@ data/cover_letters/*
 data/output/*
 data/resumes/*
 data/debug/*
+data/photo/*
 src/telegram/error_cache.yaml
 prev_err_msg.yaml
 logs/*

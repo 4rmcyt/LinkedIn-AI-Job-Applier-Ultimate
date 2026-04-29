@@ -48,19 +48,22 @@ def applier(mock_page, mock_gpt_answerer, mock_resume_anonymizer, tmp_path):
         "src.job_manager.linkedin.easy_applier_linkedin.get_ready_made_resume", return_value=None
     ):
         with patch(
-            "src.job_manager.linkedin.easy_applier_linkedin.load_yaml_file", return_value=None
+            "src.job_manager.linkedin.easy_applier_linkedin.get_ready_made_photo", return_value=None
         ):
-            inst = LinkedInEasyApplier(
-                page=mock_page,
-                gpt_answerer=mock_gpt_answerer,
-                resume_anonymizer=mock_resume_anonymizer,
-                resume_generator_manager=AsyncMock(),
-                pause_checker=None,
-                answers_file=answers_file,
-                resume_dir=resume_dir,
-                cover_letter_dir=cover_dir,
-                test_mode=False,
-            )
+            with patch(
+                "src.job_manager.linkedin.easy_applier_linkedin.load_yaml_file", return_value=None
+            ):
+                inst = LinkedInEasyApplier(
+                    page=mock_page,
+                    gpt_answerer=mock_gpt_answerer,
+                    resume_anonymizer=mock_resume_anonymizer,
+                    resume_generator_manager=AsyncMock(),
+                    pause_checker=None,
+                    answers_file=answers_file,
+                    resume_dir=resume_dir,
+                    cover_letter_dir=cover_dir,
+                    test_mode=False,
+                )
     inst.current_job = Job(job_title="Engineer", company_name="TestCorp", url=LINKEDIN_JOB_URL)
     return inst
 
@@ -373,6 +376,75 @@ class TestUploadFields:
         expected_path = os.path.abspath(str(ready_made_resume.resolve()))
         upload_element.set_input_files.assert_called_once_with(expected_path)
         assert applier.submitted_resume_path == expected_path
+
+    @pytest.mark.asyncio
+    async def test_uploads_photo_when_image_file_input_is_detected(self, applier):
+        upload_element = AsyncMock()
+
+        async def get_attribute_side_effect(name):
+            if name == "id":
+                return "photo-upload"
+            if name == "accept":
+                return "image/jpg,image/jpeg,image/gif,image/png"
+            return None
+
+        upload_element.get_attribute.side_effect = get_attribute_side_effect
+        upload_element.evaluate = AsyncMock()
+
+        parent = AsyncMock()
+        parent.text_content = AsyncMock(return_value="Photo")
+        upload_element.locator = MagicMock(return_value=MagicMock(first=parent))
+
+        element = MagicMock()
+        upload_locator = MagicMock()
+        upload_locator.all = AsyncMock(return_value=[upload_element])
+        element.locator = MagicMock(return_value=upload_locator)
+
+        applier._create_and_upload_photo = AsyncMock()
+        job = Job(job_title="Engineer", company_name="Tech")
+
+        with patch(
+            "src.job_manager.linkedin.easy_applier_linkedin.find_element_safely",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            await applier._handle_upload_fields(element, job, set())
+
+        applier._create_and_upload_photo.assert_called_once_with(upload_element, job)
+
+
+class TestCreateAndUploadPhoto:
+    @pytest.mark.asyncio
+    async def test_uploads_ready_made_photo_when_configured(self, applier, tmp_path):
+        ready_made_photo = tmp_path / "profile.jpg"
+        ready_made_photo.write_bytes(b"photo-bytes")
+        applier.ready_made_photo_path = ready_made_photo
+
+        upload_element = AsyncMock()
+        upload_element.set_input_files = AsyncMock()
+        job = Job(job_title="Engineer", company_name="Tech")
+
+        with patch(
+            "src.job_manager.linkedin.easy_applier_linkedin.async_pause",
+            new_callable=AsyncMock,
+        ):
+            await applier._create_and_upload_photo(upload_element, job)
+
+        upload_element.set_input_files.assert_called_once_with(
+            os.path.abspath(str(ready_made_photo.resolve()))
+        )
+
+    @pytest.mark.asyncio
+    async def test_rejects_ready_made_photo_with_unsupported_extension(self, applier, tmp_path):
+        ready_made_photo = tmp_path / "profile.bmp"
+        ready_made_photo.write_bytes(b"photo-bytes")
+        applier.ready_made_photo_path = ready_made_photo
+
+        upload_element = AsyncMock()
+        job = Job(job_title="Engineer", company_name="Tech")
+
+        with pytest.raises(ValueError, match="Photo file format is not allowed"):
+            await applier._create_and_upload_photo(upload_element, job)
 
 
 class TestDeduplicateQuestionText:
