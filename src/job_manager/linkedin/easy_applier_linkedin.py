@@ -597,13 +597,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
                 # output = self.gpt_answerer.resume_or_cover(container_text)
                 if "resume" in container_text:
                     logger.info("Uploading resume")
-                    if self.ready_made_resume_path is not None:
-                        abs_path = os.path.abspath(str(self.ready_made_resume_path))
-                        await upload_element.set_input_files(abs_path)
-                        logger.info(f"Resume uploaded from path: {self.ready_made_resume_path}")
-                        await async_pause(2, 3)
-                    else:
-                        await self._create_and_upload_resume(upload_element, job)
+                    await self._create_and_upload_resume(upload_element, job)
                 elif "cover" in container_text:
                     logger.info("Uploading cover letter")
                     await self._create_and_upload_cover_letter(upload_element, job)
@@ -1710,7 +1704,7 @@ if __name__ == "__main__":
         logger.info("Starting LinkedInEasyApplier test...")
 
         # Test job URL
-        job_url = "https://www.linkedin.com/jobs/view/4399548757"
+        job_url = "https://www.linkedin.com/jobs/view/4406500544/"
         # Initialize Playwright browser
         try:
             browser, context, page = await create_playwright_browser()
@@ -1750,7 +1744,7 @@ if __name__ == "__main__":
             resume_text = resume_anonymizer.anonymize_text(resume_text)
 
             gpt_answerer.set_resume(resume_structured, resume_text)
-            gpt_answerer.set_job(test_job, is_test=True)
+            gpt_answerer.set_job(test_job.model_dump(), is_test=True)
 
             # Initialize resume generator manager (mock for testing)
             style_manager = StyleManager()

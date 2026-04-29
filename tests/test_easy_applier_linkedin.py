@@ -1,6 +1,5 @@
 """Tests for src/job_manager/linkedin/easy_applier_linkedin.py"""
 
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -45,7 +44,7 @@ def applier(mock_page, mock_gpt_answerer, mock_resume_anonymizer, tmp_path):
     answers_file = tmp_path / "answers.yaml"
 
     with patch(
-        "src.job_manager.linkedin.easy_applier_linkedin.get_first_pdf_file", return_value=None
+        "src.job_manager.linkedin.easy_applier_linkedin.get_ready_made_resume", return_value=None
     ):
         with patch(
             "src.job_manager.linkedin.easy_applier_linkedin.load_yaml_file", return_value=None
@@ -500,14 +499,20 @@ class TestTextboxCaching:
     @pytest.mark.asyncio
     async def test_reuses_cached_answer_when_field_type_changed(self, applier):
         text_field = AsyncMock()
-        text_field.get_attribute = AsyncMock(side_effect=lambda attr: "text" if attr == "type" else None)
+        text_field.get_attribute = AsyncMock(
+            side_effect=lambda attr: "text" if attr == "type" else None
+        )
         text_field.fill = AsyncMock()
 
         label = AsyncMock()
         label.text_content = AsyncMock(return_value="Email Address")
 
         applier.all_questions = [
-            Question(question="email address", question_type="dropdown", answer="  ziad.nahas@gmail.com  ")
+            Question(
+                question="email address",
+                question_type="dropdown",
+                answer="  ziad.nahas@gmail.com  ",
+            )
         ]
 
         with (
@@ -536,7 +541,9 @@ class TestDropdownCaching:
         dropdown = AsyncMock()
         dropdown.get_attribute = AsyncMock(return_value="email-dropdown")
         option_locator = MagicMock()
-        option_locator.evaluate_all = AsyncMock(return_value=["Select an option", "ziad.nahas@gmail.com"])
+        option_locator.evaluate_all = AsyncMock(
+            return_value=["Select an option", "ziad.nahas@gmail.com"]
+        )
         dropdown.locator = MagicMock(return_value=option_locator)
 
         checked_locator = MagicMock()
@@ -553,7 +560,9 @@ class TestDropdownCaching:
         label.text_content = AsyncMock(return_value="Email Address")
 
         applier.all_questions = [
-            Question(question="email address", question_type="textbox", answer=" ziad.nahas@gmail.com ")
+            Question(
+                question="email address", question_type="textbox", answer=" ziad.nahas@gmail.com "
+            )
         ]
         applier._select_dropdown_option = AsyncMock()
 
@@ -585,7 +594,9 @@ class TestDropdownCaching:
         dropdown = AsyncMock()
         dropdown.get_attribute = AsyncMock(return_value="email-dropdown")
         option_locator = MagicMock()
-        option_locator.evaluate_all = AsyncMock(return_value=["Select an option", "ziad.nahas@gmail.com"])
+        option_locator.evaluate_all = AsyncMock(
+            return_value=["Select an option", "ziad.nahas@gmail.com"]
+        )
 
         checked_locator = MagicMock()
         checked_locator.first.text_content = AsyncMock(return_value="ziad.nahas@gmail.com")

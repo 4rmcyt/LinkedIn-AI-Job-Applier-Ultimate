@@ -1,6 +1,5 @@
 """Tests for src/job_manager/indeed/easy_applier_indeed.py"""
 
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -48,7 +47,9 @@ def applier(mock_page, mock_gpt_answerer, mock_resume_anonymizer, tmp_path):
     cover_dir.mkdir()
     answers_file = tmp_path / "answers.yaml"
 
-    with patch("src.job_manager.indeed.easy_applier_indeed.get_first_pdf_file", return_value=None):
+    with patch(
+        "src.job_manager.indeed.easy_applier_indeed.get_ready_made_resume", return_value=None
+    ):
         with patch("src.job_manager.indeed.easy_applier_indeed.load_yaml_file", return_value=None):
             inst = IndeedEasyApplier(
                 page=mock_page,
