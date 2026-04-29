@@ -164,6 +164,16 @@ class TestSetParameters:
             assert "evil corp" in job_applier.job_blacklist
             assert job_applier.applies_num == 0
 
+    def test_set_parameters_treats_none_company_blacklist_as_empty(self, job_applier):
+        with (
+            patch.object(job_applier, "_load_companies_from_yaml", return_value={}),
+            patch.object(job_applier, "_load_data_from_yaml", return_value=[]),
+            patch.object(job_applier, "_load_cache", return_value=JobManagerCache()),
+        ):
+            job_applier.set_parameters({"company_blacklist": None})
+
+        assert job_applier.job_blacklist == []
+
 
 class TestCacheManagement:
     """Test cache loading and writing"""
@@ -487,6 +497,7 @@ class TestCompanyManagement:
                     "interest_score": 42,
                     "interest_reason": "Mismatch with role target",
                     "skills": ["Python", "Leadership"],
+                    "submitted_resume_path": "/tmp/resume.pdf",
                 },
             )
 
@@ -494,6 +505,7 @@ class TestCompanyManagement:
             assert saved_job["interest_score"] == 42
             assert saved_job["interest_reason"] == "Mismatch with role target"
             assert saved_job["skills"] == ["Python", "Leadership"]
+            assert saved_job["submitted_resume_path"] == "/tmp/resume.pdf"
 
     def test_save_company_skip_does_not_duplicate_existing_entry(self, job_applier):
         """Test duplicate skipped vacancies are not appended again"""

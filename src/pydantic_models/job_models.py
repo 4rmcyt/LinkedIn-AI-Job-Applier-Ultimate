@@ -249,6 +249,9 @@ class JobInfo(BaseModel):
     executed_at: Optional[str] = Field(
         default=None, description="When the job was processed by the bot"
     )
+    submitted_resume_path: Optional[str] = Field(
+        default=None, description="Path of the resume file submitted with the application"
+    )
 
     @field_validator("interest_score", mode="before")
     @classmethod

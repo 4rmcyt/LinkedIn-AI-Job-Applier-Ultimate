@@ -52,6 +52,7 @@ class LinkedInJobManager(BaseJobManager):
         self.llm_answerer_component = None
         self.llm_agent_component = None
         self.resume_generator_manager = None
+        self.submitted_resume_path = None
         self.pause_checker = None
         self.jobs_no_info = (
             []
@@ -309,6 +310,7 @@ class LinkedInJobManager(BaseJobManager):
                     return "Ok"
 
                 self.llm_answerer_component.set_job(job.model_dump())
+                self.submitted_resume_path = None
 
                 if EASY_APPLY_ONLY_MODE is False:
                     apply_url = await self._check_apply_button()
@@ -321,6 +323,8 @@ class LinkedInJobManager(BaseJobManager):
                         apply_result = await self.easy_apply(job)
                 else:
                     apply_result = await self.easy_apply(job)
+                if self.submitted_resume_path:
+                    evaluation["submitted_resume_path"] = self.submitted_resume_path
                 # if the vacancy is skipped for the reason of missing information, add it to the list of vacancies,
                 # information about which will then be sent to the client
                 result, reason = apply_result
@@ -359,7 +363,9 @@ class LinkedInJobManager(BaseJobManager):
             TEST_MODE,
         )
         easy_applier_component.set_page(self.page)
-        return await easy_applier_component.apply_to_job(job)
+        apply_result = await easy_applier_component.apply_to_job(job)
+        self.submitted_resume_path = easy_applier_component.submitted_resume_path
+        return apply_result
 
     async def _scroll_to_load_jobs(self):
         """Scroll the job results container to load all job listings (async)"""

@@ -42,6 +42,11 @@ function formatDateTime(value) {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
+function formatResumePath(path) {
+  if (!path) return "-";
+  return path.split(/[\\/]/).pop() || path;
+}
+
 function currentRunPath(runId) {
   return runId ? `/runs/${encodeURIComponent(runId)}` : "/";
 }
@@ -139,6 +144,7 @@ function renderJobs(jobs) {
         <td><a href="${job.url || "#"}" target="_blank" rel="noreferrer">${job.job_title || "Unknown job"}</a></td>
         <td>${job.company_name || "-"}</td>
         <td>${job.interest_score ?? "-"}</td>
+        <td title="${(job.submitted_resume_path || "").replaceAll('"', '&quot;')}">${formatResumePath(job.submitted_resume_path)}</td>
         <td title="${(job.interest_reason || job.skip_reason || "").replaceAll('"', '&quot;')}">${job.skip_reason || job.interest_reason || "-"}</td>
       </tr>
     `)
@@ -176,6 +182,7 @@ function renderJobDetails(job) {
       <div><dt>Interest Score</dt><dd>${job.interest_score ?? "-"}</dd></div>
       <div><dt>Skip Reason</dt><dd>${job.skip_reason || "-"}</dd></div>
       <div><dt>Interest Reason</dt><dd>${job.interest_reason || "-"}</dd></div>
+      <div><dt>Submitted Resume</dt><dd>${job.submitted_resume_path || "-"}</dd></div>
       <div><dt>Skills</dt><dd>${Array.isArray(job.skills) ? job.skills.join(", ") : job.skills || "-"}</dd></div>
     </dl>
   `;

@@ -301,6 +301,7 @@ def test_get_run_jobs_builds_status_from_events(monkeypatch):
                     "result": "Success",
                     "reason": "",
                     "llm_time_seconds": 1.5,
+                    "submitted_resume_path": "/tmp/resumes/cto.pdf",
                 },
             },
             {
@@ -336,9 +337,65 @@ def test_get_run_jobs_builds_status_from_events(monkeypatch):
     assert len(jobs) == 2
     assert any(job["status"] == "applied" and job["interest_score"] == 92 for job in jobs)
     assert any(
+        job["status"] == "applied"
+        and job["submitted_resume_path"] == "/tmp/resumes/cto.pdf"
+        for job in jobs
+    )
+    assert any(
         job["status"] == "skipped" and job["skip_reason"] == "Vacancy is not interesting"
         for job in jobs
     )
+
+
+def test_get_run_jobs_enriches_missing_fields_from_saved_outputs(monkeypatch, tmp_path):
+    output_dir = tmp_path / "data" / "output"
+    _write_yaml(
+        output_dir / "success.yaml",
+        {
+            "1inch": [
+                {
+                    "company_name": "1inch",
+                    "job_title": "Chief Product Officer",
+                    "url": "https://www.linkedin.com/jobs/view/4401460753/",
+                    "interest_score": 75,
+                    "interest_reason": "Strong fintech and Web3 alignment",
+                    "skills": ["product strategy", "web3"],
+                    "llm_time_seconds": 28.037,
+                }
+            ]
+        },
+    )
+    _write_yaml(output_dir / "skipped.yaml", {})
+    _write_yaml(output_dir / "failed.yaml", {})
+
+    monkeypatch.setattr(data_service, "SUCCESS_FILE", output_dir / "success.yaml")
+    monkeypatch.setattr(data_service, "SKIPPED_FILE", output_dir / "skipped.yaml")
+    monkeypatch.setattr(data_service, "FAILED_FILE", output_dir / "failed.yaml")
+    monkeypatch.setattr(
+        data_service,
+        "read_events_for_run",
+        lambda run_id, limit=5000: [
+            {
+                "run_id": run_id,
+                "type": "job_result",
+                "message": "Job finished with status Success",
+                "timestamp": "2026-04-28T11:23:12",
+                "payload": {
+                    "job_title": "Chief Product Officer",
+                    "company_name": "1inch",
+                    "url": "https://www.linkedin.com/jobs/view/4401460753",
+                    "result": "Success",
+                },
+            }
+        ][:limit],
+    )
+
+    jobs = data_service.get_run_jobs("run-1")
+
+    assert jobs[0]["interest_score"] == 75
+    assert jobs[0]["interest_reason"] == "Strong fintech and Web3 alignment"
+    assert jobs[0]["skills"] == ["product strategy", "web3"]
+    assert jobs[0]["llm_time_seconds"] == 28.037
 
 
 def test_get_jobs_includes_executed_at_from_saved_outputs(monkeypatch, tmp_path):
@@ -352,6 +409,7 @@ def test_get_jobs_includes_executed_at_from_saved_outputs(monkeypatch, tmp_path)
                     "job_title": "CTO",
                     "url": "https://linkedin.com/jobs/view/1",
                     "executed_at": "2026-04-15T10:02:00",
+                    "submitted_resume_path": "/tmp/resumes/cto.pdf",
                 }
             ]
         },
@@ -369,6 +427,7 @@ def test_get_jobs_includes_executed_at_from_saved_outputs(monkeypatch, tmp_path)
     jobs = data_service.get_jobs()
 
     assert jobs[0]["executed_at"] == "2026-04-15T10:02:00"
+    assert jobs[0]["submitted_resume_path"] == "/tmp/resumes/cto.pdf"
 
 
 def test_get_run_detail_combines_run_jobs_and_events(monkeypatch):

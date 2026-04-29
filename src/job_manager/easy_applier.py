@@ -20,6 +20,7 @@ class BaseEasyApplier(ABC):
     def __init__(self) -> None:
         super().__init__()
         self.ready_made_resume_path = None
+        self.submitted_resume_path = None
 
     @abstractmethod
     async def apply_to_job(self, job: Job) -> None:
@@ -115,7 +116,9 @@ class BaseEasyApplier(ABC):
             )
 
         try:
-            await element.set_input_files(os.path.abspath(file_path_pdf))
+            abs_path = os.path.abspath(file_path_pdf)
+            await element.set_input_files(abs_path)
+            self.submitted_resume_path = abs_path
             await async_pause(1, 2)
             logger.debug(f"Resume created and uploaded successfully: {file_path_pdf}")
         except Exception:

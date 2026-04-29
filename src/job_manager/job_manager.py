@@ -49,7 +49,8 @@ class BaseJobManager(ABC):
         logger.info("Setting job manager parameters")
         self.max_applies_num = MAX_APPLIES_NUM
         self.apply_once_at_company = parameters.get("apply_once_at_company", True)
-        self.job_blacklist = [sanitize_text(j) for j in parameters.get("company_blacklist", [])]
+        company_blacklist = parameters.get("company_blacklist") or []
+        self.job_blacklist = [sanitize_text(j) for j in company_blacklist]
         self.success_companies = self._load_companies_from_yaml("success.yaml")
         self.skipped_companies = self._load_companies_from_yaml("skipped.yaml")
         self.failed_companies = self._load_companies_from_yaml("failed.yaml")
@@ -152,6 +153,7 @@ class BaseJobManager(ABC):
                     else 0.0
                 ),
                 executed_at=datetime.now().isoformat(timespec="seconds"),
+                submitted_resume_path=evaluation.get("submitted_resume_path"),
             )
         except Exception as e:
             logger.warning(f"Error in saving job info: {e}")
@@ -437,6 +439,7 @@ class BaseJobManager(ABC):
             job_title=job.job_title,
             company_name=job.company_name,
             url=job.url,
+            submitted_resume_path=(evaluation or {}).get("submitted_resume_path"),
         )
         self.applies_num += 1
         if result != "Limit" and COLLECT_INFO_MODE is False:

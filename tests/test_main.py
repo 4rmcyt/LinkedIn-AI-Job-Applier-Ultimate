@@ -46,6 +46,24 @@ class TestConfigValidator:
             assert "experience_level" in result
             assert "job_types" in result
 
+    def test_validate_search_config_defaults_empty_blacklists(self, tmp_path):
+        config_file = tmp_path / "search_config.yaml"
+        config_data = {
+            "positions": ["Software Engineer"],
+            "locations": None,
+            "company_blacklist": None,
+            "title_blacklist": None,
+            "location_blacklist": None,
+        }
+
+        with patch("main.load_yaml_file", return_value=config_data):
+            result = ConfigValidator().validate_search_config(config_file)
+
+        assert result["locations"] == []
+        assert result["company_blacklist"] == []
+        assert result["title_blacklist"] == []
+        assert result["location_blacklist"] == []
+
     def test_validate_search_config_missing_required_fields(self, tmp_path):
         """Test validation fails with missing required fields"""
         config_file = tmp_path / "invalid_config.yaml"

@@ -248,6 +248,7 @@ class TestCreateAndUploadResume:
         mock_element.set_input_files.assert_called_once()
         call_arg = mock_element.set_input_files.call_args[0][0]
         assert "CV_TestCorp_Engineer.pdf" in call_arg
+        assert applier.submitted_resume_path == call_arg
 
     @pytest.mark.asyncio
     async def test_raises_when_file_exceeds_size_limit(self, applier, tmp_path):
