@@ -304,7 +304,8 @@ async def create_and_run_bot(
         resume_generator = ResumeGenerator(llm_answerer_component, resume_anonymizer)
         resume_generator_manager = ResumeManager(llm_api_key, style_manager, resume_generator)
 
-        if READY_MADE_RESUME is None and not os.environ.get("DASHBOARD_RUN_ID"):
+        resume_ready_made = READY_MADE_RESUME is not None and READY_MADE_RESUME.resolve().is_file()
+        if not resume_ready_made and not os.environ.get("DASHBOARD_RUN_ID"):
             resume_generator_manager.choose_style()
 
         # Set search component
@@ -345,7 +346,7 @@ async def create_and_run_bot(
         await bot.set_search_parameters(search_config)
         bot.set_answerer_and_agent(llm_answerer_component, llm_agent_component, search_config)
         bot.set_resume(resume_structured, resume_text, resume_text_anonymized)
-        if READY_MADE_RESUME is None:
+        if not resume_ready_made:
             bot.set_resume_generator(resume_generator_manager)
         await bot.start_apply()
         emit_event("run_completed", "LinkedIn bot run completed successfully")

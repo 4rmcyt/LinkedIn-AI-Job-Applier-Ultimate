@@ -16,7 +16,7 @@ def easy_applier():
     page.locator.return_value.all = AsyncMock(return_value=[])
 
     with (
-        patch(f"{MODULE}.get_first_pdf_file", return_value=None),
+        patch(f"{MODULE}.get_ready_made_resume", return_value=None),
         patch.object(LinkedInEasyApplier, "_load_questions", return_value=[]),
     ):
         return LinkedInEasyApplier(

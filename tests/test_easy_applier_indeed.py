@@ -1,6 +1,5 @@
 """Tests for src/job_manager/indeed/easy_applier_indeed.py"""
 
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -48,7 +47,9 @@ def applier(mock_page, mock_gpt_answerer, mock_resume_anonymizer, tmp_path):
     cover_dir.mkdir()
     answers_file = tmp_path / "answers.yaml"
 
-    with patch("src.job_manager.indeed.easy_applier_indeed.get_first_pdf_file", return_value=None):
+    with patch(
+        "src.job_manager.indeed.easy_applier_indeed.get_ready_made_resume", return_value=None
+    ):
         with patch("src.job_manager.indeed.easy_applier_indeed.load_yaml_file", return_value=None):
             inst = IndeedEasyApplier(
                 page=mock_page,
@@ -84,12 +85,13 @@ class TestInit:
 class TestApplyToJob:
     @pytest.mark.asyncio
     async def test_navigates_and_delegates(self, applier, test_job):
+        applier.submitted_resume_path = None
         applier.job_easy_apply = AsyncMock(return_value=("Success", ""))
         with patch("src.job_manager.indeed.easy_applier_indeed.emit_event"):
             with patch("src.job_manager.indeed.easy_applier_indeed.async_pause"):
                 result = await applier.apply_to_job(test_job)
         applier.page.goto.assert_called_once_with(test_job.url)
-        assert result == ("Success", "")
+        assert result == (("Success", ""), None)
 
 
 class TestJobEasyApply:

@@ -59,7 +59,6 @@ class LinkedInEasyApplier(BaseEasyApplier):
         self.ready_made_photo_path = get_ready_made_photo()
         self.all_questions = self._load_questions()
         self.current_job = None
-        self.submitted_resume_path = None
         self.test_mode = test_mode
         self.previous_question_texts = []
         logger.info("LinkedInEasyApplier initialized successfully")
@@ -89,7 +88,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
             )
         return is_redirected
 
-    async def apply_to_job(self, job: Job) -> None:
+    async def apply_to_job(self, job: Job) -> Tuple[Tuple[str, str], Any]:
         """
         Starts the process of applying to a job (async).
         :param job: A job object with the job details.
@@ -107,10 +106,11 @@ class LinkedInEasyApplier(BaseEasyApplier):
         # Check for Easy Apply daily limit before attempting to apply
         if await self._check_easy_apply_limit():
             logger.warning("Easy Apply daily limit reached. Skipping job application.")
-            return "Limit", "Easy Apply daily limit reached. Skipping job application."
+            return ("Limit", "Easy Apply daily limit reached. Skipping job application."), None
 
         try:
-            return await self.job_easy_apply(job)
+            apply_result = await self.job_easy_apply(job)
+            return apply_result, self.submitted_resume_path
         except StopRequested:
             raise
         except Exception as e:
@@ -613,16 +613,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
                     await self._create_and_upload_photo(upload_element, job)
                 elif "resume" in container_text:
                     logger.info("Uploading resume")
-                    if self.resume_generator_manager is not None:
-                        await self._create_and_upload_resume(upload_element, job)
-                    elif self.ready_made_resume_path is not None:
-                        abs_path = os.path.abspath(str(self.ready_made_resume_path))
-                        await upload_element.set_input_files(abs_path)
-                        self.submitted_resume_path = abs_path
-                        logger.info(f"Resume uploaded from path: {self.ready_made_resume_path}")
-                        await async_pause(2, 3)
-                    else:
-                        await self._create_and_upload_resume(upload_element, job)
+                    await self._create_and_upload_resume(upload_element, job)
                 elif "cover" in container_text:
                     logger.info("Uploading cover letter")
                     await self._create_and_upload_cover_letter(upload_element, job)
@@ -706,7 +697,9 @@ class LinkedInEasyApplier(BaseEasyApplier):
         if extension is None:
             raise ValueError(f"Unsupported photo MIME type for upload: {mime_type}")
 
-        file_path = self.generated_photo_dir / f"PHOTO_{job.company_name}_{job.job_title}{extension}"
+        file_path = (
+            self.generated_photo_dir / f"PHOTO_{job.company_name}_{job.job_title}{extension}"
+        )
         file_bytes = base64.b64decode(encoded)
         if len(file_bytes) > max_file_size:
             raise ValueError("Profile photo exceeds LinkedIn 2 MB upload limit")
@@ -1813,7 +1806,7 @@ if __name__ == "__main__":
         logger.info("Starting LinkedInEasyApplier test...")
 
         # Test job URL
-        job_url = "https://www.linkedin.com/jobs/view/4399548757"
+        job_url = "https://www.linkedin.com/jobs/view/4406500544/"
         # Initialize Playwright browser
         try:
             browser, context, page = await create_playwright_browser()
@@ -1853,7 +1846,7 @@ if __name__ == "__main__":
             resume_text = resume_anonymizer.anonymize_text(resume_text)
 
             gpt_answerer.set_resume(resume_structured, resume_text)
-            gpt_answerer.set_job(test_job, is_test=True)
+            gpt_answerer.set_job(test_job.model_dump(), is_test=True)
 
             # Initialize resume generator manager (mock for testing)
             style_manager = StyleManager()

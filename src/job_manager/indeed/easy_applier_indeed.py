@@ -75,7 +75,7 @@ class IndeedEasyApplier(BaseEasyApplier):
     # Public interface
     # ------------------------------------------------------------------
 
-    async def apply_to_job(self, job: Job) -> Tuple[str, str]:
+    async def apply_to_job(self, job: Job) -> Tuple[Tuple[str, str], Any]:
         """Entry point - navigate to job page and apply"""
         logger.info(f"Navigating to Indeed job: {job.url}")
         emit_event(
@@ -88,8 +88,8 @@ class IndeedEasyApplier(BaseEasyApplier):
         await self.page.goto(job.url)
         logger.info(f"Page loaded: {job.url}")
         await async_pause(1, 2)
-        result, cover_letter = await self.job_easy_apply(job)
-        return result, cover_letter
+        apply_result = await self.job_easy_apply(job)
+        return apply_result, self.submitted_resume_path
 
     async def job_easy_apply(self, job: Job) -> Tuple[str, str]:
         """

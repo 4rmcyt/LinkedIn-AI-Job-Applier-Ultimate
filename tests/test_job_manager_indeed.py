@@ -465,7 +465,7 @@ class TestEasyApply:
     @pytest.mark.asyncio
     async def test_delegates_to_indeed_easy_applier(self, manager, test_job):
         mock_applier = AsyncMock()
-        mock_applier.apply_to_job = AsyncMock(return_value=("Success", ""))
+        mock_applier.apply_to_job = AsyncMock(return_value=(("Success", ""), None))
         mock_page = AsyncMock()
 
         with patch(

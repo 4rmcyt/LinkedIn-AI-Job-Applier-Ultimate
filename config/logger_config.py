@@ -15,7 +15,7 @@ logger.add(sys.stdout, level=minimum_log_level, backtrace=False, diagnose=False)
 
 logger.add(
     AsyncTelegramSink(
-        max_retries=6,
+        max_retries=4,
         cooldown=600,  # in case of the same error, we wait 10 minutes
     ),
     level="ERROR",
