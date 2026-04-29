@@ -34,7 +34,7 @@ from config.constants import LOG_DIR, RESUME_DIR, cost_per_token
 from config.logger_config import logger
 from src.dashboard.runtime import emit_event
 from src.pydantic_models.log_models import LLMCall
-from src.pydantic_models.prompt_models import ResumeStructure
+from src.pydantic_models.prompt_models import LinkedInMessageClassification, ResumeStructure
 from src.utils.json_to_readable import transform_search_config_data, transform_vacancy_data
 from src.utils.utils import append_yaml_file, pause
 
@@ -539,6 +539,7 @@ class GPTAnswerer:
         self.current_job_context = {"job_url": "", "job_title": "", "company_name": ""}
         self.job_llm_time_seconds: Dict[str, float] = {}
         self._job_llm_lock = threading.Lock()
+        self.linkedin_message_preferences: Dict[str, Any] = {}
         self.ai_adapter = AIAdapter(llm_api_key, llm_proxy, llm_api_url)
         self.llm_cheap = LoggerChatModel(
             self.ai_adapter,
@@ -561,6 +562,10 @@ class GPTAnswerer:
                 prompts.text_question_with_error_template
             ),
             "prompt_cover_letter": self._create_chain(prompts.coverletter_template),
+            "linkedin_message_reply": self._create_chain(prompts.linkedin_message_reply_template),
+            "linkedin_message_reply_humanizer": self._create_chain(
+                prompts.linkedin_message_reply_humanizer_template
+            ),
             "prompt_header": self._create_chain(prompts.prompt_header),
             "prompt_education": self._create_chain(prompts.prompt_education),
             "prompt_working_experience": self._create_chain(prompts.prompt_working_experience),
@@ -568,6 +573,10 @@ class GPTAnswerer:
             "prompt_achievements": self._create_chain(prompts.prompt_achievements),
             "prompt_certifications": self._create_chain(prompts.prompt_certifications),
             "prompt_additional_skills": self._create_chain(prompts.prompt_additional_skills),
+            "linkedin_message_classification": self._create_pydantic_chain(
+                prompts.linkedin_message_classification_template,
+                LinkedInMessageClassification,
+            ),
         }
 
     @staticmethod
@@ -626,6 +635,9 @@ class GPTAnswerer:
             if phone_prefix:
                 self.resume_structured["personal_information"]["phone_code"] = phone_prefix
         self.resume_readable = resume_readable
+
+    def set_linkedin_message_preferences(self, preferences: Dict[str, Any] | None) -> None:
+        self.linkedin_message_preferences = preferences or {}
 
     def _set_current_job_context(self, job: Dict[str, Any] | None) -> None:
         if not job:
@@ -708,6 +720,113 @@ class GPTAnswerer:
         template = self._preprocess_template_string(template)
         prompt = ChatPromptTemplate.from_template(template)
         return prompt | self.llm_cheap | parser, parser
+
+    @staticmethod
+    def _stringify_linkedin_conversation(conversation: Dict[str, Any]) -> str:
+        lines = []
+        for key, label in [
+            ("participant_name", "Participant"),
+            ("participant_headline", "Headline"),
+            ("timestamp", "Conversation timestamp"),
+            ("snippet", "Inbox snippet"),
+            ("last_sender", "Last sender"),
+        ]:
+            value = conversation.get(key)
+            if value:
+                lines.append(f"{label}: {value}")
+
+        messages = conversation.get("messages") or []
+        if messages:
+            lines.append("Messages:")
+            for message in messages:
+                sender = message.get("sender") or "Unknown"
+                timestamp = message.get("timestamp") or ""
+                body = message.get("body") or ""
+                lines.append(f"- {sender} [{timestamp}]: {body}")
+
+        return "\n".join(lines) if lines else "No conversation details available."
+
+    @staticmethod
+    def _build_apology_context(
+        conversation: Dict[str, Any],
+        classification: Dict[str, Any] | None = None,
+        preferences: Dict[str, Any] | None = None,
+    ) -> str:
+        from datetime import datetime
+
+        preferences = preferences or {}
+        if not preferences.get("old_message_apology_enabled", True):
+            return ""
+
+        timestamp_str = conversation.get("timestamp", "")
+        if not timestamp_str:
+            return ""
+
+        months = {
+            "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+            "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+        }
+        parts = timestamp_str.strip().split()
+        if len(parts) < 2:
+            return ""
+
+        month_part = parts[0].lower()[:3]
+        day_part = parts[1].rstrip(",")
+        if month_part not in months or not day_part.isdigit():
+            return ""
+
+        now = datetime.now()
+        msg_month = months[month_part]
+        msg_day = int(day_part)
+        msg_year = now.year
+        if msg_month > now.month:
+            msg_year -= 1
+
+        msg_date = datetime(msg_year, msg_month, msg_day)
+        age_days = (now - msg_date).days
+        threshold_days = max(int(preferences.get("old_message_threshold_days", 60)), 1)
+        if age_days < threshold_days:
+            return ""
+
+        category = (classification or {}).get("category")
+        apology_reason = (preferences.get("old_message_apology_reason") or "you've been busy with multiple projects").strip()
+        follow_up_enabled = preferences.get("old_job_message_follow_up_enabled", True)
+        follow_up_text = (
+            preferences.get("old_job_message_follow_up_text") or "ask if the opportunity is still available"
+        ).strip().rstrip(".")
+        if category != "job_offer_to_me":
+            return (
+                f"- This message was sent over {threshold_days} days ago. Start the reply with a brief, warm "
+                f"apology for the late response, explaining {apology_reason}.\n"
+            )
+
+        follow_up_instruction = ""
+        if follow_up_enabled and follow_up_text:
+            follow_up_instruction = f" Then politely {follow_up_text}."
+
+        return (
+            f"- This message was sent over {threshold_days} days ago. Start the reply with a brief, warm "
+            f"apology for the late response, explaining {apology_reason}.{follow_up_instruction}\n"
+        )
+
+    def _linkedin_reply_tone(self) -> str:
+        return self.linkedin_message_preferences.get(
+            "reply_tone",
+            "a thoughtful senior engineering leader",
+        )
+
+    def _linkedin_reply_max_characters(self) -> int:
+        return max(int(self.linkedin_message_preferences.get("reply_max_characters", 600)), 1)
+
+    def _linkedin_reply_paragraph_instruction(self) -> str:
+        if self.linkedin_message_preferences.get("reply_short_paragraphs", True):
+            return "Break the reply into short paragraphs (2-3 sentences each) separated by blank lines. One big block of text looks robotic."
+        return "Use the number of paragraphs that reads most naturally for the message."
+
+    def _linkedin_reply_punctuation_instruction(self) -> str:
+        if self.linkedin_message_preferences.get("reply_avoid_em_dash", True):
+            return 'Never use em dashes ("—"). Use commas, periods, or separate sentences instead.'
+        return "Use natural punctuation that fits the message."
 
     def parse_resume(self, resume_text: str) -> Dict[str, Any]:
         """Parse resume using Pydantic models for structured output."""
@@ -978,6 +1097,73 @@ class GPTAnswerer:
         output = chain.invoke(invoke_dict)
         logger.debug(f"Cover letter generated: {output}")
         return output
+
+    def classify_linkedin_message(self, conversation: Dict[str, Any]) -> Dict[str, Any]:
+        """Classify a LinkedIn conversation for dry-run inbox triage."""
+        chain, parser = self.chains["linkedin_message_classification"]
+        conversation_text = self._stringify_linkedin_conversation(conversation)
+        try:
+            output = chain.invoke(
+                {
+                    "resume": self.resume_readable,
+                    "conversation": conversation_text,
+                    "format_instructions": parser.get_format_instructions(),
+                }
+            )
+            return output.model_dump()
+        except Exception:
+            tb_str = traceback.format_exc()
+            logger.error(f"Error classifying LinkedIn message conversation\n{tb_str}")
+            return {
+                "category": "personal_message",
+                "confidence": 0,
+                "reasoning": "Classification failed, defaulting to keep for manual review.",
+                "proposed_action": "keep",
+            }
+
+    def draft_linkedin_message_reply(
+        self, conversation: Dict[str, Any], classification: Dict[str, Any]
+    ) -> str:
+        """Draft a reply for an important LinkedIn conversation."""
+        draft_chain = self.chains["linkedin_message_reply"]
+        humanizer_chain = self.chains["linkedin_message_reply_humanizer"]
+        conversation_text = self._stringify_linkedin_conversation(conversation)
+        apology_context = self._build_apology_context(
+            conversation,
+            classification,
+            self.linkedin_message_preferences,
+        )
+        try:
+            output = draft_chain.invoke(
+                {
+                    "resume": self.resume_readable,
+                    "classification": classification,
+                    "conversation": conversation_text,
+                    "apology_context": apology_context,
+                    "reply_tone": self._linkedin_reply_tone(),
+                    "reply_max_characters": self._linkedin_reply_max_characters(),
+                    "reply_paragraph_instruction": self._linkedin_reply_paragraph_instruction(),
+                    "reply_punctuation_instruction": self._linkedin_reply_punctuation_instruction(),
+                }
+            )
+        except Exception:
+            tb_str = traceback.format_exc()
+            logger.error(f"Error drafting LinkedIn message reply\n{tb_str}")
+            return ""
+
+        try:
+            humanized = humanizer_chain.invoke(
+                {
+                    "reply": output.strip(),
+                    "reply_paragraph_instruction": self._linkedin_reply_paragraph_instruction(),
+                    "reply_punctuation_instruction": self._linkedin_reply_punctuation_instruction(),
+                }
+            )
+            return humanized.strip() or output.strip()
+        except Exception:
+            tb_str = traceback.format_exc()
+            logger.error(f"Error humanizing LinkedIn message reply\n{tb_str}")
+            return output.strip()
 
     def resume_improvement_recommendations(self) -> str:
         """
