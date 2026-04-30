@@ -94,8 +94,14 @@ def _read_json(path: Path, default: Dict[str, Any] | List[Any] | None = None) ->
 
 
 def _write_json(path: Path, data: Dict[str, Any] | List[Any]) -> None:
-    with path.open("w", encoding="utf-8") as file:
-        json.dump(data, file, indent=2, sort_keys=True)
+    tmp_path = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        with tmp_path.open("w", encoding="utf-8") as file:
+            json.dump(data, file, indent=2, sort_keys=True)
+        os.replace(tmp_path, path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink()
 
 
 def get_screenshot_history(run_id: str | None = None) -> List[Dict[str, Any]]:
@@ -222,9 +228,7 @@ def _update_snapshot_from_event(event: Dict[str, Any]) -> None:
         snapshot["run_status"] = (
             "completed"
             if event_type == "run_completed"
-            else "stopped"
-            if event_type == "run_stopped"
-            else "failed"
+            else "stopped" if event_type == "run_stopped" else "failed"
         )
         snapshot["finished_at"] = event["timestamp"]
         snapshot["current_job"] = None

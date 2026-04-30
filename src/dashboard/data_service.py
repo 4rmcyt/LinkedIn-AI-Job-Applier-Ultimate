@@ -23,6 +23,7 @@ from src.dashboard.runtime import (
     sync_process_state,
 )
 from src.pydantic_models.config_models import SearchConfig
+from src.utils.utils import save_yaml_file
 
 OUTPUT_DIR = OUTPUT_DIR_LINKEDIN if JOB_SITE == "linkedin" else OUTPUT_DIR_INDEED
 APP_CONFIG_FILE = ROOT_DIR / "config" / "app_config.py"
@@ -530,8 +531,7 @@ def update_search_config(config: Dict[str, Any]) -> Dict[str, Any]:
     validated_date = validated.setdefault("date", {})
     validated_date["24_hours"] = bool(validated_date.pop("day_24_hours", False))
 
-    with (ROOT_DIR / SEARCH_CONFIG_FILE).open("w", encoding="utf-8") as file:
-        yaml.safe_dump(validated, file, allow_unicode=True, sort_keys=False)
+    save_yaml_file(ROOT_DIR / SEARCH_CONFIG_FILE, validated, sort_keys=False)
     return validated
 
 
