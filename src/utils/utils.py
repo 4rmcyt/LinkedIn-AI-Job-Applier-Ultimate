@@ -56,11 +56,31 @@ def load_app_config() -> dict:
 
 
 def save_yaml_file(yaml_path: Path, data: dict, sort_keys: bool = True) -> None:
-    """Load settings from YAML configuration file"""
-    with open(yaml_path, "w", encoding="UTF-8") as stream:
-        yaml.safe_dump(
-            data, stream, allow_unicode=True, default_flow_style=False, sort_keys=sort_keys
-        )
+    """Save YAML data atomically and flush it to disk."""
+    yaml_path = Path(yaml_path)
+    yaml_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = yaml_path.with_name(
+        f".{yaml_path.name}.{os.getpid()}.{threading.get_ident()}.tmp"
+    )
+    try:
+        with open(tmp_path, "w", encoding="UTF-8") as stream:
+            yaml.safe_dump(
+                data, stream, allow_unicode=True, default_flow_style=False, sort_keys=sort_keys
+            )
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(tmp_path, yaml_path)
+        try:
+            dir_fd = os.open(yaml_path.parent, os.O_DIRECTORY)
+        except OSError:
+            return
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink()
 
 
 def append_yaml_file(yaml_path: Path, data: dict) -> None:
