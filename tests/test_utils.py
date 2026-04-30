@@ -112,6 +112,17 @@ class TestSaveYamlFile:
         assert loaded_data == new_data
         assert loaded_data != initial_data
 
+    @patch("src.utils.utils.os.fsync")
+    def test_save_yaml_file_flushes_file_and_directory(self, mock_fsync, tmp_path):
+        """Test YAML saves are flushed so per-job output survives abrupt shutdowns"""
+        yaml_file = tmp_path / "output.yaml"
+
+        save_yaml_file(yaml_file, {"status": "saved"})
+
+        assert yaml_file.exists()
+        assert mock_fsync.call_count >= 2
+        assert list(tmp_path.glob("*.tmp")) == []
+
 
 class TestPause:
     """Tests for pause function"""
