@@ -1,5 +1,11 @@
 # LinkedIn Messages Manager
 
+> Don't have time to manage your inbox, then this feature is for you!
+
+If you receive a large volume of LinkedIn messages and do not have the time to manually review every conversation, this feature is designed for exactly that situation.
+
+It helps busy users triage recruiter outreach, personal messages, spam, and inbound job-seeking messages faster by scanning the inbox, classifying conversations, and recording or executing actions based on your settings.
+
 ## What This Feature Does
 
 The LinkedIn Messages Manager is a separate workflow that opens your LinkedIn inbox, reviews conversations, classifies them with the configured LLM, and then decides what to do with each conversation based on your settings.
