@@ -59,9 +59,7 @@ def save_yaml_file(yaml_path: Path, data: dict, sort_keys: bool = True) -> None:
     """Save YAML data atomically and flush it to disk."""
     yaml_path = Path(yaml_path)
     yaml_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = yaml_path.with_name(
-        f".{yaml_path.name}.{os.getpid()}.{threading.get_ident()}.tmp"
-    )
+    tmp_path = yaml_path.with_name(f".{yaml_path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     try:
         with open(tmp_path, "w", encoding="UTF-8") as stream:
             yaml.safe_dump(

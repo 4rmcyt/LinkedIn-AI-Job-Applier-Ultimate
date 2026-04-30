@@ -23,6 +23,7 @@ from src.dashboard.runtime import (
     sync_process_state,
 )
 from src.pydantic_models.config_models import SearchConfig
+from src.utils.utils import save_yaml_file
 
 OUTPUT_DIR = OUTPUT_DIR_LINKEDIN if JOB_SITE == "linkedin" else OUTPUT_DIR_INDEED
 APP_CONFIG_FILE = ROOT_DIR / "config" / "app_config.py"
@@ -32,6 +33,7 @@ SKIPPED_FILE = ROOT_DIR / OUTPUT_DIR / "skipped.yaml"
 FAILED_FILE = ROOT_DIR / OUTPUT_DIR / "failed.yaml"
 INTERESTING_FILE = ROOT_DIR / OUTPUT_DIR / "interesting_jobs.yaml"
 LLM_CALLS_FILE = ROOT_DIR / LOG_DIR / "llm_api_calls.yaml"
+MESSAGES_FILE = ROOT_DIR / OUTPUT_DIR / "messages_dry_run.yaml"
 EDITABLE_APP_CONFIG_KEYS = {
     "MAX_APPLIES_NUM",
     "HEADLESS_MODE",
@@ -404,6 +406,23 @@ def get_jobs(status: str | None = None, search: str | None = None) -> List[Dict[
     return _apply_job_filters(_load_jobs_board(), status=status, search=search)
 
 
+def get_messages(
+    category: str | None = None,
+    status: str | None = None,
+) -> List[Dict[str, Any]]:
+    entries = _read_yaml(MESSAGES_FILE, [])
+    if not isinstance(entries, list):
+        entries = []
+
+    if category:
+        entries = [e for e in entries if e.get("category") == category]
+    if status:
+        entries = [e for e in entries if e.get("processing_status") == status]
+
+    entries.sort(key=lambda e: e.get("updated_at") or "", reverse=True)
+    return entries
+
+
 def get_live_state() -> Dict[str, Any]:
     sync_process_state()
     return {
@@ -512,8 +531,7 @@ def update_search_config(config: Dict[str, Any]) -> Dict[str, Any]:
     validated_date = validated.setdefault("date", {})
     validated_date["24_hours"] = bool(validated_date.pop("day_24_hours", False))
 
-    with (ROOT_DIR / SEARCH_CONFIG_FILE).open("w", encoding="utf-8") as file:
-        yaml.safe_dump(validated, file, allow_unicode=True, sort_keys=False)
+    save_yaml_file(ROOT_DIR / SEARCH_CONFIG_FILE, validated, sort_keys=False)
     return validated
 
 

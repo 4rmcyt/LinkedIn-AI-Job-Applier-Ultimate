@@ -239,6 +239,77 @@ button:disabled {
   min-width: 0;
 }
 
+/* ── MESSAGES BOARD ──────────────────────────────── */
+
+.message-details {
+  font-size: 0.82rem;
+  overflow-y: auto;
+}
+
+.message-details .detail-header {
+  margin-bottom: 0.65rem;
+}
+
+.message-details .detail-header h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.15rem;
+}
+
+.message-details .detail-header p {
+  margin: 0.1rem 0;
+  font-size: 0.78rem;
+}
+
+.message-details .detail-grid {
+  gap: 0.35rem 0.65rem;
+  margin-bottom: 0.85rem;
+}
+
+.msg-reasoning,
+.msg-reply,
+.msg-thread {
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--border);
+}
+
+.msg-reasoning strong,
+.msg-reply strong,
+.msg-thread strong {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.msg-reasoning p,
+.msg-reply p {
+  margin: 0.3rem 0 0;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.msg-bubble {
+  margin-top: 0.45rem;
+  padding: 0.5rem 0.6rem;
+  background: var(--surface-hover);
+  border-radius: 6px;
+  border-left: 3px solid var(--accent);
+}
+
+.msg-sender {
+  font-weight: 600;
+  font-size: 0.76rem;
+  margin-bottom: 0.2rem;
+}
+
+.msg-body {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
 /* ── RUN HISTORY ─────────────────────────────────── */
 .run-history {
   display: grid;
