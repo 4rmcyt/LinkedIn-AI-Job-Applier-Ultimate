@@ -46,6 +46,7 @@ But if you're planning to use Indeed for searching jobs without auto-applying - 
   - [Installation](#installation)
 - [🔧 Configuration](#-configuration)
 - [▶️ Usage](#️-usage)
+  - [LinkedIn Messages Manager](#linkedin-messages-manager)
   - [Dashboard](#dashboard)
   - [Dashboard Routes And APIs](#dashboard-routes-and-apis)
 - [💵 Vacancy application cost](#-vacancy-application-cost)
@@ -73,6 +74,7 @@ This project enhances the original codebase with several powerful new features:
 *   **📊 Skill Statistics:** Analyzes job descriptions to identify the most in-demand skills, helping you tailor your resume effectively.
 *   **🧠 Intelligent Error Handling:** If LinkedIn's Easy Apply feature encounters errors (e.g., incorrectly filled fields), the bot will attempt to fix them automatically.
 *   **📈 Local Monitoring Dashboard:** Includes a local web dashboard for live monitoring, run history, screenshot review, config editing, bot controls, and JSON export of individual runs.
+*   **💬 LinkedIn Messages Manager:** Includes a separate inbox triage workflow for classifying LinkedIn conversations, drafting replies, archiving spam, starring recruiter outreach, applying the `Jobs` label, and recording all message decisions to a persistent ledger for dashboard review.
 *   **🤝 Automated Networking:** Includes a powerful tool to search for and connect with "Open Networkers" (LIONs) automatically, expanding your professional network with people likely to accept your requests.
 *   **☑️ Smart Checkbox Handling:** Automatically detects and answers checkbox questions in LinkedIn Easy Apply forms with intelligent context-aware responses.
 *   **🔗 Contextual Question Processing:** Considers previous answers when responding to follow-up questions like "If yes/no, who/when/where?" for more accurate and relevant responses.
@@ -267,7 +269,24 @@ This project enhances the original codebase with several powerful new features:
     *   `additional_search_words`: Keywords to narrow down the search to your specific field (e.g., "ai", "ml", "data science").
     The bot will search for every combination of these words and attempt to connect with users whose profiles indicate they are open networkers (while intelligently skipping those profiles where the keywords appear only in "mutual connections").
 
-5.  **Resume files for LLM (`data/resumes/resume_text.txt` and `data/resumes/structured_resume.yaml`):**
+5.  **LinkedIn Messages Manager Settings (`config/linkedin_messages_manager_config.yaml`):**
+    This is a separate configuration file for the LinkedIn inbox triage workflow launched by `uv run python linkedin_messages.py`.
+
+    It controls things like:
+    *   dry run versus execute mode
+    *   whether archives are allowed
+    *   whether replies are allowed
+    *   unread-only scanning
+    *   whether recruiter messages are auto-starred
+    *   whether recruiter messages are auto-labeled as `Jobs`
+    *   reply tone and formatting rules
+    *   how old-message apology context should work
+
+    Because this feature is more nuanced than the main job application flow, it has dedicated documentation:
+
+    `docs/linkedin-messages-manager.md`
+
+6.  **Resume files for LLM (`data/resumes/resume_text.txt` and `data/resumes/structured_resume.yaml`):**
     Resume text must contain information about your first and last names and your gender (that is necessary for the correct work of anonymization functions).
     Bot needs to resume files for correct work:
     *   **raw resume text file** (`resume_text.txt`) which contains all available information about your resume in text format and is used to answer the questions and write cover letters (I find out that using full resume text for these tasks is more reliable + saves input token + you don't need to determine which resume section you have to use). **TIP**: Try to add to this file as much information about youself as possible - that will let bot to answer questions more precisely and better tailor your resume to a specific vacancy.
@@ -278,12 +297,12 @@ This project enhances the original codebase with several powerful new features:
     *   **Manual Structure:** fill out file `structured_resume.yaml` manually for precise control. Why use this option instead of first? Because if you select the first option, all data from your resume text will be sent to the LLM to create the structured_resume file — for some people who care about their privacy this would be unacceptable. I want to point out that Automatic Parsing and Non-Easy Apply vacancies applying are the only two functions of this bot that send not anonymized user's personal information to LLM. All other bot functions anonymize personal information before sending it to LLM.
     Examples of `resume_text.txt` and `structured_resume.yaml` files can be found in `examples/data/resumes` folder
 
-6. **On-site profile/resume (LinkedIn and Indeed):**
+7. **On-site profile/resume (LinkedIn and Indeed):**
     Before running the bot, make sure your profile on the job site is as complete as possible:
     *   **LinkedIn:** Go to your LinkedIn profile and fill in all sections — work experience, education, skills, certifications, contact info, etc. Also upload your resume in the **Easy Apply settings** (LinkedIn → Job Preferences → Easy Apply Resume). LinkedIn pre-fills application forms from your profile and saved resume, so the more complete they are, the fewer questions the bot needs to answer via LLM — saving you tokens and money.
     *   **Indeed:** Go to your Indeed profile and fill in all sections — work history, education, skills, licenses, desired salary, etc. Indeed uses your on-site profile to auto-fill Easy Apply forms, so a thorough profile means fewer questions the bot has to send to the LLM.
 
-7. **Resume generation:**
+8. **Resume generation:**
     You have two options:
     *   **Automatic Creation (recommended):** Leave `READY_MADE_RESUME_PATH` empty in `config/app_config.py` and the bot will generate a new resume tailored to each vacancy. Generated resumes are stored in `data/resumes/generated_resumes/`. Sections that are the same across vacancies (e.g. header) are generated once and cached in `data/resumes/templates/<section_name>.html`. Delete a cached file to force re-generation.
     *   **Ready-Made Resume:** Set `READY_MADE_RESUME_PATH` in `config/app_config.py` to the path of your resume PDF (e.g. `"data/resumes/resume.pdf"`). The bot will use that file for every application.
@@ -320,6 +339,33 @@ If 30 seconds pass or you select `y` or all fields in the `structured_resume.yam
 The bot will log its progress in the console and create detailed log files in the `logs/` directory. Upon completion, it will send a report to your configured Telegram chat.
 
 **Pause/Resume:** While the bot is running, and you see that it behaves incorrectly - you can pause it by pressing `Ctrl+X`. Press `Ctrl+X` again to resume. This is useful if you need to temporarily stop the bot without terminating the entire process. **Bot won't stop immediately**, usually couple of seconds may pass after you press Ctrl + X.
+
+### LinkedIn Messages Manager
+
+The repository also includes a separate LinkedIn inbox triage workflow.
+
+Run it with:
+
+```bash
+uv run python linkedin_messages.py
+```
+
+This workflow is designed for LinkedIn messages, not job applications. It can:
+
+- scan your inbox
+- optionally filter to unread conversations only
+- classify conversations with the LLM
+- skip threads where you already replied
+- draft replies for important conversations
+- archive spam or low-value threads
+- star recruiter outreach
+- label recruiter conversations as `Jobs`
+- write every processed result to `data/output/linkedin/messages_dry_run.yaml`
+- display results on the dashboard messages page
+
+This feature has several safety rules and configuration options, so it is documented separately here:
+
+`docs/linkedin-messages-manager.md`
 
 ### Dashboard
 

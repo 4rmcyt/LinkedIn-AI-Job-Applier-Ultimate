@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -233,3 +233,21 @@ class ResumeStructure(BaseModel):
     work_preferences: WorkPreferences = Field(
         default_factory=WorkPreferences, description="Work preferences"
     )
+
+
+class LinkedInMessageClassification(BaseModel):
+    category: Literal[
+        "personal_message",
+        "job_offer_to_me",
+        "looking_for_job",
+        "marketing_spam",
+    ] = Field(description="Classification category for the conversation")
+    confidence: int = Field(description="Confidence score from 0 to 100")
+    reasoning: str = Field(description="Short explanation for the classification")
+    proposed_action: Literal[
+        "skip",
+        "keep",
+        "draft_reply",
+        "archive",
+        "flag_spam_and_archive",
+    ] = Field(description="Recommended action to take in dry-run mode")

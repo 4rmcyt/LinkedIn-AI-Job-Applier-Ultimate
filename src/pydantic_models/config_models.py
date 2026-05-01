@@ -100,6 +100,33 @@ class ConnectionSearcherConfig(BaseModel):
     additional_search_words: List[str] = []
 
 
+class LinkedInMessagesConfig(BaseModel):
+    dry_run: bool = True
+    execute_archives: bool = False
+    execute_replies: bool = False
+    max_conversations_to_scan: int = 25
+    unread_only: bool = False
+    auto_star_job_offers: bool = True
+    auto_label_job_offers: bool = True
+    skip_drafting_for_personal_messages: bool = True
+    reply_tone: str = "a thoughtful senior engineering leader"
+    reply_max_characters: int = 600
+    reply_short_paragraphs: bool = True
+    reply_avoid_em_dash: bool = True
+    old_message_threshold_days: int = 60
+    old_message_apology_enabled: bool = True
+    old_message_apology_reason: str = "you've been busy with multiple projects"
+    old_job_message_follow_up_enabled: bool = True
+    old_job_message_follow_up_text: str = "ask if the opportunity is still available"
+
+    @field_validator("max_conversations_to_scan", "reply_max_characters", "old_message_threshold_days")
+    @classmethod
+    def validate_positive_integers(cls, value, info):
+        if value < 1:
+            raise ValueError(f"{info.field_name} must be at least 1")
+        return value
+
+
 class Secrets(BaseModel):
     linkedin_email: Optional[str] = None
     linkedin_password: Optional[str] = None

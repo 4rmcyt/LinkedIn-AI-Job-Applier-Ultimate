@@ -264,6 +264,104 @@ No info
 ```
 """
 
+
+linkedin_message_classification_template = """
+You are triaging a LinkedIn inbox for the account owner.
+
+Classify the conversation into exactly one of these categories:
+- personal_message
+- job_offer_to_me
+- looking_for_job
+- marketing_spam
+
+## Classification intent
+- personal_message: genuine networking, relationship building, personal follow-up, or general conversation not primarily trying to sell a service or seek a job.
+- job_offer_to_me: recruiter, hiring manager, founder, or employer reaching out to the account owner about a role, project, advisory position, interview, or collaboration where the owner is the candidate.
+- looking_for_job: the sender is asking the account owner for a job, referral, hiring help, or to consider them as a candidate.
+- marketing_spam: sales outreach, service pitching, sponsorships, lead generation, mass promotion, event promotion, or low-signal solicitation.
+
+## Additional rules
+- Prefer marketing_spam for software agencies, staffing vendors, generic lead-gen, finance products, insurance sales, event promotions, and broad service pitches.
+- Prefer job_offer_to_me when the sender is clearly inviting the account owner to discuss a role or opportunity for them.
+- Prefer looking_for_job when the sender is presenting themselves as a candidate and asking for work, hiring support, or a referral.
+- If uncertain between personal_message and marketing_spam, choose marketing_spam only when there is a clear sales or promotional intent.
+- The proposed_action must be conservative because this is dry-run only.
+- Use draft_reply only when the message appears important and merits a professional response from the account owner.
+- Use flag_spam_and_archive only for clear spam or promotional outreach.
+- Keep the reasoning brief and specific.
+
+## Output format instructions
+{format_instructions}
+
+## Resume
+``` 
+{resume}
+```
+
+## Conversation
+``` 
+{conversation}
+```
+"""
+
+
+linkedin_message_reply_template = """
+You are writing a LinkedIn reply for the account owner.
+
+## Additional rules
+- Write a concise, professional, human message.
+- Sound like a real person, not an assistant or a polished sales email.
+- Keep the language plain and direct.
+- Avoid buzzwords, corporate jargon, hype, and overly polished phrasing.
+- Prefer short, natural sentences and contractions when they sound right.
+- Match the tone of {reply_tone}, but keep it conversational.
+- Do not overcommit.
+- If the opportunity looks interesting, express interest and suggest a short call or ask for more details.
+- If details are vague, ask one or two concrete follow-up questions.
+- {reply_paragraph_instruction}
+- {reply_punctuation_instruction}
+- Keep the reply under {reply_max_characters} characters.
+- Return only the reply text, with no intro, no bullets, and no quotation marks.
+
+{apology_context}
+
+## Resume
+```
+{resume}
+```
+
+## Classification
+```
+{classification}
+```
+
+## Conversation
+```
+{conversation}
+```
+"""
+
+
+linkedin_message_reply_humanizer_template = """
+Rewrite the LinkedIn reply below so it sounds more human and less AI-generated.
+
+## Additional rules
+- Keep the original meaning.
+- Make it sound natural, warm, and direct.
+- {reply_paragraph_instruction}
+- {reply_punctuation_instruction}
+- Remove unnecessary jargon, filler, and overly polished wording.
+- Avoid sounding formal for the sake of sounding professional.
+- Keep it concise.
+- Do not add new claims, achievements, or details.
+- Return only the rewritten reply text.
+
+## Reply
+```
+{reply}
+```
+"""
+
 date_question_template = """
 You are a job applicant filling out a date field in an application form.
 Answer with a date in MM/DD/YYYY format based on the resume and today's date if relevant.
