@@ -15,6 +15,10 @@ I have no time to check this bot every day, so if you face any malfunction or ha
 
 Please ⭐ the repository if you find it useful. This is the only thing that motivates me to continue developing the project.
 
+## 🎥 Demo
+
+[![LinkedIn AI Job Applier Ultimate Demo](https://img.youtube.com/vi/HmbeI8u12MU/maxresdefault.jpg)](https://www.youtube.com/watch?v=HmbeI8u12MU)
+
 ### ⚠️ Note on Indeed
 
 Indeed support is functional but has important limitations compared to LinkedIn:
