@@ -61,6 +61,7 @@ class IndeedEasyApplier(BaseEasyApplier):
         self.resume_dir = resume_dir
         self.cover_letter_dir = cover_letter_dir
         self.test_mode = test_mode
+        self.submitted_resume_path = None
         self.all_questions: List[Question] = self._load_questions()
         self.previous_question_texts: List[str] = []
         self.generated_resume_dir = Path(resume_dir) / "generated_resumes"
