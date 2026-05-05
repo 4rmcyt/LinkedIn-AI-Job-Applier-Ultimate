@@ -18,7 +18,6 @@ from langchain_core.messages.ai import AIMessage
 from langchain_core.output_parsers import PydanticOutputParser, StrOutputParser
 from langchain_core.prompt_values import StringPromptValue
 from langchain_core.prompts import ChatPromptTemplate
-from Levenshtein import distance
 from pydantic import BaseModel
 
 import src.llm.prompts as prompts
@@ -590,10 +589,17 @@ class GPTAnswerer:
         if not options:
             return "no info"
         logger.info(f"Searching for best match for text: '{text}' in options: {options}")
-        distances = [(option, distance(text.lower(), option.lower())) for option in options]
-        best_option = min(distances, key=lambda x: x[1])[0]
-        logger.info(f"Best match found: {best_option}")
-        return best_option
+        text_lower = text.lower()
+        for option in options:
+            if text_lower == option.lower():
+                logger.info(f"Best match found: {option}")
+                return option
+        for option in options:
+            if text_lower in option.lower() or option.lower() in text_lower:
+                logger.info(f"Best match found: {option}")
+                return option
+        logger.info(f"No match found for '{text}' in options, returning no info")
+        return "no info"
 
     @staticmethod
     def _remove_placeholders(text: str) -> str:
@@ -763,8 +769,18 @@ class GPTAnswerer:
             return ""
 
         months = {
-            "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
-            "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+            "jan": 1,
+            "feb": 2,
+            "mar": 3,
+            "apr": 4,
+            "may": 5,
+            "jun": 6,
+            "jul": 7,
+            "aug": 8,
+            "sep": 9,
+            "oct": 10,
+            "nov": 11,
+            "dec": 12,
         }
         parts = timestamp_str.strip().split()
         if len(parts) < 2:
@@ -789,11 +805,19 @@ class GPTAnswerer:
             return ""
 
         category = (classification or {}).get("category")
-        apology_reason = (preferences.get("old_message_apology_reason") or "you've been busy with multiple projects").strip()
+        apology_reason = (
+            preferences.get("old_message_apology_reason")
+            or "you've been busy with multiple projects"
+        ).strip()
         follow_up_enabled = preferences.get("old_job_message_follow_up_enabled", True)
         follow_up_text = (
-            preferences.get("old_job_message_follow_up_text") or "ask if the opportunity is still available"
-        ).strip().rstrip(".")
+            (
+                preferences.get("old_job_message_follow_up_text")
+                or "ask if the opportunity is still available"
+            )
+            .strip()
+            .rstrip(".")
+        )
         if category != "job_offer_to_me":
             return (
                 f"- This message was sent over {threshold_days} days ago. Start the reply with a brief, warm "

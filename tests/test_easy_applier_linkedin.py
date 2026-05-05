@@ -494,6 +494,29 @@ class TestIsNumericField:
         result = await applier._is_numeric_field(field)
         assert result is False
 
+    @pytest.mark.asyncio
+    async def test_detects_keyword_in_question_text(self, applier):
+        field = AsyncMock()
+        field.get_attribute = AsyncMock(side_effect=lambda attr: "text" if attr == "type" else "")
+        result = await applier._is_numeric_field(field, "what is your expected salary?")
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_keyword_not_matched_as_substring(self, applier):
+        field = AsyncMock()
+        field.get_attribute = AsyncMock(side_effect=lambda attr: "text" if attr == "type" else "")
+        # "rate" is a substring of "demonstrates" — must not match
+        question = "include github code samples and any evaluation or benchmark work that demonstrates your technical rigor."
+        result = await applier._is_numeric_field(field, question)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_keyword_matched_as_whole_word(self, applier):
+        field = AsyncMock()
+        field.get_attribute = AsyncMock(side_effect=lambda attr: "text" if attr == "type" else "")
+        result = await applier._is_numeric_field(field, "what is your hourly rate?")
+        assert result is True
+
 
 class TestSelectDropdownOption:
     @pytest.mark.asyncio

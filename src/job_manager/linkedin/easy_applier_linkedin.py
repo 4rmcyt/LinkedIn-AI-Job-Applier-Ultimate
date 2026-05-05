@@ -1,5 +1,6 @@
 import base64
 import os
+import re
 import traceback
 from pathlib import Path
 from typing import Any, List, Tuple
@@ -1461,7 +1462,10 @@ class LinkedInEasyApplier(BaseEasyApplier):
         )
         if not is_numeric:
             q = question_text.lower()
-            is_numeric = any(kw in q for kw in self._NUMERIC_QUESTION_KEYWORDS)
+            is_numeric = any(
+                re.search(r"\b" + re.escape(kw) + r"\b", q)
+                for kw in self._NUMERIC_QUESTION_KEYWORDS
+            )
         logger.debug(f"Field type: {field_type}, Field ID: {field_id}, Is numeric: {is_numeric}")
         return is_numeric
 

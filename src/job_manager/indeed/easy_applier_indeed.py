@@ -666,7 +666,9 @@ class IndeedEasyApplier(BaseEasyApplier):
         if field_type == "number" or inputmode == "numeric" or field_id.startswith("number-input-"):
             return True
         q = question_text.lower()
-        return any(kw in q for kw in self._NUMERIC_QUESTION_KEYWORDS)
+        return any(
+            re.search(r"\b" + re.escape(kw) + r"\b", q) for kw in self._NUMERIC_QUESTION_KEYWORDS
+        )
 
     async def _find_and_handle_textbox_question(self, section: Any) -> bool:
         """Fill appropriate textbox using cache or LLM"""
