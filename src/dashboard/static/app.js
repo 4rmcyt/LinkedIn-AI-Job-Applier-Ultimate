@@ -186,6 +186,7 @@ function renderJobDetails(job) {
       <div><dt>Skills</dt><dd>${Array.isArray(job.skills) ? job.skills.join(", ") : job.skills || "-"}</dd></div>
     </dl>
   `;
+  jobDetails.scrollTop = 0;
 }
 
 function renderRunHistory(runs) {
