@@ -124,6 +124,7 @@ Answer the question, based on the information from the resume if necessary, or o
 - Remember that the gender is {gender}.
 - If you do not have the information to answer the question or part of the question - answer 'No info'
 - If it's looks like the question is related to the previous questions (e.g. "If yes/no, who/when/where?"), use the information from the previous questions.
+- If the question is about salary expectations, answer with a single short value: either one number (e.g. "$80000") or a range (e.g. "$80000-160000"), based on what is stated in the resume. Always include the currency symbol. If the currency implied by the question differs from the currency in the resume, convert the value to the question's currency. Do not add any extra text.
 """
 
 text_question_with_error_template = """
@@ -296,6 +297,8 @@ Follow these strategic guidelines when responding experience related questions:
    - For High Experience: For high levels of experience, provide a number based on clear evidence from the resume. Avoid making inferences for high experience levels unless the evidence is strong.
 ##Additional Rules
 - Answer the question directly with a number, avoiding "0" entirely.
+- If the question provides a salary range (e.g. "80000-160000" or "80000 to 160000"), respond with that exact range as-is (e.g. "80000-160000"), not a single number.
+- For salary answers, always include the currency symbol (e.g. "$80000" or "$80000-160000"). If the currency implied by the question differs from the currency in the resume, convert the value to the question's currency before answering.
 - If question is about age, TAKE INTO ACCOUNT that today's date is {current_date}
 - If you do not have the information to answer the question or part of the question - answer 'No info
 - If it's looks like the question is related to the previous questions (e.g. "If yes/no, who/when/where?"), use the information from the previous questions.

@@ -1223,7 +1223,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
                 logger.warning(f"Could not find label for text field: {e}")
                 question_text = ""
 
-            is_numeric = await self._is_numeric_field(text_field)
+            is_numeric = await self._is_numeric_field(text_field, question_text)
             logger.info(f"Is the field numeric? {'Yes' if is_numeric else 'No'}")
 
             question_type = "numeric" if is_numeric else "textbox"
@@ -1434,7 +1434,23 @@ class LinkedInEasyApplier(BaseEasyApplier):
             await debug_capture(self.page, "dropdown_question_error")
             return False
 
-    async def _is_numeric_field(self, field: Any) -> bool:
+    _NUMERIC_QUESTION_KEYWORDS = (
+        "salary",
+        "compensation",
+        "pay",
+        "wage",
+        "rate",
+        "earnings",
+        "years of experience",
+        "how many years",
+        "how many months",
+        "number of",
+        "how many",
+        "gpa",
+        "grade point",
+    )
+
+    async def _is_numeric_field(self, field: Any, question_text: str = "") -> bool:
         """Check if field is numeric (async)"""
         field_type = (await field.get_attribute("type") or "").lower()
         field_id = (await field.get_attribute("id") or "").lower()
@@ -1443,6 +1459,9 @@ class LinkedInEasyApplier(BaseEasyApplier):
             or field_type == "number"
             or ("text" == field_type and "numeric" in field_id)
         )
+        if not is_numeric:
+            q = question_text.lower()
+            is_numeric = any(kw in q for kw in self._NUMERIC_QUESTION_KEYWORDS)
         logger.debug(f"Field type: {field_type}, Field ID: {field_id}, Is numeric: {is_numeric}")
         return is_numeric
 

@@ -642,14 +642,31 @@ class IndeedEasyApplier(BaseEasyApplier):
         logger.warning(f"Could not parse date '{date_str}', using as-is")
         return date_str
 
-    async def _is_numeric_field(self, field: Any) -> bool:
+    _NUMERIC_QUESTION_KEYWORDS = (
+        "salary",
+        "compensation",
+        "pay",
+        "wage",
+        "rate",
+        "earnings",
+        "years of experience",
+        "how many years",
+        "how many months",
+        "number of",
+        "how many",
+        "gpa",
+        "grade point",
+    )
+
+    async def _is_numeric_field(self, field: Any, question_text: str = "") -> bool:
         """Check if a form field is a numeric (number) question on Indeed"""
         field_type = (await field.get_attribute("type") or "").lower()
         field_id = (await field.get_attribute("id") or "").lower()
         inputmode = (await field.get_attribute("inputmode") or "").lower()
-        return (
-            field_type == "number" or inputmode == "numeric" or field_id.startswith("number-input-")
-        )
+        if field_type == "number" or inputmode == "numeric" or field_id.startswith("number-input-"):
+            return True
+        q = question_text.lower()
+        return any(kw in q for kw in self._NUMERIC_QUESTION_KEYWORDS)
 
     async def _find_and_handle_textbox_question(self, section: Any) -> bool:
         """Fill appropriate textbox using cache or LLM"""
@@ -661,7 +678,7 @@ class IndeedEasyApplier(BaseEasyApplier):
         question_text = await get_clean_text(section)
         try:
             self.previous_question_texts.append(question_text)
-            is_numeric = await self._is_numeric_field(text_input)
+            is_numeric = await self._is_numeric_field(text_input, question_text)
             question_type = "numeric" if is_numeric else "text"
             cached = self._find_cached_question(question_text, question_type)
             existing_answer = cached.answer if cached else None
