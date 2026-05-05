@@ -842,6 +842,9 @@ class LinkedInEasyApplier(BaseEasyApplier):
     async def _handle_terms_of_service(self, element: Any) -> bool:
         """Handle terms of service checkbox (async)"""
         try:
+            checkboxes = await element.locator("input[type='checkbox']").all()
+            if not checkboxes:
+                return False
             checkbox_text = (
                 await element.locator("xpath=.//label").first.text_content() or ""
             ).lower()
