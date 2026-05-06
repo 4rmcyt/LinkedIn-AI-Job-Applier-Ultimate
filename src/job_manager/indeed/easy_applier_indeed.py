@@ -1159,7 +1159,7 @@ if __name__ == "__main__":
             resume_text = resume_anonymizer.anonymize_text(resume_text)
 
             gpt_answerer.set_resume(resume_structured, resume_text)
-            gpt_answerer.set_job(test_job, is_test=True)
+            gpt_answerer.set_job(test_job.model_dump(), is_test=True)
 
             # Initialize resume generator manager
             style_manager = StyleManager()

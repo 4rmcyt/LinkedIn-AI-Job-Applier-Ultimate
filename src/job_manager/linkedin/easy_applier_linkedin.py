@@ -1832,7 +1832,7 @@ if __name__ == "__main__":
         logger.info("Starting LinkedInEasyApplier test...")
 
         # Test job URL
-        job_url = "https://www.linkedin.com/jobs/view/4406409061"
+        job_url = "https://www.linkedin.com/jobs/view/4410066193"
         # Initialize Playwright browser
         try:
             browser, context, page = await create_playwright_browser()

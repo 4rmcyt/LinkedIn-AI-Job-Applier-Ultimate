@@ -1418,14 +1418,68 @@ class GPTAnswerer:
 
 
 if __name__ == "__main__":
+    import yaml
+
     load_dotenv()
     api_key = os.getenv("llm_api_key", "")
     llm_proxy = os.getenv("llm_proxy", "")
     llm_api_url = os.getenv("llm_api_url", None)
 
-    adapter = AIAdapter(api_key, llm_proxy, llm_api_url)
-    prompt = ChatPromptTemplate.from_messages(
-        [("human", "Say 'model works correctly' and nothing else.")]
-    ).format_prompt()
-    response = adapter.invoke(prompt)
-    print(f"Model response: {response.content}")
+    resume_dir = Path(RESUME_DIR)
+    resume_text_path = resume_dir / "resume_text.txt"
+    resume_structured_path = resume_dir / "structured_resume.yaml"
+
+    with open(resume_text_path, "r", encoding="utf-8") as f:
+        resume_text = f.read()
+
+    with open(resume_structured_path, "r", encoding="utf-8") as f:
+        resume_structured = yaml.safe_load(f)
+    resume_structured = ResumeStructure(**resume_structured).model_dump()
+
+    answerer = GPTAnswerer(llm_api_key=api_key, llm_proxy=llm_proxy, llm_api_url=llm_api_url)
+    answerer.set_resume(resume_structured, resume_text)
+
+    test_cases = [
+        {
+            "type": "textual",
+            "question": "Tell me about your educational background.",
+        },
+        {
+            "type": "numeric",
+            "question": "How many years of experience do you have with Python?",
+        },
+        {
+            "type": "numeric",
+            "question": "What are your salary expectations (annual, USD)?",
+        },
+        {
+            "type": "radio",
+            "question": "What is your highest level of education?",
+            "options": ["High School", "Bachelor's Degree", "Master's Degree", "PhD"],
+        },
+        {
+            "type": "checkbox",
+            "question": "Which of the following programming languages are you proficient in?",
+            "options": ["Python", "Java", "C++", "JavaScript", "Go", "Rust"],
+        },
+    ]
+
+    for case in test_cases:
+        print(f"\n{'=' * 60}")
+        print(f"Type: {case['type']}")
+        print(f"Question: {case['question']}")
+        if "options" in case:
+            print(f"Options: {case['options']}")
+        print("-" * 60)
+
+        q = case["question"]
+        if case["type"] == "textual":
+            answer = answerer.answer_question_textual_wide_range(q, [])
+        elif case["type"] == "numeric":
+            answer = answerer.answer_question_numeric(q, [])
+        elif case["type"] == "radio":
+            answer = answerer.select_one_answer_from_options(q, case["options"], [])
+        elif case["type"] == "checkbox":
+            answer = answerer.select_many_answers_from_options(q, case["options"], [])
+
+        print(f"Answer: {answer}")
