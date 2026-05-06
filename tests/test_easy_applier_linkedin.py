@@ -580,8 +580,12 @@ class TestHandleTermsOfService:
         label.text_content = AsyncMock(return_value="I agree to the terms of service")
         label.click = AsyncMock()
 
+        checkbox_locator = MagicMock()
+        checkbox_locator.all = AsyncMock(return_value=["checkbox"])
+        checkbox_locator.first = label
+
         section = MagicMock()
-        section.locator = MagicMock(return_value=MagicMock(first=label))
+        section.locator = MagicMock(return_value=checkbox_locator)
 
         result = await applier._handle_terms_of_service(section)
 

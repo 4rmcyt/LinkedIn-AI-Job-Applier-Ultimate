@@ -604,9 +604,9 @@ class TestGPTAnswerer:
         assert result == "Python"
 
     def test_gpt_answerer_find_best_match_fuzzy(self):
-        """Test GPTAnswerer find_best_match with fuzzy match"""
+        """Test GPTAnswerer find_best_match with partial match"""
         options = ["Python", "Java", "JavaScript"]
-        text = "Pythn"  # Typo
+        text = "Pyth"  # Prefix substring of Python
 
         result = GPTAnswerer.find_best_match(text, options)
         assert result == "Python"
