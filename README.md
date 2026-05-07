@@ -293,7 +293,7 @@ This project enhances the original codebase with several powerful new features:
     *   **structured resume file** (`structured_resume.yaml`) which is used for tailored resume generation
 
     Resume text file is mandatory, you need to create it by yourself. But with structured resume file you have two options:
-    *   **Automatic Parsing (recommended):** The bot will use the LLM to parse your resume text file into a structured format on the first run and save it in `data/resumes/structured_resume.yaml`. Just add raw resume text to your project and run the bot - it will do the rest. Also if you want to update your resume info - add it to `resume_text.txt`, delete `structured_resume.yaml` and run the bot again - it will create updated `structured_resume.yaml` file.
+    *   **Automatic Parsing (recommended):** The bot will use the LLM to parse your resume text file into a structured format on the first run and save it in `data/resumes/structured_resume.yaml`. Just add raw resume text to your project and run the bot - it will do the rest. Also if you want to update your resume info - add it to `resume_text.txt`, delete `structured_resume.yaml` and run the bot again - it will create updated `structured_resume.yaml` file. Another way of auto creating structured resume is to run `uv run python src/resume_builder/resume_manager.py` command - it will create `structured_resume.yaml` file if it doesn't exist.
     *   **Manual Structure:** fill out file `structured_resume.yaml` manually for precise control. Why use this option instead of first? Because if you select the first option, all data from your resume text will be sent to the LLM to create the structured_resume file — for some people who care about their privacy this would be unacceptable. I want to point out that Automatic Parsing and Non-Easy Apply vacancies applying are the only two functions of this bot that send not anonymized user's personal information to LLM. All other bot functions anonymize personal information before sending it to LLM.
     Examples of `resume_text.txt` and `structured_resume.yaml` files can be found in `examples/data/resumes` folder
 
@@ -310,17 +310,17 @@ This project enhances the original codebase with several powerful new features:
     **I also recommend to test resume generation before starting applying jobs**.
 
     ### How to test resume generation using bot
-    1.  Fill file `data/resumes/resume_text.txt` with information from your resume. Example of resume_text.txt file can be found in `examples` folder.
-    2.  Run the bot to create the file `data/resumes/structured_resume.yaml` and fill it automatically or fill it manually.
-    3.  Run this command
+    1.  Fill file `data/resumes/resume_text.txt` with information from your resume. Example of resume_text.txt file can be found in `examples` folder. You can also fill `structured_resume.yaml` manually, but if you don't want to do it - just move to step 2.
+    2.  Run this command
 
         ```bash
-        python src/resume_builder/resume_manager.py
+        uv run python src/resume_builder/resume_manager.py
         ```
-    4.  Select resume style (first style FAANGPath is recommended).
-    5.  Output file is `test_generated_resume.pdf` in root directory
-    6.  Carefully read the resume, look for **No info**, **N/A** or **None** text in it. If you find it - that means that some critical information in your resume text is missing and you must add it to your resume file(s) and repeat the resume creation process.
-    7.  If you are satisfied with the quality of your resume - move the output file to any path you like (e.g. `data/resumes/resume.pdf`) and set `READY_MADE_RESUME_PATH` in `config/app_config.py` to that path. The bot will use it for every application.
+        If you don't have `structured_resume.yaml` file - bot will create it automatically using `resume_text.txt` file during this step.
+    3.  Select resume style (first style FAANGPath is recommended).
+    4.  Output file is `test_generated_resume.pdf` in root directory
+    5.  Carefully read the resume, look for **No info**, **N/A** or **None** text in it. If you find it - that means that some critical information in your resume text is missing and you must add it to your resume file(s) and repeat the resume creation process.
+    6.  If you are satisfied with the quality of your resume - move the output file to any path you like (e.g. `data/resumes/resume.pdf`) and set `READY_MADE_RESUME_PATH` in `config/app_config.py` to that path. The bot will use it for every application.
 
 ## ▶️ Usage
 
@@ -447,7 +447,7 @@ If you want a more detailed dashboard guide, see `docs/dashboard.md`.
 To run the networking tool that finds and connects with Open Networkers:
 
 ```bash
-python linkedin_connection_searcher.py
+uv run python linkedin_connection_searcher.py
 ```
 
 This tool will use the settings in `config/linkedin_connection_searcher_config.yaml` to search for potential connections on LinkedIn and send invitations automatically.
