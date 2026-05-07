@@ -20,6 +20,11 @@ LAST_RUN_FILE = Path(OUTPUT_DIR) / "last_run.yaml"
 
 
 class BaseJobManager(ABC):
+    @staticmethod
+    def _is_target_closed_error(error: Exception) -> bool:
+        """Return True when Playwright reports a closed page, context, or browser."""
+        return "Target page, context or browser has been closed" in str(error)
+
     @abstractmethod
     def start_applying(self) -> None:
         pass
@@ -234,7 +239,10 @@ class BaseJobManager(ABC):
             self.interesting_jobs, key=lambda x: int(x.interest_score), reverse=True
         )
         self._save_data_to_yaml(
-            [job.model_dump(exclude_none=True, exclude_defaults=True) for job in self.interesting_jobs],
+            [
+                job.model_dump(exclude_none=True, exclude_defaults=True)
+                for job in self.interesting_jobs
+            ],
             "interesting_jobs.yaml",
         )
         logger.info("Interesting job successfully saved to a file")
@@ -245,7 +253,9 @@ class BaseJobManager(ABC):
         if result != "Skip":
             return False
         normalized_reason = reason.lower()
-        return "no info" in normalized_reason or "easy apply dialog did not open" in normalized_reason
+        return (
+            "no info" in normalized_reason or "easy apply dialog did not open" in normalized_reason
+        )
 
     def _save_data_to_yaml(
         self,

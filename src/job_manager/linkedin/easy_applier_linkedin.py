@@ -63,9 +63,7 @@ def normalize_test_job_from_parsed_page(parsed_job: Job | None, job_url: str) ->
     return job
 
 
-def collect_apply_result_metadata(
-    easy_applier: Any, submitted_resume_path: Any
-) -> dict[str, str]:
+def collect_apply_result_metadata(easy_applier: Any, submitted_resume_path: Any) -> dict[str, str]:
     """Collect metadata that should be persisted with standalone Easy Apply results."""
     metadata = {}
     if isinstance(submitted_resume_path, str) and submitted_resume_path:
@@ -759,11 +757,14 @@ class LinkedInEasyApplier(BaseEasyApplier):
                     logger.info("Uploading resume")
                     if (
                         self.resume_generator_manager is not None
-                        and getattr(self.resume_generator_manager, "selected_style", None) is not None
+                        and getattr(self.resume_generator_manager, "selected_style", None)
+                        is not None
                     ):
                         await self._create_and_upload_resume(upload_element, job)
                     elif self.ready_made_resume_path is not None:
-                        logger.info("Resume generator is not ready; falling back to ready-made resume")
+                        logger.info(
+                            "Resume generator is not ready; falling back to ready-made resume"
+                        )
                         await self._create_and_upload_resume(upload_element, job)
                     else:
                         raise NoInfoException(
@@ -1155,7 +1156,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
                     selected_options = self.gpt_answerer.select_many_answers_from_options(
                         question_text, checkbox_options, self.previous_question_texts[:-1]
                     )
-                    if not any(s.lower().startswith("no info") for s in selected_options):
+                    if not any(self._is_no_info_answer(s) for s in selected_options):
                         self._save_questions(
                             Question(
                                 question_type="checkbox",
@@ -1173,7 +1174,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
                         if any(
                             selected in label_text.lower() or label_text.lower() in selected.lower()
                             for selected in selected_options
-                            if not selected.lower().startswith("no info")
+                            if not self._is_no_info_answer(selected)
                         ):
                             if not await checkbox.is_checked():
                                 logger.info(f"Checking checkbox: {label_text}")
@@ -1310,7 +1311,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
             answer = self.gpt_answerer.select_one_answer_from_options(
                 question_text, options, self.previous_question_texts[:-1]
             )
-            if answer.lower().startswith("no info"):
+            if self._is_no_info_answer(answer):
                 raise NoInfoException(f"No info found for question: {question_text}")
             question_data = Question(question_type="radio", question=question_text, answer=answer)
             self._save_questions(question_data)
@@ -1393,9 +1394,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
                 if cached_question:
                     cached_answer = cached_question.answer.strip()
                     if self._is_no_info_answer(cached_answer):
-                        logger.info(
-                            f"Ignoring cached No info answer for question: {question_text}"
-                        )
+                        logger.info(f"Ignoring cached No info answer for question: {question_text}")
                     else:
                         existing_answer = cached_answer
                         logger.debug(
@@ -1425,7 +1424,9 @@ class LinkedInEasyApplier(BaseEasyApplier):
 
             if self._is_no_info_answer(answer):
                 if not await self._is_required_text_field(section, text_field):
-                    logger.info(f"Skipping optional text field with no available answer: {question_text}")
+                    logger.info(
+                        f"Skipping optional text field with no available answer: {question_text}"
+                    )
                     return True
                 raise NoInfoException(f"No info found for question: {question_text}")
 
@@ -1447,9 +1448,6 @@ class LinkedInEasyApplier(BaseEasyApplier):
 
         logger.debug("No text fields found in the section.")
         return False
-
-    def _is_no_info_answer(self, answer: Any) -> bool:
-        return isinstance(answer, str) and answer.strip().lower().startswith("no info")
 
     async def _is_required_text_field(self, section: Any, text_field: Any) -> bool:
         """Best-effort detection for LinkedIn required text fields."""
@@ -1597,7 +1595,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
                     answer = self.gpt_answerer.select_one_answer_from_options(
                         question_text, options, self.previous_question_texts[:-1]
                     )
-                    if answer.lower().startswith("no info"):
+                    if self._is_no_info_answer(answer):
                         raise NoInfoException(f"No info found for question: {question_text}")
                     question_data = Question(
                         question_type="dropdown", question=question_text, answer=answer
@@ -1969,7 +1967,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
                 await element.get_attribute("value"),
                 self.previous_question_texts[:-1],
             )
-            if answer.lower().startswith("no info"):
+            if self._is_no_info_answer(answer):
                 raise NoInfoException(
                     f"Can't fix error: {error_text}. No info found for question: {question_text}"
                 )
@@ -1990,7 +1988,12 @@ if __name__ == "__main__":
     import dotenv
 
     from config.app_config import TEST_MODE
-    from config.constants import COVER_LETTER_DIR, OUTPUT_DIR_LINKEDIN, RESUME_DIR, SEARCH_CONFIG_FILE
+    from config.constants import (
+        COVER_LETTER_DIR,
+        OUTPUT_DIR_LINKEDIN,
+        RESUME_DIR,
+        SEARCH_CONFIG_FILE,
+    )
     from src.job_manager.linkedin.job_manager_linkedin import LinkedInJobManager
     from src.job_manager.resume_anonymizer import ResumeAnonymizer
     from src.llm.llm_manager import GPTAnswerer
@@ -2037,9 +2040,7 @@ if __name__ == "__main__":
                 parser = LinkedInJobManager(page, "", None, None)
                 parsed_job = await parser._get_detailed_job_description()
                 test_job = normalize_test_job_from_parsed_page(parsed_job, job_url)
-                logger.info(
-                    f"Parsed job page: {test_job.job_title} at {test_job.company_name}"
-                )
+                logger.info(f"Parsed job page: {test_job.job_title} at {test_job.company_name}")
             except Exception as e:
                 logger.warning(f"Failed to parse job page; using generic fallback job context: {e}")
                 test_job = normalize_test_job_from_parsed_page(None, job_url)
@@ -2113,7 +2114,9 @@ if __name__ == "__main__":
                 logger.info("✅ LinkedInEasyApplier test completed successfully!")
                 return True
             if status == "Skip" and reason == "Already applied to this job":
-                logger.info("✅ LinkedInEasyApplier test detected already-applied job successfully!")
+                logger.info(
+                    "✅ LinkedInEasyApplier test detected already-applied job successfully!"
+                )
                 return True
             else:
                 logger.error(f"❌ LinkedInEasyApplier test failed - result is {status}: {reason}")

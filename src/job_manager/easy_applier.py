@@ -62,15 +62,14 @@ class BaseEasyApplier(ABC):
             logger.error(f"Failed to create directory: {self.generated_resume_dir}. Error: {e}")
             raise
 
-        generator_ready = (
-            getattr(self, "resume_generator_manager", None) is not None
-            and getattr(self.resume_generator_manager, "selected_style", None) is not None
-        )
-
-        if self.ready_made_resume_path is not None and not generator_ready:
+        if self.ready_made_resume_path is not None:
             file_path_pdf = os.path.abspath(str(self.ready_made_resume_path))
             logger.info(f"Using ready-made resume: {file_path_pdf}")
         else:
+            generator_ready = (
+                getattr(self, "resume_generator_manager", None) is not None
+                and getattr(self.resume_generator_manager, "selected_style", None) is not None
+            )
             if not generator_ready:
                 raise NoInfoException(
                     "No resume generator style selected and no ready-made resume configured"
@@ -191,6 +190,9 @@ class BaseEasyApplier(ABC):
             and self.current_job.company_name is not None
             and self.current_job.company_name in answer
         )
+
+    def _is_no_info_answer(self, answer: Any) -> bool:
+        return isinstance(answer, str) and answer.strip().lower().startswith("no info")
 
     def _find_cached_question(
         self, question_text: str, question_type: str | None = None

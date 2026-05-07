@@ -1,8 +1,8 @@
 import re
 import time
 import traceback
-from inspect import isawaitable
 from datetime import timedelta
+from inspect import isawaitable
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -37,11 +37,6 @@ from src.utils.utils import async_pause, load_yaml_file, sanitize_text
 
 search_config = load_yaml_file(SEARCH_CONFIG_FILE)
 logger.info(f"Maximum allowed number of applications: {MAX_APPLIES_NUM}")
-
-
-def _is_target_closed_error(error: Exception) -> bool:
-    """Return True when Playwright reports a closed page, context, or browser."""
-    return "Target page, context or browser has been closed" in str(error)
 
 
 class LinkedInJobManager(BaseJobManager):
@@ -231,7 +226,7 @@ class LinkedInJobManager(BaseJobManager):
                 except StopRequested:
                     raise
                 except Exception as e:
-                    if _is_target_closed_error(e):
+                    if self._is_target_closed_error(e):
                         logger.warning("Browser was closed during job processing; stopping run")
                         result = "Error"
                         break
@@ -395,13 +390,13 @@ class LinkedInJobManager(BaseJobManager):
             try:
                 await new_page.close()
             except Exception as e:
-                if not _is_target_closed_error(e):
+                if not self._is_target_closed_error(e):
                     logger.warning(f"Failed to close job page: {e}")
             self.page = original_page
             try:
                 await self.page.bring_to_front()
             except Exception as e:
-                if _is_target_closed_error(e):
+                if self._is_target_closed_error(e):
                     logger.warning("Browser was closed before returning to the search page")
                 else:
                     raise
@@ -535,10 +530,10 @@ class LinkedInJobManager(BaseJobManager):
 
         # Try different selectors for job links
         link_selectors = [
-                "a[href*='currentJobId=']",
-                "a[href*='/jobs/collections/recommended']",
-                "a[href*='/jobs/collections/top-applicant']",
-                "a[href*='/jobs/view/']",
+            "a[href*='currentJobId=']",
+            "a[href*='/jobs/collections/recommended']",
+            "a[href*='/jobs/collections/top-applicant']",
+            "a[href*='/jobs/view/']",
             "a[data-control-name='job_card_title']",
             ".job-card-job-posting-card-wrapper__card-link",
             ".base-card__full-link",
