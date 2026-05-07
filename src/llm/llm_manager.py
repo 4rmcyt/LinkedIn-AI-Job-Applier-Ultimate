@@ -989,6 +989,12 @@ class GPTAnswerer:
             all_digits = re.sub(r"\D", "", stripped)
             if all_digits:
                 return all_digits
+        # Match salary ranges like $60000-$80000, £280-£560, or $60,000-$80,000
+        range_match = re.search(r"[^\d,]?([\d,]+)\s*-\s*[^\d,]?([\d,]+)", output_str)
+        if range_match:
+            low = range_match.group(1).replace(",", "")
+            high = range_match.group(2).replace(",", "")
+            return f"{low}-{high}"
         numbers = re.findall(r"\d+", output_str)
         if numbers:
             return str(numbers[0])
@@ -1451,6 +1457,14 @@ if __name__ == "__main__":
         {
             "type": "numeric",
             "question": "What are your salary expectations (annual, USD)?",
+        },
+        {
+            "type": "numeric",
+            "question": "What are your salary expectations (monthly, EUR)?",
+        },
+        {
+            "type": "numeric",
+            "question": "What are your salary expectations (daily, GBP)?",
         },
         {
             "type": "radio",
