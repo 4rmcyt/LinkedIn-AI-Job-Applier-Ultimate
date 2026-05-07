@@ -21,6 +21,8 @@ class BaseEasyApplier(ABC):
         super().__init__()
         self.ready_made_resume_path = None
         self.submitted_resume_path = None
+        self.already_applied_at = None
+        self.already_applied_at_text = None
 
     @abstractmethod
     async def apply_to_job(self, job: Job) -> None:
@@ -60,10 +62,19 @@ class BaseEasyApplier(ABC):
             logger.error(f"Failed to create directory: {self.generated_resume_dir}. Error: {e}")
             raise
 
-        if self.ready_made_resume_path is not None:
+        generator_ready = (
+            getattr(self, "resume_generator_manager", None) is not None
+            and getattr(self.resume_generator_manager, "selected_style", None) is not None
+        )
+
+        if self.ready_made_resume_path is not None and not generator_ready:
             file_path_pdf = os.path.abspath(str(self.ready_made_resume_path))
             logger.info(f"Using ready-made resume: {file_path_pdf}")
         else:
+            if not generator_ready:
+                raise NoInfoException(
+                    "No resume generator style selected and no ready-made resume configured"
+                )
             file_path_pdf = os.path.join(
                 self.generated_resume_dir, f"CV_{job.company_name}_{job.job_title}.pdf"
             )

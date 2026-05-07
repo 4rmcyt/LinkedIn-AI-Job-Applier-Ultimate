@@ -1,9 +1,11 @@
 import base64
 import os
 import re
+import sys
 import traceback
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from playwright.sync_api import Page
 from reportlab.lib.pagesizes import A4
@@ -32,6 +34,52 @@ from src.utils.utils import (
 )
 
 
+def build_linkedin_job_url(job_url_or_id: str | None = None) -> str:
+    """Build a LinkedIn job URL from a full URL, numeric ID, or default value."""
+    default_job_url = "https://www.linkedin.com/jobs/view/4410066193"
+    if not job_url_or_id:
+        return default_job_url
+    job_url_or_id = job_url_or_id.strip()
+    if not job_url_or_id:
+        return default_job_url
+    if job_url_or_id.isdigit():
+        return f"https://www.linkedin.com/jobs/view/{job_url_or_id}"
+    return job_url_or_id
+
+
+def normalize_test_job_from_parsed_page(parsed_job: Job | None, job_url: str) -> Job:
+    """Ensure direct Easy Applier tests always have a usable Job object."""
+    job = parsed_job or Job()
+    if not job.url:
+        job.url = job_url
+    if not job.job_title:
+        job.job_title = "LinkedIn job"
+    if not job.company_name:
+        job.company_name = "Unknown company"
+    if not job.job_description:
+        job.job_description = "LinkedIn vacancy information was not parsed from the page."
+    if not job.apply_method:
+        job.apply_method = "Easy Apply"
+    return job
+
+
+def collect_apply_result_metadata(
+    easy_applier: Any, submitted_resume_path: Any
+) -> dict[str, str]:
+    """Collect metadata that should be persisted with standalone Easy Apply results."""
+    metadata = {}
+    if isinstance(submitted_resume_path, str) and submitted_resume_path:
+        metadata["submitted_resume_path"] = submitted_resume_path
+
+    applied_at = getattr(easy_applier, "already_applied_at", None)
+    applied_at_text = getattr(easy_applier, "already_applied_at_text", None)
+    if isinstance(applied_at, str) and applied_at:
+        metadata["applied_at"] = applied_at
+    if isinstance(applied_at_text, str) and applied_at_text:
+        metadata["applied_at_text"] = applied_at_text
+    return metadata
+
+
 class LinkedInEasyApplier(BaseEasyApplier):
     def __init__(
         self,
@@ -46,6 +94,7 @@ class LinkedInEasyApplier(BaseEasyApplier):
         test_mode: bool,
     ):
         logger.info("Initializing LinkedInEasyApplier")
+        super().__init__()
         self.page = page
         self.gpt_answerer = gpt_answerer
         self.resume_anonymizer = resume_anonymizer
@@ -130,9 +179,13 @@ class LinkedInEasyApplier(BaseEasyApplier):
             logger.debug("Focus removed from the active element")
             logger.info("Attempting to click 'Easy Apply' button")
             while True:
+                if await self._is_already_applied():
+                    return "Skip", "Already applied to this job"
                 # Click 'Easy Apply' button
                 result = await self._find_easy_apply_button(job)
                 if result is False:
+                    if await self._is_already_applied():
+                        return "Skip", "Already applied to this job"
                     return (
                         "Skip",
                         "No clickable 'Easy Apply' button found, maybe you already applied to this job",
@@ -456,9 +509,9 @@ class LinkedInEasyApplier(BaseEasyApplier):
 
             if modal_content is None:
                 logger.error("Easy Apply modal content not found on the page with any selector")
-                raise Exception(
-                    "Easy Apply modal content not found. The Easy Apply dialog may not be open."
-                )
+                if await self._is_already_applied():
+                    raise NoInfoException("Already applied to this job")
+                raise NoInfoException("Easy Apply dialog did not open")
 
             logger.debug("Easy Apply modal content found successfully")
 
@@ -525,6 +578,96 @@ class LinkedInEasyApplier(BaseEasyApplier):
             await self._handle_upload_fields(element, job, processed_file_inputs)
         else:
             await self._process_form_section(element)
+
+    async def _is_already_applied(self) -> bool:
+        """Detect LinkedIn's application status panel for already-submitted jobs."""
+        return await self._mark_already_applied_status()
+
+    async def _mark_already_applied_status(self) -> bool:
+        status = await self._get_already_applied_status()
+        if not status:
+            return False
+        self.already_applied_at = status.get("applied_at")
+        self.already_applied_at_text = status.get("applied_at_text")
+        if self.already_applied_at_text:
+            logger.info(
+                f"Detected already-submitted LinkedIn application status: {self.already_applied_at_text}"
+            )
+        else:
+            logger.info("Detected already-submitted LinkedIn application status")
+        return True
+
+    async def _get_already_applied_status(self) -> Optional[Dict[str, Optional[str]]]:
+        """Return LinkedIn's application status metadata when this job was already submitted."""
+        selectors = [
+            "//*[normalize-space()='Application status']/following::*[normalize-space()='Application submitted'][1]",
+            "//*[normalize-space()='Application submitted']",
+        ]
+        for selector in selectors:
+            try:
+                submitted_element = await find_element_safely(
+                    self.page, selector, "xpath", timeout=1000
+                )
+                if submitted_element:
+                    applied_at_text = await self._extract_already_applied_at_text(submitted_element)
+                    return {
+                        "applied_at": self._parse_already_applied_at(applied_at_text),
+                        "applied_at_text": applied_at_text,
+                    }
+            except Exception as e:
+                logger.debug(f"Failed checking already-applied selector {selector}: {e}")
+        return None
+
+    async def _extract_already_applied_at_text(self, submitted_element: Any) -> Optional[str]:
+        """Extract the date/relative time text next to LinkedIn's submitted status."""
+        selectors = [
+            "xpath=following-sibling::*[1]",
+            "xpath=following::*[normalize-space()][1]",
+        ]
+        for selector in selectors:
+            try:
+                date_element = submitted_element.locator(selector).first
+                if await date_element.count() > 0:
+                    text = (await date_element.inner_text()).strip()
+                    if text and text.lower() != "view resume":
+                        return text
+            except Exception as e:
+                logger.debug(f"Failed extracting already-applied date with {selector}: {e}")
+        return None
+
+    def _parse_already_applied_at(self, applied_at_text: Optional[str]) -> Optional[str]:
+        """Convert common LinkedIn relative submitted times into an ISO timestamp."""
+        if not applied_at_text:
+            return None
+
+        normalized = applied_at_text.strip().lower()
+        now = datetime.now()
+        if normalized in {"just now", "moments ago", "a moment ago"}:
+            return now.isoformat(timespec="seconds")
+
+        match = re.search(
+            r"(?:about\s+)?(?:a|an|1|(?P<count>\d+))\s+"
+            r"(?P<unit>minute|minutes|hour|hours|day|days|week|weeks|month|months|year|years)\s+ago",
+            normalized,
+        )
+        if not match:
+            return None
+
+        count = int(match.group("count") or 1)
+        unit = match.group("unit")
+        if unit.startswith("minute"):
+            delta = timedelta(minutes=count)
+        elif unit.startswith("hour"):
+            delta = timedelta(hours=count)
+        elif unit.startswith("day"):
+            delta = timedelta(days=count)
+        elif unit.startswith("week"):
+            delta = timedelta(weeks=count)
+        elif unit.startswith("month"):
+            delta = timedelta(days=30 * count)
+        else:
+            delta = timedelta(days=365 * count)
+        return (now - delta).isoformat(timespec="seconds")
 
     async def _is_upload_field(self, element: Any) -> bool:
         """Check if element is upload field (async)"""
@@ -614,7 +757,18 @@ class LinkedInEasyApplier(BaseEasyApplier):
                     await self._create_and_upload_photo(upload_element, job)
                 elif "resume" in container_text:
                     logger.info("Uploading resume")
-                    await self._create_and_upload_resume(upload_element, job)
+                    if (
+                        self.resume_generator_manager is not None
+                        and getattr(self.resume_generator_manager, "selected_style", None) is not None
+                    ):
+                        await self._create_and_upload_resume(upload_element, job)
+                    elif self.ready_made_resume_path is not None:
+                        logger.info("Resume generator is not ready; falling back to ready-made resume")
+                        await self._create_and_upload_resume(upload_element, job)
+                    else:
+                        raise NoInfoException(
+                            "No resume generator style selected and no ready-made resume configured"
+                        )
                 elif "cover" in container_text:
                     logger.info("Uploading cover letter")
                     await self._create_and_upload_cover_letter(upload_element, job)
@@ -842,9 +996,6 @@ class LinkedInEasyApplier(BaseEasyApplier):
     async def _handle_terms_of_service(self, element: Any) -> bool:
         """Handle terms of service checkbox (async)"""
         try:
-            checkboxes = await element.locator("input[type='checkbox']").all()
-            if not checkboxes:
-                return False
             checkbox_text = (
                 await element.locator("xpath=.//label").first.text_content() or ""
             ).lower()
@@ -1240,12 +1391,18 @@ class LinkedInEasyApplier(BaseEasyApplier):
             if not is_cover_letter:
                 cached_question = self._find_cached_question(question_text, question_type)
                 if cached_question:
-                    existing_answer = cached_question.answer.strip()
-                    logger.debug(
-                        "Found existing answer for '%s' via cached %s field",
-                        question_text,
-                        cached_question.question_type,
-                    )
+                    cached_answer = cached_question.answer.strip()
+                    if self._is_no_info_answer(cached_answer):
+                        logger.info(
+                            f"Ignoring cached No info answer for question: {question_text}"
+                        )
+                    else:
+                        existing_answer = cached_answer
+                        logger.debug(
+                            "Found existing answer for '%s' via cached %s field",
+                            question_text,
+                            cached_question.question_type,
+                        )
 
             if existing_answer and not is_cover_letter:
                 answer = existing_answer
@@ -1266,7 +1423,10 @@ class LinkedInEasyApplier(BaseEasyApplier):
                         question_text, self.previous_question_texts[:-1]
                     )
 
-            if answer.lower().startswith("no info"):
+            if self._is_no_info_answer(answer):
+                if not await self._is_required_text_field(section, text_field):
+                    logger.info(f"Skipping optional text field with no available answer: {question_text}")
+                    return True
                 raise NoInfoException(f"No info found for question: {question_text}")
 
             answer = self.resume_anonymizer.deanonymize_text(answer)
@@ -1286,6 +1446,32 @@ class LinkedInEasyApplier(BaseEasyApplier):
             return True
 
         logger.debug("No text fields found in the section.")
+        return False
+
+    def _is_no_info_answer(self, answer: Any) -> bool:
+        return isinstance(answer, str) and answer.strip().lower().startswith("no info")
+
+    async def _is_required_text_field(self, section: Any, text_field: Any) -> bool:
+        """Best-effort detection for LinkedIn required text fields."""
+        for attr in ("required", "aria-required"):
+            try:
+                value = await text_field.get_attribute(attr)
+                if value is not None and str(value).lower() in {"", "true", "required"}:
+                    return True
+            except Exception:
+                pass
+
+        try:
+            labels = await section.locator("label").all()
+            for label in labels:
+                label_text = (await label.text_content() or "").strip().lower()
+                if "optional" in label_text:
+                    continue
+                if "*" in label_text:
+                    return True
+        except Exception as e:
+            logger.debug(f"Failed checking required text field labels: {e}")
+
         return False
 
     async def _process_autocomplete_suggestions(self, text_field: Any) -> None:
@@ -1804,10 +1990,10 @@ if __name__ == "__main__":
     import dotenv
 
     from config.app_config import TEST_MODE
-    from config.constants import COVER_LETTER_DIR, OUTPUT_DIR_LINKEDIN, RESUME_DIR
+    from config.constants import COVER_LETTER_DIR, OUTPUT_DIR_LINKEDIN, RESUME_DIR, SEARCH_CONFIG_FILE
+    from src.job_manager.linkedin.job_manager_linkedin import LinkedInJobManager
     from src.job_manager.resume_anonymizer import ResumeAnonymizer
     from src.llm.llm_manager import GPTAnswerer
-    from src.pydantic_models.job_models import Job
     from src.pydantic_models.prompt_models import ResumeStructure
     from src.resume_builder.resume_generator import ResumeGenerator
     from src.resume_builder.resume_manager import ResumeManager
@@ -1827,12 +2013,12 @@ if __name__ == "__main__":
             while paused:
                 await asyncio.sleep(0.5)
 
-    async def test_easy_applier():
+    async def test_easy_applier(job_url_or_id: str | None = None):
         """Test LinkedInEasyApplier with a real LinkedIn job posting (async)"""
         logger.info("Starting LinkedInEasyApplier test...")
 
         # Test job URL
-        job_url = "https://www.linkedin.com/jobs/view/4410066193"
+        job_url = build_linkedin_job_url(job_url_or_id)
         # Initialize Playwright browser
         try:
             browser, context, page = await create_playwright_browser()
@@ -1842,17 +2028,22 @@ if __name__ == "__main__":
             logger.error(f"Failed to initialize Playwright browser: {e}")
             return False
 
-        # Create test job object
-        test_job = Job(
-            job_title="Junior Software Developer",
-            company_name="Jobgether",
-            location="Alaska, United States",
-            url=job_url,
-            job_description="This opportunity is ideal for recent graduates or early-career professionals eager to start their journey in software development. You will gain practical experience working on real-world applications while building proficiency in Java, Spring Boot, REST APIs, and full-stack workflows.",
-            apply_method="Easy Apply",
-        )
-
         try:
+            # Navigate to job page and parse the actual job context before initializing LLM prompts.
+            logger.info(f"Navigating to job page: {job_url}")
+            await page.goto(job_url)
+            await async_pause(3, 5)
+            try:
+                parser = LinkedInJobManager(page, "", None, None)
+                parsed_job = await parser._get_detailed_job_description()
+                test_job = normalize_test_job_from_parsed_page(parsed_job, job_url)
+                logger.info(
+                    f"Parsed job page: {test_job.job_title} at {test_job.company_name}"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to parse job page; using generic fallback job context: {e}")
+                test_job = normalize_test_job_from_parsed_page(None, job_url)
+
             # Load secrets for LLM
             secrets = dotenv.dotenv_values(".env")
             llm_api_key = secrets.get("llm_api_key", "")
@@ -1894,20 +2085,38 @@ if __name__ == "__main__":
             if easy_applier.ready_made_resume_path is None:
                 resume_generator_manager.choose_style()
 
-            # Navigate to job page
-            logger.info(f"Navigating to job page: {job_url}")
-            await page.goto(job_url)
-            await async_pause(3, 5)
-
             # Test the apply_to_job method
             logger.info("Testing LinkedInEasyApplier.apply_to_job method...")
             result = await easy_applier.apply_to_job(test_job)
+            apply_result, submitted_resume_path = result
+            status, reason = apply_result
 
-            if result[0] == "Success":
+            result_manager = LinkedInJobManager(page, "", resume_anonymizer, None)
+            result_manager.set_answerer_and_agent(gpt_answerer, None)
+            result_manager.set_parameters(load_yaml_file(SEARCH_CONFIG_FILE) or {})
+            await result_manager._handle_apply_result(
+                apply_result,
+                test_job,
+                evaluation=collect_apply_result_metadata(easy_applier, submitted_resume_path),
+            )
+            logger.info("Standalone Easy Apply result persisted to output YAML")
+
+            if easy_applier.already_applied_at_text:
+                logger.info(
+                    "Already-applied status date: "
+                    f"{easy_applier.already_applied_at_text} ({easy_applier.already_applied_at})"
+                )
+            if submitted_resume_path:
+                logger.info(f"Submitted resume path: {submitted_resume_path}")
+
+            if status == "Success":
                 logger.info("✅ LinkedInEasyApplier test completed successfully!")
                 return True
+            if status == "Skip" and reason == "Already applied to this job":
+                logger.info("✅ LinkedInEasyApplier test detected already-applied job successfully!")
+                return True
             else:
-                logger.error("❌ LinkedInEasyApplier test failed - result is not Success")
+                logger.error(f"❌ LinkedInEasyApplier test failed - result is {status}: {reason}")
                 return False
 
         except Exception as e:
@@ -1930,7 +2139,8 @@ if __name__ == "__main__":
                 pass
 
     print("\nTesting full LinkedInEasyApplier functionality...")
-    success = asyncio.run(test_easy_applier())
+    job_url_or_id = sys.argv[1] if len(sys.argv) > 1 else None
+    success = asyncio.run(test_easy_applier(job_url_or_id))
     if success:
         print("✅ LinkedInEasyApplier test passed!")
     else:

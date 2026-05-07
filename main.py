@@ -303,7 +303,7 @@ async def create_and_run_bot(
         resume_generator_manager = ResumeManager(llm_api_key, style_manager, resume_generator)
 
         resume_ready_made = READY_MADE_RESUME is not None and READY_MADE_RESUME.resolve().is_file()
-        if not resume_ready_made and not os.environ.get("DASHBOARD_RUN_ID"):
+        if not resume_ready_made:
             resume_generator_manager.choose_style()
 
         # Set search component

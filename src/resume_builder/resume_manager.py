@@ -52,6 +52,11 @@ class ResumeManager:
             logger.info(f"Using resume style from config: '{RESUME_STYLE}'")
             return
 
+        if os.environ.get("DASHBOARD_RUN_ID"):
+            logger.info("Dashboard run detected, using default resume style")
+            self.choose_default_style()
+            return
+
         # Check if running in non-interactive mode (Docker, no TTY)
         if not self.is_interactive_mode():
             logger.info("Running in non-interactive mode (Docker/headless)")

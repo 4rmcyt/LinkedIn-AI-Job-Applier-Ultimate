@@ -1,6 +1,7 @@
 import re
 import time
 import traceback
+from inspect import isawaitable
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -38,6 +39,11 @@ search_config = load_yaml_file(SEARCH_CONFIG_FILE)
 logger.info(f"Maximum allowed number of applications: {MAX_APPLIES_NUM}")
 
 
+def _is_target_closed_error(error: Exception) -> bool:
+    """Return True when Playwright reports a closed page, context, or browser."""
+    return "Target page, context or browser has been closed" in str(error)
+
+
 class LinkedInJobManager(BaseJobManager):
     """Class for searching and sending applications to employers"""
 
@@ -53,6 +59,8 @@ class LinkedInJobManager(BaseJobManager):
         self.llm_agent_component = None
         self.resume_generator_manager = None
         self.submitted_resume_path = None
+        self.already_applied_at = None
+        self.already_applied_at_text = None
         self.pause_checker = None
         self.jobs_no_info = (
             []
@@ -102,6 +110,9 @@ class LinkedInJobManager(BaseJobManager):
                 selector_vacancies = []
                 for job_element in elements:
                     try:
+                        if await self._is_applied_job_card(job_element):
+                            logger.info("Skipping already-applied LinkedIn job card")
+                            continue
                         job_url = await self._extract_job_url(job_element)
                         if job_url:
                             match = re.search(r"/jobs/view/(\d+)", job_url)
@@ -146,6 +157,32 @@ class LinkedInJobManager(BaseJobManager):
             return []
 
         return vacancies
+
+    async def _is_applied_job_card(self, job_element: Any) -> bool:
+        """Return True when the search result card is marked as already applied."""
+        selectors = [
+            ".job-card-container__footer-job-state",
+            ".job-card-container__footer-wrapper",
+            "li",
+        ]
+        for selector in selectors:
+            try:
+                locator = job_element.locator(selector)
+                if isawaitable(locator):
+                    continue
+                count = await locator.count()
+                for index in range(count):
+                    text = (await locator.nth(index).inner_text() or "").strip().lower()
+                    if text == "applied":
+                        return True
+            except Exception:
+                continue
+
+        try:
+            text = (await get_clean_text(job_element)).lower()
+            return any(line.strip() == "applied" for line in text.splitlines())
+        except Exception:
+            return False
 
     async def start_applying(self) -> None:
         """Send applications to all employers on all pages (async)"""
@@ -193,7 +230,11 @@ class LinkedInJobManager(BaseJobManager):
                         break
                 except StopRequested:
                     raise
-                except Exception:
+                except Exception as e:
+                    if _is_target_closed_error(e):
+                        logger.warning("Browser was closed during job processing; stopping run")
+                        result = "Error"
+                        break
                     tb_str = traceback.format_exc()
                     logger.error(f"Unknown error on the page: {url}\n{tb_str}")
                     await debug_capture(self.page, "apply_loop_error")
@@ -311,6 +352,8 @@ class LinkedInJobManager(BaseJobManager):
 
                 self.llm_answerer_component.set_job(job.model_dump())
                 self.submitted_resume_path = None
+                self.already_applied_at = None
+                self.already_applied_at_text = None
 
                 if EASY_APPLY_ONLY_MODE is False:
                     apply_url = await self._check_apply_button()
@@ -325,6 +368,10 @@ class LinkedInJobManager(BaseJobManager):
                     apply_result = await self.easy_apply(job)
                 if self.submitted_resume_path:
                     evaluation["submitted_resume_path"] = self.submitted_resume_path
+                if self.already_applied_at:
+                    evaluation["applied_at"] = self.already_applied_at
+                if self.already_applied_at_text:
+                    evaluation["applied_at_text"] = self.already_applied_at_text
                 # if the vacancy is skipped for the reason of missing information, add it to the list of vacancies,
                 # information about which will then be sent to the client
                 result, reason = apply_result
@@ -345,9 +392,19 @@ class LinkedInJobManager(BaseJobManager):
             time_left = int(minimum_job_time - time.time())
             if time_left > 0:
                 await async_pause(time_left, time_left + 5)
-            await new_page.close()
+            try:
+                await new_page.close()
+            except Exception as e:
+                if not _is_target_closed_error(e):
+                    logger.warning(f"Failed to close job page: {e}")
             self.page = original_page
-            await self.page.bring_to_front()
+            try:
+                await self.page.bring_to_front()
+            except Exception as e:
+                if _is_target_closed_error(e):
+                    logger.warning("Browser was closed before returning to the search page")
+                else:
+                    raise
 
     async def easy_apply(self, job: Job) -> Tuple[str, str]:
         """Apply to the vacancy using LinkedIn Easy Apply functionality (async)"""
@@ -364,6 +421,10 @@ class LinkedInJobManager(BaseJobManager):
         )
         easy_applier_component.set_page(self.page)
         apply_result, self.submitted_resume_path = await easy_applier_component.apply_to_job(job)
+        applied_at = getattr(easy_applier_component, "already_applied_at", None)
+        applied_at_text = getattr(easy_applier_component, "already_applied_at_text", None)
+        self.already_applied_at = applied_at if isinstance(applied_at, str) else None
+        self.already_applied_at_text = applied_at_text if isinstance(applied_at_text, str) else None
         return apply_result
 
     async def _scroll_to_load_jobs(self):
@@ -474,9 +535,10 @@ class LinkedInJobManager(BaseJobManager):
 
         # Try different selectors for job links
         link_selectors = [
-            "a[href*='currentJobId=']",
-            "a[href*='/jobs/collections/recommended']",
-            "a[href*='/jobs/view/']",
+                "a[href*='currentJobId=']",
+                "a[href*='/jobs/collections/recommended']",
+                "a[href*='/jobs/collections/top-applicant']",
+                "a[href*='/jobs/view/']",
             "a[data-control-name='job_card_title']",
             ".job-card-job-posting-card-wrapper__card-link",
             ".base-card__full-link",
