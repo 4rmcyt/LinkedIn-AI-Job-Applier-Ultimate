@@ -193,6 +193,13 @@ button:disabled {
   color: var(--muted);
 }
 
+.section-count {
+  color: var(--accent);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
 /* ── SUMMARY CARDS ───────────────────────────────── */
 .grid-summary {
   display: grid;

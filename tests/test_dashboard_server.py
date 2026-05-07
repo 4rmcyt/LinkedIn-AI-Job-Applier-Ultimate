@@ -233,6 +233,18 @@ def test_screenshot_file_returns_file(tmp_path, monkeypatch):
     assert response.content == b"fake-image"
 
 
+def test_screenshot_returns_stable_byte_snapshot(tmp_path, monkeypatch):
+    screenshot = tmp_path / "latest.png"
+    screenshot.write_bytes(b"first-image")
+    monkeypatch.setattr("src.dashboard.server.LATEST_SCREENSHOT_FILE", screenshot)
+
+    response = client.get("/api/screenshot")
+
+    screenshot.write_bytes(b"updated-image")
+    assert response.status_code == 200
+    assert response.content == b"first-image"
+
+
 def test_event_stream_sends_initial_snapshot(monkeypatch):
     monkeypatch.setattr(
         "src.dashboard.server.get_live_state",
