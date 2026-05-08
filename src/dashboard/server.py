@@ -12,13 +12,13 @@ from pydantic import BaseModel
 from config.app_config import JOB_SITE
 from src.dashboard.data_service import (
     get_app_config,
-    get_jobs,
+    get_jobs_payload,
     get_live_state,
     get_messages,
     get_run_detail,
     get_run_events,
     get_run_history,
-    get_run_jobs,
+    get_run_jobs_payload,
     get_run_screenshots,
     get_search_config,
     get_summary,
@@ -102,7 +102,7 @@ async def jobs(
     status: str | None = Query(default=None),
     search: str | None = Query(default=None),
 ) -> JSONResponse:
-    return JSONResponse({"jobs": get_jobs(status=status, search=search)})
+    return JSONResponse(get_jobs_payload(status=status, search=search))
 
 
 @app.get("/api/messages")
@@ -154,9 +154,7 @@ async def run_jobs(
     status: str | None = Query(default=None),
     search: str | None = Query(default=None),
 ) -> JSONResponse:
-    return JSONResponse(
-        {"run_id": run_id, "jobs": get_run_jobs(run_id=run_id, status=status, search=search)}
-    )
+    return JSONResponse(get_run_jobs_payload(run_id=run_id, status=status, search=search))
 
 
 @app.get("/api/config")

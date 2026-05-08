@@ -19,10 +19,32 @@ const runHistory = document.getElementById("run-history");
 const runDetailSummary = document.getElementById("run-detail-summary");
 const screenshotHistory = document.getElementById("screenshot-history");
 const exportRunButton = document.getElementById("export-run");
+const dashboardLoading = document.getElementById("dashboard-loading");
 
 let dashboardConfig = null;
 let currentJobs = [];
 let selectedRunId = null;
+const initialLoadingStartedAt = performance.now();
+const minimumInitialLoadingMs = 450;
+
+function setDashboardLoading(isLoading) {
+  if (!dashboardLoading) {
+    return;
+  }
+
+  document.body.classList.toggle("dashboard-loading", isLoading);
+  document.body.setAttribute("aria-busy", String(isLoading));
+  dashboardLoading.setAttribute("aria-hidden", String(!isLoading));
+}
+
+async function clearInitialLoading() {
+  const elapsedMs = performance.now() - initialLoadingStartedAt;
+  const remainingMs = Math.max(0, minimumInitialLoadingMs - elapsedMs);
+  if (remainingMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, remainingMs));
+  }
+  setDashboardLoading(false);
+}
 
 function formatDateTime(value) {
   if (!value) {
@@ -47,6 +69,11 @@ function formatDateTime(value) {
 function formatResumePath(path) {
   if (!path) return "-";
   return path.split(/[\\/]/).pop() || path;
+}
+
+function truncateText(value, maxLength = 120) {
+  if (!value) return "-";
+  return value.length > maxLength ? `${value.slice(0, maxLength).trim()}...` : value;
 }
 
 function currentRunPath(runId) {
@@ -136,21 +163,27 @@ function renderLive(snapshot, events) {
   renderTimeline(events);
 }
 
-function renderJobs(jobs) {
+function renderJobs(jobs, counts = {}) {
   currentJobs = jobs;
-  jobsCount.textContent = `(${jobs.length})`;
+  const filteredCount = counts.filtered_count ?? jobs.length;
+  const totalCount = counts.total_count ?? jobs.length;
+  jobsCount.textContent = filteredCount === totalCount
+    ? `(${totalCount})`
+    : `(${filteredCount} / ${totalCount})`;
   jobsBody.innerHTML = jobs
-    .map((job, index) => `
+    .map((job, index) => {
+      const reason = job.skip_reason || job.interest_reason || "";
+      return `
       <tr class="job-row" data-job-index="${index}">
         <td><span class="badge" data-status="${job.status}">${job.status}</span></td>
         <td>${formatDateTime(job.executed_at || job.updated_at)}</td>
         <td><a href="${job.url || "#"}" target="_blank" rel="noreferrer">${job.job_title || "Unknown job"}</a></td>
         <td>${job.company_name || "-"}</td>
         <td>${job.interest_score ?? "-"}</td>
-        <td title="${(job.submitted_resume_path || "").replaceAll('"', '&quot;')}">${formatResumePath(job.submitted_resume_path)}</td>
-        <td title="${(job.interest_reason || job.skip_reason || "").replaceAll('"', '&quot;')}">${job.skip_reason || job.interest_reason || "-"}</td>
+        <td class="reason-preview" title="${reason.replaceAll('"', '&quot;')}">${truncateText(reason)}</td>
       </tr>
-    `)
+    `;
+    })
     .join("");
 
   for (const row of jobsBody.querySelectorAll(".job-row")) {
@@ -307,7 +340,7 @@ async function selectRun(runId) {
   const payload = await fetchJson(`/api/runs/${runId}`);
   renderRunDetailSummary(payload.run);
   renderTimeline(payload.events);
-  renderJobs(payload.jobs);
+  renderJobs(payload.jobs, payload);
   renderScreenshotHistory(payload.screenshots || []);
   await refreshRuns();
 }
@@ -443,7 +476,7 @@ async function refreshJobs() {
   const endpoint = selectedRunId ? `/api/runs/${selectedRunId}/jobs` : "/api/jobs";
   try {
     const payload = await fetchJson(`${endpoint}?${query.toString()}`);
-    renderJobs(payload.jobs);
+    renderJobs(payload.jobs, payload);
   } finally {
     if (refreshJobsButton) {
       refreshJobsButton.disabled = false;
@@ -563,16 +596,20 @@ async function refreshMeta() {
 
 async function init() {
   selectedRunId = getInitialSelectedRunId();
-  await wireControls();
-  wireFilters();
-  await Promise.all([refreshMeta(), refreshSummary(), refreshLive(), refreshJobs(), refreshConfig(), refreshRuns()]);
-  if (selectedRunId) {
-    await selectRun(selectedRunId);
-  } else {
-    renderRunDetailSummary(null);
-    renderScreenshotHistory([]);
+  try {
+    await wireControls();
+    wireFilters();
+    await Promise.all([refreshMeta(), refreshSummary(), refreshLive(), refreshJobs(), refreshConfig(), refreshRuns()]);
+    if (selectedRunId) {
+      await selectRun(selectedRunId);
+    } else {
+      renderRunDetailSummary(null);
+      renderScreenshotHistory([]);
+    }
+    startEventStream();
+  } finally {
+    await clearInitialLoading();
   }
-  startEventStream();
 }
 
 init().catch((error) => {

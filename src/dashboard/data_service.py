@@ -88,8 +88,16 @@ def _flatten_company_jobs(
     return rows
 
 
+def _flatten_interesting_jobs(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [{"status": "interesting", **job} for job in data or []]
+
+
 def _job_url_key(url: str | None) -> str:
-    return (url or "").rstrip("/")
+    value = (url or "").strip()
+    linkedin_job_id = re.search(r"/jobs/view/(\d+)", value)
+    if linkedin_job_id:
+        return f"linkedin:{linkedin_job_id.group(1)}"
+    return value.split("?", 1)[0].rstrip("/")
 
 
 def _load_jobs_board() -> List[Dict[str, Any]]:
@@ -98,12 +106,11 @@ def _load_jobs_board() -> List[Dict[str, Any]]:
     jobs.extend(_flatten_company_jobs(_read_yaml(SKIPPED_FILE, {}), "skipped"))
     jobs.extend(_flatten_company_jobs(_read_yaml(FAILED_FILE, {}), "failed"))
 
-    interesting_jobs = _read_yaml(INTERESTING_FILE, [])
-    seen_urls = {job.get("url") for job in jobs if job.get("url")}
-    for job in interesting_jobs:
-        if job.get("url") and job.get("url") in seen_urls:
+    seen_urls = {_job_url_key(job.get("url")) for job in jobs if job.get("url")}
+    for job in _flatten_interesting_jobs(_read_yaml(INTERESTING_FILE, [])):
+        if job.get("url") and _job_url_key(job.get("url")) in seen_urls:
             continue
-        jobs.append({"status": "interesting", **job})
+        jobs.append(job)
 
     jobs.sort(
         key=lambda job: (
@@ -231,20 +238,22 @@ def _build_run_jobs(run_id: str) -> List[Dict[str, Any]]:
                 job["status"] = "failed"
                 job["skip_reason"] = payload.get("reason") or job.get("skip_reason", "")
 
-    saved_jobs_by_url = {
-        _job_url_key(job.get("url")): job
-        for job in (
-            _flatten_company_jobs(_read_yaml(SUCCESS_FILE, {}), "applied")
-            + _flatten_company_jobs(_read_yaml(SKIPPED_FILE, {}), "skipped")
-            + _flatten_company_jobs(_read_yaml(FAILED_FILE, {}), "failed")
-        )
-        if job.get("url")
-    }
+    saved_jobs_by_url: Dict[str, Dict[str, Any]] = {}
+    for saved_job in (
+        _flatten_company_jobs(_read_yaml(SUCCESS_FILE, {}), "applied")
+        + _flatten_company_jobs(_read_yaml(SKIPPED_FILE, {}), "skipped")
+        + _flatten_company_jobs(_read_yaml(FAILED_FILE, {}), "failed")
+        + _flatten_interesting_jobs(_read_yaml(INTERESTING_FILE, []))
+    ):
+        if saved_job.get("url"):
+            saved_jobs_by_url[_job_url_key(saved_job.get("url"))] = saved_job
 
     rows = []
     for job in jobs.values():
         saved_job = saved_jobs_by_url.get(_job_url_key(job.get("url")))
         if saved_job:
+            if saved_job.get("status") == "interesting" and job.get("status") != "applied":
+                job["status"] = "interesting"
             for field in ("company_name", "job_title", "skip_reason", "interest_reason"):
                 job[field] = job.get(field) or saved_job.get(field)
             if job.get("interest_score") in (None, 0):
@@ -407,6 +416,16 @@ def get_jobs(status: str | None = None, search: str | None = None) -> List[Dict[
     return _apply_job_filters(_load_jobs_board(), status=status, search=search)
 
 
+def get_jobs_payload(status: str | None = None, search: str | None = None) -> Dict[str, Any]:
+    jobs = _load_jobs_board()
+    filtered_jobs = _apply_job_filters(jobs, status=status, search=search)
+    return {
+        "jobs": filtered_jobs,
+        "filtered_count": len(filtered_jobs),
+        "total_count": len(jobs),
+    }
+
+
 def get_messages(
     category: str | None = None,
     status: str | None = None,
@@ -449,8 +468,22 @@ def get_run_jobs(
     return _apply_job_filters(_build_run_jobs(run_id), status=status, search=search)
 
 
+def get_run_jobs_payload(
+    run_id: str, status: str | None = None, search: str | None = None
+) -> Dict[str, Any]:
+    jobs = _build_run_jobs(run_id)
+    filtered_jobs = _apply_job_filters(jobs, status=status, search=search)
+    return {
+        "run_id": run_id,
+        "jobs": filtered_jobs,
+        "filtered_count": len(filtered_jobs),
+        "total_count": len(jobs),
+    }
+
+
 def get_run_detail(run_id: str) -> Dict[str, Any]:
     runs = {run["run_id"]: run for run in get_run_history()}
+    jobs = get_run_jobs(run_id)
     return {
         "run": runs.get(
             run_id,
@@ -470,7 +503,9 @@ def get_run_detail(run_id: str) -> Dict[str, Any]:
                 },
             },
         ),
-        "jobs": get_run_jobs(run_id),
+        "jobs": jobs,
+        "filtered_count": len(jobs),
+        "total_count": len(jobs),
         "events": get_run_events(run_id, limit=120),
         "screenshots": get_run_screenshots(run_id),
     }
