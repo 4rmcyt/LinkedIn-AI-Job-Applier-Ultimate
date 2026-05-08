@@ -608,7 +608,7 @@ class IndeedEasyApplier(BaseEasyApplier):
                 raw = self.gpt_answerer.answer_question_date(
                     question_text, self.previous_question_texts[:-1]
                 )
-                if raw.lower().startswith("no info"):
+                if self._is_no_info_answer(raw):
                     raise NoInfoException(f"No info found for question: {question_text}")
                 answer = self._parse_date_to_mmddyyyy(raw)
                 self._save_questions(
@@ -691,7 +691,7 @@ class IndeedEasyApplier(BaseEasyApplier):
                 answer = self.gpt_answerer.answer_question_numeric(
                     question_text, self.previous_question_texts[:-1]
                 )
-                if answer.lower().startswith("no info"):
+                if self._is_no_info_answer(answer):
                     raise NoInfoException(f"No info found for question: {question_text}")
                 self._save_questions(
                     Question(question_type="numeric", question=question_text, answer=answer)
@@ -700,7 +700,7 @@ class IndeedEasyApplier(BaseEasyApplier):
                 answer = self.gpt_answerer.answer_question_textual_wide_range(
                     question_text, self.previous_question_texts[:-1]
                 )
-                if answer.lower().startswith("no info"):
+                if self._is_no_info_answer(answer):
                     raise NoInfoException(f"No info found for question: {question_text}")
                 answer = self.resume_anonymizer.deanonymize_text(answer)
                 self._save_questions(
@@ -782,7 +782,7 @@ class IndeedEasyApplier(BaseEasyApplier):
                 if any(
                     sel.lower() in label_text.lower() or label_text.lower() in sel.lower()
                     for sel in selected_options
-                    if not sel.lower().startswith("no info")
+                    if not self._is_no_info_answer(sel)
                 ):
                     if not await cb.is_checked():
                         cb_id = await cb.get_attribute("id")
@@ -843,7 +843,7 @@ class IndeedEasyApplier(BaseEasyApplier):
                 answer = self.gpt_answerer.select_one_answer_from_options(
                     question_text, option_texts, self.previous_question_texts[:-1]
                 )
-                if answer.lower().startswith("no info"):
+                if self._is_no_info_answer(answer):
                     raise NoInfoException(f"No info found for question: {question_text}")
                 self._save_questions(
                     Question(question_type="radio", question=question_text, answer=answer)
@@ -914,7 +914,7 @@ class IndeedEasyApplier(BaseEasyApplier):
                 answer = self.gpt_answerer.select_one_answer_from_options(
                     question_text, option_texts, self.previous_question_texts[:-1]
                 )
-                if answer.lower().startswith("no info"):
+                if self._is_no_info_answer(answer):
                     raise NoInfoException(f"No info found for question: {question_text}")
                 self._save_questions(
                     Question(question_type="dropdown", question=question_text, answer=answer)
@@ -1062,7 +1062,7 @@ class IndeedEasyApplier(BaseEasyApplier):
                     current_value,
                     self.previous_question_texts,
                 )
-                if answer.lower().startswith("no info"):
+                if self._is_no_info_answer(answer):
                     raise NoInfoException(
                         f"Can't fix error: {error_text}. No info for question: {question_text}"
                     )

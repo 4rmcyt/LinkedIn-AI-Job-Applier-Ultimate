@@ -1,5 +1,5 @@
-import asyncio
 import argparse
+import asyncio
 import re
 from typing import Any, Dict, Union
 
@@ -20,7 +20,7 @@ def normalize_telegram_topic_id(value: str | None) -> str | None:
         return None
     if value.isdigit():
         return value
-    topic_url_match = re.search(r"/c/\d+/(\d+)(?:\D|$)", value)
+    topic_url_match = re.search(r"t\.me/(?:c/\d+|[^/]+)/(\d+)", value)
     if topic_url_match:
         return topic_url_match.group(1)
     return value
@@ -196,6 +196,7 @@ class TelegramReportSender:
 
 
 if __name__ == "__main__":
+
     def parse_args():
         parser = argparse.ArgumentParser(description="Telegram diagnostics")
         parser.add_argument(
@@ -226,8 +227,6 @@ if __name__ == "__main__":
             await sender.send_test_error_message(args.message)
             return
 
-        logger.info(
-            "No action requested. Use --test-report or --test-error"
-        )
+        logger.info("No action requested. Use --test-report or --test-error")
 
     asyncio.run(main())

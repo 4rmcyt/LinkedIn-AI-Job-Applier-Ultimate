@@ -4,15 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.job_manager.linkedin.search_customizer_linkedin import (
-    SearchCustomizer,
-    _canonical_job_url_from_href,
-    _fallback_job_card_fields,
-    format_linkedin_keyword_query,
-    is_applied_job_card_text,
-    is_applied_search_result_card,
-    parse_visible_search_results,
-)
+from src.job_manager.linkedin.search_customizer_linkedin import SearchCustomizer
 
 MODULE = "src.job_manager.linkedin.search_customizer_linkedin"
 
@@ -80,94 +72,13 @@ class TestSetAdvancedSearchParams:
 
 
 class TestSearchDebugHelpers:
-    def test_canonical_job_url_from_current_job_id(self):
-        href = "https://www.linkedin.com/jobs/collections/recommended/?currentJobId=4410514476"
-        assert _canonical_job_url_from_href(href) == (
-            "https://www.linkedin.com/jobs/view/4410514476"
+    def test_format_linkedin_keyword_query_quotes_and_ors_positions(self, mock_page):
+        sc = SearchCustomizer(mock_page)
+        sc.positions = ["CTO", "Chief Technology Officer", " Technical Manager ", ""]
+        assert (
+            sc.format_linkedin_keyword_query()
+            == '"CTO" OR "Chief Technology Officer" OR "Technical Manager"'
         )
-
-    def test_canonical_job_url_from_view_url(self):
-        href = "https://www.linkedin.com/jobs/view/4410514476/?trackingId=abc"
-        assert _canonical_job_url_from_href(href) == (
-            "https://www.linkedin.com/jobs/view/4410514476"
-        )
-
-    def test_fallback_job_card_fields_filters_noise(self):
-        title, company, location = _fallback_job_card_fields(
-            "Promoted\nHead of AI\nInvolved Solutions\nDubai, UAE\nEasy Apply"
-        )
-
-        assert title == "Head of AI"
-        assert company == "Involved Solutions"
-        assert location == "Dubai, UAE"
-
-    def test_format_linkedin_keyword_query_quotes_and_ors_positions(self):
-        assert format_linkedin_keyword_query(
-            ["CTO", "Chief Technology Officer", " Technical Manager ", ""]
-        ) == '"CTO" OR "Chief Technology Officer" OR "Technical Manager"'
-
-    def test_detects_applied_card_text(self):
-        assert is_applied_job_card_text("Head of Digitalization\nMadison Pearl\nApplied") is True
-        assert is_applied_job_card_text("Applied AI Engineer\nCompany") is False
-
-    @pytest.mark.asyncio
-    async def test_detects_applied_card_from_footer(self):
-        card = MagicMock()
-        footer_locator = MagicMock()
-        footer_locator.count = AsyncMock(return_value=1)
-        footer_item = MagicMock()
-        footer_item.inner_text = AsyncMock(return_value="Applied")
-        footer_locator.nth.return_value = footer_item
-        card.locator.return_value = footer_locator
-
-        assert await is_applied_search_result_card(card) is True
-
-    @pytest.mark.asyncio
-    async def test_parse_visible_search_results_from_fallback_text_and_job_id(self, mock_page):
-        card = MagicMock()
-        card.locator.side_effect = RuntimeError("locator unavailable")
-        card.get_attribute = AsyncMock(
-            side_effect=lambda attr: "4410514476" if attr == "data-job-id" else None
-        )
-
-        with (
-            patch(f"{MODULE}.find_elements_safely", new_callable=AsyncMock, return_value=[card]),
-            patch(
-                f"{MODULE}.get_clean_text",
-                new_callable=AsyncMock,
-                return_value="Head of AI\nInvolved Solutions\nDubai, UAE",
-            ),
-        ):
-            results = await parse_visible_search_results(mock_page, limit=10)
-
-        assert results == [
-            {
-                "title": "Head of AI",
-                "company": "Involved Solutions",
-                "location": "Dubai, UAE",
-                "url": "https://www.linkedin.com/jobs/view/4410514476",
-                "skip_reason": "",
-            }
-        ]
-
-    @pytest.mark.asyncio
-    async def test_parse_visible_search_results_marks_applied_cards(self, mock_page):
-        card = MagicMock()
-        card.locator.side_effect = RuntimeError("locator unavailable")
-        card.get_attribute = AsyncMock(return_value="4409336438")
-
-        with (
-            patch(f"{MODULE}.find_elements_safely", new_callable=AsyncMock, return_value=[card]),
-            patch(
-                f"{MODULE}.get_clean_text",
-                new_callable=AsyncMock,
-                return_value="Head of Digitalization\nMadison Pearl\nApplied",
-            ),
-        ):
-            results = await parse_visible_search_results(mock_page, limit=10)
-
-        assert results[0]["skip_reason"] == "Already applied"
-        assert results[0]["url"] == "https://www.linkedin.com/jobs/view/4409336438"
 
 
 class TestIsJobBlacklisted:
@@ -612,7 +523,9 @@ class TestSetSearchParams:
             patch(f"{MODULE}.LINKEDIN_RECOMMENDED_JOBS_MODE", True),
             patch(f"{MODULE}.LINKEDIN_TOP_APPLICANT_JOBS_MODE", False),
             patch(f"{MODULE}.async_pause", new_callable=AsyncMock),
-            patch.object(customizer, "_set_basic_search_terms", new_callable=AsyncMock) as mock_basic,
+            patch.object(
+                customizer, "_set_basic_search_terms", new_callable=AsyncMock
+            ) as mock_basic,
             patch.object(customizer, "_commit_basic_search", new_callable=AsyncMock) as mock_commit,
             patch.object(customizer, "_open_all_filters", new_callable=AsyncMock) as mock_filters,
         ):
@@ -632,7 +545,9 @@ class TestSetSearchParams:
             patch(f"{MODULE}.LINKEDIN_RECOMMENDED_JOBS_MODE", False),
             patch(f"{MODULE}.LINKEDIN_TOP_APPLICANT_JOBS_MODE", True),
             patch(f"{MODULE}.async_pause", new_callable=AsyncMock),
-            patch.object(customizer, "_set_basic_search_terms", new_callable=AsyncMock) as mock_basic,
+            patch.object(
+                customizer, "_set_basic_search_terms", new_callable=AsyncMock
+            ) as mock_basic,
             patch.object(customizer, "_commit_basic_search", new_callable=AsyncMock) as mock_commit,
             patch.object(customizer, "_open_all_filters", new_callable=AsyncMock) as mock_filters,
         ):

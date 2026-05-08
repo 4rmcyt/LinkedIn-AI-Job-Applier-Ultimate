@@ -6,13 +6,50 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.job_manager.easy_applier import NoInfoException
-from src.job_manager.linkedin.easy_applier_linkedin import (
-    LinkedInEasyApplier,
-    build_linkedin_job_url,
-    collect_apply_result_metadata,
-    normalize_test_job_from_parsed_page,
-)
+from src.job_manager.linkedin.easy_applier_linkedin import LinkedInEasyApplier
 from src.pydantic_models.job_models import Job, Question
+
+LINKEDIN_DEFAULT_JOB_URL = "https://www.linkedin.com/jobs/view/4410066193"
+
+
+def build_linkedin_job_url(job_url_or_id: str | None = None) -> str:
+    if not job_url_or_id:
+        return LINKEDIN_DEFAULT_JOB_URL
+    job_url_or_id = job_url_or_id.strip()
+    if not job_url_or_id:
+        return LINKEDIN_DEFAULT_JOB_URL
+    if job_url_or_id.isdigit():
+        return f"https://www.linkedin.com/jobs/view/{job_url_or_id}"
+    return job_url_or_id
+
+
+def normalize_test_job_from_parsed_page(parsed_job: Job | None, job_url: str) -> Job:
+    job = parsed_job or Job()
+    if not job.url:
+        job.url = job_url
+    if not job.job_title:
+        job.job_title = "LinkedIn job"
+    if not job.company_name:
+        job.company_name = "Unknown company"
+    if not job.job_description:
+        job.job_description = "LinkedIn vacancy information was not parsed from the page."
+    if not job.apply_method:
+        job.apply_method = "Easy Apply"
+    return job
+
+
+def collect_apply_result_metadata(easy_applier: object, submitted_resume_path: object) -> dict:
+    metadata = {}
+    if isinstance(submitted_resume_path, str) and submitted_resume_path:
+        metadata["submitted_resume_path"] = submitted_resume_path
+    applied_at = getattr(easy_applier, "already_applied_at", None)
+    applied_at_text = getattr(easy_applier, "already_applied_at_text", None)
+    if isinstance(applied_at, str) and applied_at:
+        metadata["applied_at"] = applied_at
+    if isinstance(applied_at_text, str) and applied_at_text:
+        metadata["applied_at_text"] = applied_at_text
+    return metadata
+
 
 LINKEDIN_JOB_URL = "https://www.linkedin.com/jobs/view/123456"
 

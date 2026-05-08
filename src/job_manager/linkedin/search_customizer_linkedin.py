@@ -1,10 +1,10 @@
 """
 This module is used to customize the search parameters for the LinkedIn jobs search.
 """
+
 import argparse
 import re
 from inspect import isawaitable
-
 from typing import Any, Union
 
 from playwright.sync_api import Page
@@ -34,169 +34,6 @@ from src.utils.browser_utils import (
 from src.utils.utils import async_pause, load_yaml_file
 
 
-def _canonical_job_url_from_href(href: str | None) -> str:
-    if not href:
-        return ""
-
-    current_job_match = re.search(r"[?&]currentJobId=(\d+)", href)
-    if current_job_match:
-        return f"https://www.linkedin.com/jobs/view/{current_job_match.group(1)}"
-
-    view_match = re.search(r"/jobs/view/(\d+)", href)
-    if view_match:
-        return f"https://www.linkedin.com/jobs/view/{view_match.group(1)}"
-
-    return href
-
-
-async def _first_text(element: Any, selectors: list[str]) -> str:
-    for selector in selectors:
-        try:
-            locator = element.locator(selector).first
-            if await locator.count() > 0:
-                text = (await locator.inner_text() or await locator.text_content() or "").strip()
-                if text:
-                    return " ".join(text.split())
-        except Exception:
-            continue
-    return ""
-
-
-async def _first_href(element: Any, selectors: list[str]) -> str:
-    for selector in selectors:
-        try:
-            locator = element.locator(selector).first
-            if await locator.count() > 0:
-                href = await locator.get_attribute("href")
-                if href:
-                    return _canonical_job_url_from_href(href)
-        except Exception:
-            continue
-    return ""
-
-
-def _fallback_job_card_fields(text: str) -> tuple[str, str, str]:
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    filtered = [
-        line
-        for line in lines
-        if line.lower() not in {"promoted", "easy apply", "view job", "actively hiring"}
-    ]
-    title = filtered[0] if len(filtered) > 0 else ""
-    company = filtered[1] if len(filtered) > 1 else ""
-    location = filtered[2] if len(filtered) > 2 else ""
-    return title, company, location
-
-
-def is_applied_job_card_text(text: str) -> bool:
-    return any(line.strip().lower() == "applied" for line in text.splitlines())
-
-
-async def is_applied_search_result_card(card: Any, full_text: str = "") -> bool:
-    """Return True when a visible search result card is marked Applied."""
-    selectors = [
-        ".job-card-container__footer-job-state",
-        ".job-card-container__footer-wrapper",
-        "li",
-    ]
-    for selector in selectors:
-        try:
-            locator = card.locator(selector)
-            if isawaitable(locator):
-                continue
-            count = await locator.count()
-            for index in range(count):
-                item = locator.nth(index)
-                text = (await item.inner_text() or await item.text_content() or "").strip().lower()
-                if text == "applied":
-                    return True
-        except Exception:
-            continue
-
-    return is_applied_job_card_text(full_text)
-
-
-def format_linkedin_keyword_query(positions: list[str]) -> str:
-    """Format positions as a LinkedIn boolean keyword query."""
-    cleaned_positions = [position.strip() for position in positions if position and position.strip()]
-    return " OR ".join(f'"{position}"' for position in cleaned_positions)
-
-
-async def parse_visible_search_results(page: Any, limit: int = 25) -> list[dict[str, str]]:
-    """Parse visible LinkedIn search result cards without opening/applying to jobs."""
-    card_selectors = [
-        ".scaffold-layout__list [data-view-name='job-card'][data-job-id]",
-        ".scaffold-layout__list .job-card-job-posting-card-wrapper[data-job-id]",
-        ".scaffold-layout__list div[data-job-id]",
-        ".jobs-search-results__list-item",
-        ".job-card-container",
-        "div[data-job-id]",
-    ]
-    title_selectors = [
-        "a[href*='/jobs/view/']",
-        "a[href*='currentJobId=']",
-        ".job-card-list__title",
-        ".job-card-container__link",
-    ]
-    company_selectors = [
-        ".artdeco-entity-lockup__subtitle",
-        ".job-card-container__primary-description",
-        "a[href*='/company/']",
-    ]
-    location_selectors = [
-        ".artdeco-entity-lockup__caption",
-        ".job-card-container__metadata-item",
-        "li-icon[type='map-marker-icon'] ~ span",
-    ]
-    link_selectors = ["a[href*='/jobs/view/']", "a[href*='currentJobId=']"]
-
-    seen_urls = set()
-    results = []
-    for selector in card_selectors:
-        by = "xpath" if selector.startswith("//") else "css selector"
-        cards = await find_elements_safely(page, selector, by)
-        if not cards:
-            continue
-
-        for card in cards:
-            if len(results) >= limit:
-                break
-            try:
-                full_text = await get_clean_text(card)
-                is_applied = await is_applied_search_result_card(card, full_text)
-                fallback_title, fallback_company, fallback_location = _fallback_job_card_fields(
-                    full_text
-                )
-                url = await _first_href(card, link_selectors)
-                if not url:
-                    job_id = await card.get_attribute("data-job-id") or await card.get_attribute(
-                        "data-occludable-job-id"
-                    )
-                    if job_id:
-                        url = f"https://www.linkedin.com/jobs/view/{job_id}"
-                if url and url in seen_urls:
-                    continue
-                if url:
-                    seen_urls.add(url)
-
-                results.append(
-                    {
-                        "title": await _first_text(card, title_selectors) or fallback_title,
-                        "company": await _first_text(card, company_selectors) or fallback_company,
-                        "location": await _first_text(card, location_selectors) or fallback_location,
-                        "url": url,
-                        "skip_reason": "Already applied" if is_applied else "",
-                    }
-                )
-            except Exception as e:
-                logger.debug(f"Failed parsing visible job card: {e}")
-
-        if results:
-            break
-
-    return results
-
-
 class SearchCustomizer(BaseSearchCustomizer):
     RECOMMENDED_JOBS_URL = "https://www.linkedin.com/jobs/collections/recommended/"
     TOP_APPLICANT_JOBS_URL = "https://www.linkedin.com/jobs/collections/top-applicant/"
@@ -217,12 +54,19 @@ class SearchCustomizer(BaseSearchCustomizer):
         await self.page.goto(self.TOP_APPLICANT_JOBS_URL, wait_until="domcontentloaded")
         await async_pause(2, 3)
 
+    def format_linkedin_keyword_query(self) -> str:
+        """Format positions as a LinkedIn boolean keyword query."""
+        cleaned_positions = [
+            position.strip() for position in self.positions if position and position.strip()
+        ]
+        return " OR ".join(f'"{position}"' for position in cleaned_positions)
+
     async def _set_basic_search_terms(self):
         """Set basic search parameters (keywords and location) - async"""
         try:
             # Set job title/keywords
             if self.positions:
-                keyword_query = format_linkedin_keyword_query(self.positions)
+                keyword_query = self.format_linkedin_keyword_query()
                 keyword_selectors = [
                     "input[aria-label*='or company']:not([disabled]):not([aria-hidden='true'])",
                     "input[aria-label*='Search by title']:not([disabled]):not([aria-hidden='true'])",
@@ -233,9 +77,7 @@ class SearchCustomizer(BaseSearchCustomizer):
 
                 keywords_filled = False
                 for selector in keyword_selectors:
-                    if await safe_fill(
-                        self.page, selector, keyword_query, wait_for_timeout=2000
-                    ):
+                    if await safe_fill(self.page, selector, keyword_query, wait_for_timeout=2000):
                         logger.info(f"Keywords set: {keyword_query}")
                         keywords_filled = True
                         # await async_pause(1, 2)
@@ -278,7 +120,9 @@ class SearchCustomizer(BaseSearchCustomizer):
                 location_cleared = False
                 for selector in location_selectors:
                     if await safe_fill(self.page, selector, "", wait_for_timeout=2000):
-                        logger.info("Location search field cleared because no locations are configured")
+                        logger.info(
+                            "Location search field cleared because no locations are configured"
+                        )
                         await self._dismiss_location_typeahead()
                         location_cleared = True
                         break
@@ -681,6 +525,162 @@ if __name__ == "__main__":
             help="Seconds to keep the browser open for manual inspection after parsing",
         )
         return parser.parse_args()
+
+    def _canonical_job_url_from_href(href: str | None) -> str:
+        if not href:
+            return ""
+
+        current_job_match = re.search(r"[?&]currentJobId=(\d+)", href)
+        if current_job_match:
+            return f"https://www.linkedin.com/jobs/view/{current_job_match.group(1)}"
+
+        view_match = re.search(r"/jobs/view/(\d+)", href)
+        if view_match:
+            return f"https://www.linkedin.com/jobs/view/{view_match.group(1)}"
+
+        return href
+
+    async def _first_text(element: Any, selectors: list[str]) -> str:
+        for selector in selectors:
+            try:
+                locator = element.locator(selector).first
+                if await locator.count() > 0:
+                    text = (
+                        await locator.inner_text() or await locator.text_content() or ""
+                    ).strip()
+                    if text:
+                        return " ".join(text.split())
+            except Exception:
+                continue
+        return ""
+
+    async def _first_href(element: Any, selectors: list[str]) -> str:
+        for selector in selectors:
+            try:
+                locator = element.locator(selector).first
+                if await locator.count() > 0:
+                    href = await locator.get_attribute("href")
+                    if href:
+                        return _canonical_job_url_from_href(href)
+            except Exception:
+                continue
+        return ""
+
+    def _fallback_job_card_fields(text: str) -> tuple[str, str, str]:
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        filtered = [
+            line
+            for line in lines
+            if line.lower() not in {"promoted", "easy apply", "view job", "actively hiring"}
+        ]
+        title = filtered[0] if len(filtered) > 0 else ""
+        company = filtered[1] if len(filtered) > 1 else ""
+        location = filtered[2] if len(filtered) > 2 else ""
+        return title, company, location
+
+    def is_applied_job_card_text(text: str) -> bool:
+        return any(line.strip().lower() == "applied" for line in text.splitlines())
+
+    async def is_applied_search_result_card(card: Any, full_text: str = "") -> bool:
+        """Return True when a visible search result card is marked Applied."""
+        selectors = [
+            ".job-card-container__footer-job-state",
+            ".job-card-container__footer-wrapper",
+            "li",
+        ]
+        for selector in selectors:
+            try:
+                locator = card.locator(selector)
+                if isawaitable(locator):
+                    continue
+                count = await locator.count()
+                for index in range(count):
+                    item = locator.nth(index)
+                    text = (
+                        (await item.inner_text() or await item.text_content() or "").strip().lower()
+                    )
+                    if text == "applied":
+                        return True
+            except Exception:
+                continue
+
+        return is_applied_job_card_text(full_text)
+
+    async def parse_visible_search_results(page: Any, limit: int = 25) -> list[dict[str, str]]:
+        """Parse visible LinkedIn search result cards without opening/applying to jobs."""
+        card_selectors = [
+            ".scaffold-layout__list [data-view-name='job-card'][data-job-id]",
+            ".scaffold-layout__list .job-card-job-posting-card-wrapper[data-job-id]",
+            ".scaffold-layout__list div[data-job-id]",
+            ".jobs-search-results__list-item",
+            ".job-card-container",
+            "div[data-job-id]",
+        ]
+        title_selectors = [
+            "a[href*='/jobs/view/']",
+            "a[href*='currentJobId=']",
+            ".job-card-list__title",
+            ".job-card-container__link",
+        ]
+        company_selectors = [
+            ".artdeco-entity-lockup__subtitle",
+            ".job-card-container__primary-description",
+            "a[href*='/company/']",
+        ]
+        location_selectors = [
+            ".artdeco-entity-lockup__caption",
+            ".job-card-container__metadata-item",
+            "li-icon[type='map-marker-icon'] ~ span",
+        ]
+        link_selectors = ["a[href*='/jobs/view/']", "a[href*='currentJobId=']"]
+
+        seen_urls = set()
+        results = []
+        for selector in card_selectors:
+            by = "xpath" if selector.startswith("//") else "css selector"
+            cards = await find_elements_safely(page, selector, by)
+            if not cards:
+                continue
+
+            for card in cards:
+                if len(results) >= limit:
+                    break
+                try:
+                    full_text = await get_clean_text(card)
+                    is_applied = await is_applied_search_result_card(card, full_text)
+                    fallback_title, fallback_company, fallback_location = _fallback_job_card_fields(
+                        full_text
+                    )
+                    url = await _first_href(card, link_selectors)
+                    if not url:
+                        job_id = await card.get_attribute(
+                            "data-job-id"
+                        ) or await card.get_attribute("data-occludable-job-id")
+                        if job_id:
+                            url = f"https://www.linkedin.com/jobs/view/{job_id}"
+                    if url and url in seen_urls:
+                        continue
+                    if url:
+                        seen_urls.add(url)
+
+                    results.append(
+                        {
+                            "title": await _first_text(card, title_selectors) or fallback_title,
+                            "company": await _first_text(card, company_selectors)
+                            or fallback_company,
+                            "location": await _first_text(card, location_selectors)
+                            or fallback_location,
+                            "url": url,
+                            "skip_reason": "Already applied" if is_applied else "",
+                        }
+                    )
+                except Exception as e:
+                    logger.debug(f"Failed parsing visible job card: {e}")
+
+            if results:
+                break
+
+        return results
 
     def load_debug_search_config(use_real_config: bool) -> dict[str, Any]:
         if use_real_config:
