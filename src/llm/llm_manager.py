@@ -576,6 +576,7 @@ class GPTAnswerer:
                 prompts.linkedin_message_classification_template,
                 LinkedInMessageClassification,
             ),
+            "generate_resume_text": self._create_chain(prompts.generate_resume_text_template),
         }
 
     @staticmethod
@@ -861,6 +862,12 @@ class GPTAnswerer:
         )
         logger.debug(f"Structured resume parsing completed: {output}")
         return output.model_dump()
+
+    def generate_resume_text(self, raw_text: str, template: str) -> str:
+        """Generate formatted resume_text.txt content from raw PDF text using the given template."""
+        logger.info("Generating resume text from raw PDF content")
+        chain = self.chains["generate_resume_text"]
+        return chain.invoke({"raw_text": raw_text, "template": template})
 
     def extract_skills_from_vacancy(self, job_description: str) -> list[str]:
         """Extract skills from vacancy"""

@@ -38,6 +38,7 @@ RESUME_DIR = "data/resumes"
 PHOTO_DIR = "data/photo"
 COVER_LETTER_DIR = "data/cover_letters"
 BROWSER_STORAGE_STATE = "browser_session/browser_state.json"
+RESUME_TEXT_TEMPLATE_FILE = "examples/data/resumes/resume_text.txt"
 APP_CONFIG_FILE = "config/app_config.yaml"
 
 # Default cost per token fallback when model is not in PRICE_DICT

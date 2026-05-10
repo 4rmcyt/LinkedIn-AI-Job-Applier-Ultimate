@@ -708,6 +708,24 @@ You are writing a LinkedIn reply for the account owner.
 """
 
 
+generate_resume_text_template = """
+You are a professional resume writer. Convert the raw resume content below into a clean, structured resume text following the provided template format exactly.
+
+## Instructions
+- Extract all information from the raw resume content and map it to the corresponding sections in the template.
+- Preserve all factual details: names, dates, companies, technologies, responsibilities, education.
+- Replace template placeholders (e.g. [Full Name], [Job Title 1]) with actual values from the resume.
+- If a piece of information is not present in the raw resume, use "Not specified" for scalar fields or omit list items.
+- Keep the same section headers and indentation style as the template.
+- Output only the filled resume text, no commentary.
+
+## Template
+{template}
+
+## Raw Resume Content
+{raw_text}
+"""
+
 linkedin_message_reply_humanizer_template = """
 Rewrite the LinkedIn reply below so it sounds more human and less AI-generated.
 
