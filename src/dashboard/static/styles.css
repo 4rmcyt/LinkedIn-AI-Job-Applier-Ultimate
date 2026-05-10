@@ -21,6 +21,8 @@
   --purple-dim: rgba(167, 139, 250, 0.14);
   --blue: #60a5fa;
   --blue-dim: rgba(96, 165, 250, 0.14);
+  --panel-bg: #1a1f30;
+  --th-bg: #202639;
 }
 
 * {
@@ -88,7 +90,7 @@ body.dashboard-loading .loading-shell {
 .loading-panel {
   position: relative;
   overflow: hidden;
-  background: #1a1f30;
+  background: var(--panel-bg);
   border: 1px solid var(--border);
   border-radius: 14px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.04);
@@ -309,7 +311,7 @@ button:disabled {
 
 /* ── PANEL ───────────────────────────────────────── */
 .panel {
-  background: #1a1f30;
+  background: var(--panel-bg);
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 1.2rem 1.4rem;
@@ -746,7 +748,7 @@ th {
   letter-spacing: 0.08em;
   color: var(--muted);
   font-weight: 700;
-  background: #202639;
+  background: var(--th-bg);
   box-shadow: 0 1px 0 var(--border);
 }
 

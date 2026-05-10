@@ -483,7 +483,6 @@ def get_run_jobs_payload(
 
 def get_run_detail(run_id: str) -> Dict[str, Any]:
     runs = {run["run_id"]: run for run in get_run_history()}
-    jobs = get_run_jobs(run_id)
     return {
         "run": runs.get(
             run_id,
@@ -503,9 +502,7 @@ def get_run_detail(run_id: str) -> Dict[str, Any]:
                 },
             },
         ),
-        "jobs": jobs,
-        "filtered_count": len(jobs),
-        "total_count": len(jobs),
+        "jobs": get_run_jobs(run_id),
         "events": get_run_events(run_id, limit=120),
         "screenshots": get_run_screenshots(run_id),
     }
