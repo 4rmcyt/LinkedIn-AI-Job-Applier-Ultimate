@@ -4,6 +4,12 @@
 
 # LinkedIn AI Job Applier Ultimate
 
+![Python](https://img.shields.io/badge/python-3.12-blue)
+![License](https://img.shields.io/github/license/beatwad/LinkedIn-AI-Job-Applier-Ultimate)
+![Stars](https://img.shields.io/github/stars/beatwad/LinkedIn-AI-Job-Applier-Ultimate?style=social)
+![Last Commit](https://img.shields.io/github/last-commit/beatwad/LinkedIn-AI-Job-Applier-Ultimate)
+
+
 🤖 AI-powered bot that **auto-applies** to jobs on **LinkedIn** and **Indeed**. It parses your resume, generates tailored resumes per vacancy, answers application questions using an LLM (Gemini, OpenAI, Claude, Ollama), gathers statistics of the most important for employers skills and delivers detailed
 Telegram reports — fully automating your job search.
 
