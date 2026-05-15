@@ -57,6 +57,12 @@ WARNING: applying to the jobs with 3rd party applications is not guaranteed to b
 EASY_APPLY_ONLY_MODE = True
 
 """
+If True - use the LinkedIn Premium Easy Apply flow (easy_applier_linkedin_premium.py).
+If False - use the standard Easy Apply flow (easy_applier_linkedin.py).
+"""
+IS_PREMIUM = False
+
+"""
 If enabled for LinkedIn, ignores positions in search_config.yaml and processes
 LinkedIn's recommended jobs list instead of a keyword search.
 """

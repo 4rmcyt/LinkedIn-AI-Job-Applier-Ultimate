@@ -20,7 +20,17 @@ from config.constants import COVER_LETTER_DIR, OUTPUT_DIR_LINKEDIN, RESUME_DIR, 
 from config.logger_config import logger
 from src.dashboard.runtime import StopRequested, emit_event
 from src.job_manager.job_manager import BaseJobManager
-from src.job_manager.linkedin.easy_applier_linkedin import LinkedInEasyApplier
+
+try:
+    from config.app_config import IS_PREMIUM
+except ImportError:
+    IS_PREMIUM = False
+
+if IS_PREMIUM:
+    from src.job_manager.linkedin.easy_applier_linkedin_premium import LinkedInEasyApplier
+else:
+    from src.job_manager.linkedin.easy_applier_linkedin import LinkedInEasyApplier
+
 from src.pydantic_models.job_models import Job
 from src.utils.browser_utils import (
     debug_capture,
