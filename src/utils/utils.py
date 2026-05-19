@@ -68,14 +68,15 @@ def save_yaml_file(yaml_path: Path, data: dict, sort_keys: bool = True) -> None:
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(tmp_path, yaml_path)
-        try:
-            dir_fd = os.open(yaml_path.parent, os.O_DIRECTORY)
-        except OSError:
-            return
-        try:
-            os.fsync(dir_fd)
-        finally:
-            os.close(dir_fd)
+        if hasattr(os, "O_DIRECTORY"):
+            try:
+                dir_fd = os.open(yaml_path.parent, os.O_DIRECTORY)
+            except OSError:
+                return
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
     finally:
         if tmp_path.exists():
             tmp_path.unlink()
