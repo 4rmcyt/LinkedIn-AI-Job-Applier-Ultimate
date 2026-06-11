@@ -114,6 +114,45 @@ PRICE_DICT: dict[str, dict[str, float]] = {
         "input_cost_per_token": 0.325 / 1_000_000,
         "output_cost_per_token": 1.30 / 1_000_000,
     },
+    # NVIDIA NIM
+    "meta/llama-3.3-70b-instruct": {
+        "input_cost_per_token": 0.27 / 1_000_000,
+        "output_cost_per_token": 0.85 / 1_000_000,
+    },
+    "meta/llama-3.1-405b-instruct": {
+        "input_cost_per_token": 1.00 / 1_000_000,
+        "output_cost_per_token": 3.00 / 1_000_000,
+    },
+    "nvidia/llama-3.1-nemotron-70b-instruct": {
+        "input_cost_per_token": 0.27 / 1_000_000,
+        "output_cost_per_token": 0.85 / 1_000_000,
+    },
+    # Groq
+    "llama-3.3-70b-versatile": {
+        "input_cost_per_token": 0.59 / 1_000_000,
+        "output_cost_per_token": 0.79 / 1_000_000,
+    },
+    "llama-3.1-8b-instant": {
+        "input_cost_per_token": 0.05 / 1_000_000,
+        "output_cost_per_token": 0.08 / 1_000_000,
+    },
+    "deepseek-r1-distill-llama-70b": {
+        "input_cost_per_token": 0.75 / 1_000_000,
+        "output_cost_per_token": 0.99 / 1_000_000,
+    },
+    # Cerebras
+    "llama-3.3-70b": {
+        "input_cost_per_token": 0.85 / 1_000_000,
+        "output_cost_per_token": 1.20 / 1_000_000,
+    },
+    "llama-3.1-8b": {
+        "input_cost_per_token": 0.10 / 1_000_000,
+        "output_cost_per_token": 0.10 / 1_000_000,
+    },
+    "qwen-3-32b": {
+        "input_cost_per_token": 0.45 / 1_000_000,
+        "output_cost_per_token": 0.65 / 1_000_000,
+    },
 }
 
 
