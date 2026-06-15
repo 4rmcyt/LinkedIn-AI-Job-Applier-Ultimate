@@ -72,6 +72,30 @@ class ApplyAgent:
                 model=self.model,
                 base_url="https://openrouter.ai/api/v1",
             )
+        elif model_type == "nvidia_nim":
+            if not self.api_key:
+                raise ValueError("API key is required for NVIDIA NIM model")
+            llm = ChatOpenAI(
+                api_key=self.api_key,
+                model=self.model,
+                base_url="https://integrate.api.nvidia.com/v1",
+            )
+        elif model_type == "groq":
+            if not self.api_key:
+                raise ValueError("API key is required for Groq model")
+            llm = ChatOpenAI(
+                api_key=self.api_key,
+                model=self.model,
+                base_url="https://api.groq.com/openai/v1",
+            )
+        elif model_type == "cerebras":
+            if not self.api_key:
+                raise ValueError("API key is required for Cerebras model")
+            llm = ChatOpenAI(
+                api_key=self.api_key,
+                model=self.model,
+                base_url="https://api.cerebras.ai/v1",
+            )
         else:
             raise ValueError(f"Unsupported model type: {model_type}")
         return llm

@@ -175,6 +175,81 @@ class OpenRouterModel(AIModel):
         return response
 
 
+class NvidiaNimModel(AIModel):
+    """Get access to models via NVIDIA NIM API (OpenAI-compatible endpoint)"""
+
+    def __init__(self, api_key: str, llm_model: str, llm_proxy: str = None) -> None:
+        from langchain_openai import ChatOpenAI
+
+        http_client = httpx.Client(proxy=llm_proxy) if llm_proxy else None
+        self.llm_proxy = llm_proxy
+        self.model_name = llm_model
+        self.model = ChatOpenAI(
+            model_name=self.model_name,
+            openai_api_key=api_key,
+            openai_api_base="https://integrate.api.nvidia.com/v1",
+            http_client=http_client,
+            temperature=TEMPERATURE,
+            timeout=120,
+        )
+
+    def invoke(self, prompt: ChatPromptTemplate) -> BaseMessage:
+        logger.info("Got access to model via NVIDIA NIM API")
+        prompt_messages = [SystemMessage(content=prompts.custom_instructions)] + prompt.messages
+        response = self.model.invoke(prompt_messages)
+        return response
+
+
+class GroqModel(AIModel):
+    """Get access to models via Groq API (OpenAI-compatible endpoint)"""
+
+    def __init__(self, api_key: str, llm_model: str, llm_proxy: str = None) -> None:
+        from langchain_openai import ChatOpenAI
+
+        http_client = httpx.Client(proxy=llm_proxy) if llm_proxy else None
+        self.llm_proxy = llm_proxy
+        self.model_name = llm_model
+        self.model = ChatOpenAI(
+            model_name=self.model_name,
+            openai_api_key=api_key,
+            openai_api_base="https://api.groq.com/openai/v1",
+            http_client=http_client,
+            temperature=TEMPERATURE,
+            timeout=60,
+        )
+
+    def invoke(self, prompt: ChatPromptTemplate) -> BaseMessage:
+        logger.info("Got access to model via Groq API")
+        prompt_messages = [SystemMessage(content=prompts.custom_instructions)] + prompt.messages
+        response = self.model.invoke(prompt_messages)
+        return response
+
+
+class CerebrasModel(AIModel):
+    """Get access to models via Cerebras API (OpenAI-compatible endpoint)"""
+
+    def __init__(self, api_key: str, llm_model: str, llm_proxy: str = None) -> None:
+        from langchain_openai import ChatOpenAI
+
+        http_client = httpx.Client(proxy=llm_proxy) if llm_proxy else None
+        self.llm_proxy = llm_proxy
+        self.model_name = llm_model
+        self.model = ChatOpenAI(
+            model_name=self.model_name,
+            openai_api_key=api_key,
+            openai_api_base="https://api.cerebras.ai/v1",
+            http_client=http_client,
+            temperature=TEMPERATURE,
+            timeout=60,
+        )
+
+    def invoke(self, prompt: ChatPromptTemplate) -> BaseMessage:
+        logger.info("Got access to model via Cerebras API")
+        prompt_messages = [SystemMessage(content=prompts.custom_instructions)] + prompt.messages
+        response = self.model.invoke(prompt_messages)
+        return response
+
+
 # class xAIModel(AIModel):
 #     """Get access to xAI model"""
 
@@ -236,6 +311,18 @@ class AIAdapter:
             return OllamaModel(self.easy_apply_model, llm_api_url)
         elif self.model_type == "openrouter":
             return OpenRouterModel(api_key, self.easy_apply_model, llm_proxy)
+        elif self.model_type == "nvidia_nim":
+            if not api_key:
+                raise ValueError("API key is required for NVIDIA NIM model")
+            return NvidiaNimModel(api_key, self.easy_apply_model, llm_proxy)
+        elif self.model_type == "groq":
+            if not api_key:
+                raise ValueError("API key is required for Groq model")
+            return GroqModel(api_key, self.easy_apply_model, llm_proxy)
+        elif self.model_type == "cerebras":
+            if not api_key:
+                raise ValueError("API key is required for Cerebras model")
+            return CerebrasModel(api_key, self.easy_apply_model, llm_proxy)
         # elif self.model_type == "xai":
         #     return xAIModel(api_key, self.easy_apply_model)
         # elif self.model_type == "huggingface":
