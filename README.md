@@ -590,7 +590,7 @@ If error happens when `search_config.yaml` is processed:
 
 7. Send a message to every topic in the chat. Then click on that message and select *Copy Message Link*. You will get a link like: https://t.me/c/194xxxx987/11/13, so the group Topic ID is 11. Set TG_ERR_TOPIC_ID in `config/app_config.py` with Error Topic ID and TG_REPORT_TOPIC_ID - with Report Topic ID.
 
-## 🤝 Contribution
+## 🤝 Contributing
 
 Contributions are welcome! If you have suggestions for improvements or find a bug, please feel free to open an issue. If you want to submit a pull request, please read the rules below.
 
