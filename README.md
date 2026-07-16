@@ -184,6 +184,9 @@ This project enhances the original codebase with several powerful new features:
     # Optional proxy for LLM requests
     llm_proxy="http://your_proxy_url:port"
 
+    # LLM endpoint URL (required for "openai_compatible", optional for "ollama")
+    llm_api_url="http://localhost:8000/v1"
+
     # Your Telegram Bot Token for sending error messages and reports
     tg_token="your_telegram_bot_token"
 
@@ -267,6 +270,11 @@ This project enhances the original codebase with several powerful new features:
     **Ollama (local/server)**
     - Set: `LLM_MODEL_TYPE = "ollama"`
     - Examples: `llama3`, `qwen2.5` (any model available in your Ollama)
+
+    **OpenAI-compatible endpoint (vLLM, LM Studio, llama.cpp server, etc.)**
+    - Set: `LLM_MODEL_TYPE = "openai_compatible"`
+    - Set the endpoint URL in `.env` as `llm_api_url` (e.g. `http://localhost:8000/v1`)
+    - Examples: any model name served by your endpoint; if the endpoint doesn't require an API key, `llm_api_key` can be set to any placeholder value
 
     Notes:
     - Recommended models: gemini + gemini-3.1-flash-lite or openai + gpt-5-mini - both are fast, clever and cheap (gemini models can be even free!)

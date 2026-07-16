@@ -250,6 +250,43 @@ class CerebrasModel(AIModel):
         return response
 
 
+class OpenAICompatibleModel(AIModel):
+    """Get access to models via any OpenAI-compatible endpoint"""
+
+    def __init__(
+        self, api_key: str, llm_model: str, llm_api_url: str, llm_proxy: str = None
+    ) -> None:
+        from langchain_openai import ChatOpenAI
+
+        if not llm_api_url:
+            raise ValueError("llm_api_url is required for openai_compatible model type")
+
+        http_client = httpx.Client(proxy=llm_proxy) if llm_proxy else None
+        self.model_name = llm_model
+        is_reasoning_model = (
+            "o1" in self.model_name
+            or "o3" in self.model_name
+            or "o4" in self.model_name
+            or "gpt-5" in self.model_name
+        )
+        extra = {"reasoning_effort": "minimal"} if is_reasoning_model else {}
+        self.model = ChatOpenAI(
+            model_name=self.model_name,
+            openai_api_key=api_key,
+            openai_api_base=llm_api_url,
+            http_client=http_client,
+            temperature=1 if is_reasoning_model else TEMPERATURE,
+            timeout=60,
+            **extra,
+        )
+
+    def invoke(self, prompt: ChatPromptTemplate) -> BaseMessage:
+        logger.info("Got access to model via OpenAI-compatible endpoint")
+        prompt_messages = [SystemMessage(content=prompts.custom_instructions)] + prompt.messages
+        response = self.model.invoke(prompt_messages)
+        return response
+
+
 # class xAIModel(AIModel):
 #     """Get access to xAI model"""
 
@@ -323,6 +360,8 @@ class AIAdapter:
             if not api_key:
                 raise ValueError("API key is required for Cerebras model")
             return CerebrasModel(api_key, self.easy_apply_model, llm_proxy)
+        elif self.model_type == "openai_compatible":
+            return OpenAICompatibleModel(api_key, self.easy_apply_model, llm_api_url, llm_proxy)
         # elif self.model_type == "xai":
         #     return xAIModel(api_key, self.easy_apply_model)
         # elif self.model_type == "huggingface":

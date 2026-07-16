@@ -96,6 +96,14 @@ class ApplyAgent:
                 model=self.model,
                 base_url="https://api.cerebras.ai/v1",
             )
+        elif model_type == "openai_compatible":
+            if not llm_api_url:
+                raise ValueError("llm_api_url is required for openai_compatible model type")
+            llm = ChatOpenAI(
+                api_key=self.api_key,
+                model=self.model,
+                base_url=llm_api_url,
+            )
         else:
             raise ValueError(f"Unsupported model type: {model_type}")
         return llm
