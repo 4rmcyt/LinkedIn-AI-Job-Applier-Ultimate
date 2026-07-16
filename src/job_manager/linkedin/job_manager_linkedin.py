@@ -48,6 +48,13 @@ from src.utils.utils import async_pause, load_yaml_file, sanitize_text
 search_config = load_yaml_file(SEARCH_CONFIG_FILE)
 logger.info(f"Maximum allowed number of applications: {MAX_APPLIES_NUM}")
 
+# External ATSes browser-use can't reliably automate: stale element indices
+# cause infinite step loops with no exception. Matched as URL substrings.
+EXTERNAL_APPLY_SKIP_ATSES: tuple[str, ...] = (
+    "phenom",
+    "successfactors",
+)
+
 
 class LinkedInJobManager(BaseJobManager):
     """Class for searching and sending applications to employers"""
@@ -365,6 +372,9 @@ class LinkedInJobManager(BaseJobManager):
                     if apply_url:
                         if TEST_MODE:
                             apply_result = "Skip", "Test mode"
+                        elif any(host in apply_url for host in EXTERNAL_APPLY_SKIP_ATSES):
+                            logger.info(f"Skipping unsupported external ATS: {apply_url}")
+                            apply_result = "Skip", f"Unsupported external ATS: {apply_url}"
                         else:
                             apply_result = await self.llm_agent_component.apply_to_job(apply_url)
                     else:
