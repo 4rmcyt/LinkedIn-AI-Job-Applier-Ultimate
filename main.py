@@ -55,6 +55,7 @@ from src.resume_builder.resume_manager import ResumeManager
 from src.resume_builder.style_manager import StyleManager
 from src.utils.browser_utils import create_playwright_browser, save_browser_session, stop_tracing
 from src.utils.runtime_control import (
+    ShutdownState,
     register_shutdown_handlers,
     runtime_controller,
     sleep_with_shutdown,
@@ -263,6 +264,8 @@ async def create_and_run_bot(
 ):
     """Start LinkedIn bot (async)"""
     logger.info("Initializing LinkedIn bot...")
+    # Fresh shutdown state per run (matters when RESTART_EVERY_DAY loops runs)
+    runtime_controller.set_shutdown_state(ShutdownState.RUNNING)
     emit_event(
         "run_started",
         "LinkedIn bot run started",
@@ -385,6 +388,7 @@ async def create_and_run_bot(
     finally:
         # Cleanup browser resources
         logger.info("Cleaning up browser resources...")
+        runtime_controller.set_shutdown_state(ShutdownState.CLEANUP)
         try:
             if context is not None:
                 await save_browser_session(context)
@@ -400,6 +404,7 @@ async def create_and_run_bot(
         except Exception as e:
             logger.warning(f"Error during browser cleanup: {e}")
         finally:
+            runtime_controller.set_shutdown_state(ShutdownState.DONE)
             # Local runtime patch: release any pending shutdown handler waits.
             runtime_controller.finish_run()
 

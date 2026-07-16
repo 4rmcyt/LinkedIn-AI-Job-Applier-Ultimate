@@ -20,6 +20,7 @@ from config.constants import COVER_LETTER_DIR, OUTPUT_DIR_LINKEDIN, RESUME_DIR, 
 from config.logger_config import logger
 from src.dashboard.runtime import StopRequested, emit_event
 from src.job_manager.job_manager import BaseJobManager
+from src.utils.runtime_control import ShutdownState, runtime_controller
 
 try:
     from config.app_config import IS_PREMIUM
@@ -234,6 +235,12 @@ class LinkedInJobManager(BaseJobManager):
                 if self.pause_checker:
                     await self.pause_checker()
 
+                # Stop starting new jobs once a shutdown has been requested
+                if runtime_controller.shutdown_state == ShutdownState.DRAINING:
+                    logger.info("Shutdown requested — stopping before the next job")
+                    result = "Shutdown"
+                    break
+
                 url = vacancy.get("url")
                 try:
                     result = await self.apply_job(vacancy)
@@ -262,7 +269,7 @@ class LinkedInJobManager(BaseJobManager):
                 else:
                     self.error_num = 0
             # break the search for vacancies if the limit is reached
-            if result == "Limit" or result == "Error":
+            if result == "Limit" or result == "Error" or result == "Shutdown":
                 break
             # go to the next page
             if not await self._go_to_next_page():
