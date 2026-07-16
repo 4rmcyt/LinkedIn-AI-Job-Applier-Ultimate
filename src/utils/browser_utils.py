@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import json
 import os
 import random
 import re
@@ -58,6 +59,35 @@ def ensure_playwright_profile() -> str:
     return session_dir
 
 
+def _sanitize_storage_state(path: str) -> dict:
+    """Load browser_state.json and sanitize cookies for Playwright's storageState API.
+
+    Playwright requires `cookies[i].partitionKey` to be a URL string or absent.
+    Some Chromium versions write it as a dict (CHIPS partitioned cookies with
+    {topLevelSite, hasCrossSiteAncestor}). This loader strips the field whenever
+    it's not a plain string, so cross-site partitioned cookies from external
+    embeds don't crash new_context(). Cookies themselves are preserved; only
+    the partition descriptor is dropped.
+    """
+    try:
+        with open(path, "r") as f:
+            state = json.loads(f.read() or "{}")
+    except Exception as e:
+        logger.debug(f"_sanitize_storage_state read failed (non-fatal): {e}")
+        return {}
+    if not isinstance(state, dict):
+        return {}
+    cookies = state.get("cookies")
+    if isinstance(cookies, list):
+        for cookie in cookies:
+            if not isinstance(cookie, dict):
+                continue
+            pk = cookie.get("partitionKey")
+            if pk is not None and not isinstance(pk, str):
+                cookie.pop("partitionKey", None)
+    return state
+
+
 async def create_playwright_browser() -> tuple[Browser, BrowserContext, Page]:
     """Create Playwright browser, context and page asynchronously (PRIMARY METHOD)
 
@@ -70,7 +100,11 @@ async def create_playwright_browser() -> tuple[Browser, BrowserContext, Page]:
     try:
         ensure_playwright_profile()
         viewport = {"width": 1920, "height": 1080}
-        storage_state = BROWSER_STORAGE_STATE if os.path.exists(BROWSER_STORAGE_STATE) else None
+        storage_state = (
+            _sanitize_storage_state(BROWSER_STORAGE_STATE)
+            if os.path.exists(BROWSER_STORAGE_STATE)
+            else None
+        )
 
         args = [
             "--window-position=0,0",
@@ -151,9 +185,14 @@ async def save_browser_session(context: BrowserContext) -> None:
         ensure_playwright_profile()
         storage_state = await context.storage_state()
 
-        with open(BROWSER_STORAGE_STATE, "w") as f:
-            import json
+        # Playwright's storage_state() omits empty arrays, but the reader
+        # (browser.new_context) is strict and rejects origins without a
+        # localStorage key. Normalize before writing.
+        for origin in storage_state.get("origins", []):
+            origin.setdefault("localStorage", [])
+        storage_state.setdefault("cookies", [])
 
+        with open(BROWSER_STORAGE_STATE, "w") as f:
             json.dump(storage_state, f)
 
         logger.info(f"Playwright session saved to {BROWSER_STORAGE_STATE}")
